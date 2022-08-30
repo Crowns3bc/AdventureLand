@@ -6,7 +6,7 @@ function item_quantity(name) {
     return 0;
 }
 
-function send_cm(){
+function refill_pots(){
     var potAmount = 10;
     if (item_quantity("hpot1") < potAmount){
     send_cm("CrownsAnal", "HP")
@@ -16,21 +16,6 @@ function send_cm(){
 	}
 }
 
-function handle_cm(){
-    if(m.name == 'CrownPriest' && m.message == "HP"){
-        send_item("CrownPriest",2,100)
-    }
-    if(m.name == 'CrownPriest' && m.message == "MP"){
-        send_item("CrownPriest",3,100)
-    }
-    if(m.name == 'CrownTown' && m.message == "HP"){
-        send_item("CrownTown",2,100)
-    }
-    if(m.name == 'CrownTown' && m.message == "MP"){
-        send_item("CrownTown",3,100)
-    }
-}
-character.on("cm", handle_cm)
 
 function on_cm(name, data) {
     if(name == "CrownPriest") {
@@ -41,6 +26,16 @@ function on_cm(name, data) {
     if(name == "CrownPriest") {
         if(data == "MP") {
             send_item("CrownPriest",3,100)
+		}
+	}
+	    if(name == "CrownTown") {
+      if(data == "HP") {
+        send_item("CrownTown",2,100)
+        }
+    }
+    if(name == "CrownTown") {
+        if(data == "MP") {
+            send_item("CrownTown",3,100)
 		}
 	}
 }

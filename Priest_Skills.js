@@ -6,9 +6,9 @@ function skills(){
 		if (!is_on_cooldown("zapperzap")) {
       use_skill("zapperzap", entity);
       break;
-			}
-		}
-	}
+      }
+    }
+  }
 }
 	if(character.name == "CrownPriest")
 	    if  (character.party){
@@ -18,10 +18,10 @@ function skills(){
             if (monster) {
                 if (!is_on_cooldown("absorb")) {
                     use_skill("absorb", char_name);
-			}
-		}
-	}
-}
+                  }
+                }
+              }
+            }
 		var c1 = get_player("CrownPriest");
 		var c2 = get_player("CrownsAnal");
 		var c3 = get_player("CrownTown");
@@ -32,12 +32,12 @@ function skills(){
 	   (c4 && c4.hp < character.max_hp * 0.45)){
 		if (!is_on_cooldown("partyheal")) {
 		use_skill("partyheal");
-		  }
+	  }
 	}
 	if (!is_on_cooldown("darkblessing")) {
 	use_skill("darkblessing");
 	}
 	if(character.mp > character.max_mp * 0.7){
 		use_skill("zapperzap");
-	  }
+  }
 }

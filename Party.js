@@ -1,7 +1,7 @@
 var group = ["CrownsAnal", "CrownMage", "CrownSpam", "CrownMerch", "CrownPriest", "CrownTown"];
 
 setInterval(function () {
-	if(parent.party_list.length < 1 ){
+	if(parent.party_list.length < 3 ){
     if (character.name == group[0]) {
         for (let i = 1; i < group.length; i++) {
             let name = group[i];

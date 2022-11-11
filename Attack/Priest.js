@@ -5,7 +5,7 @@ function ms_to_next_skill(skill) {
     return ms < 0 ? 0 : ms
 }
 
-var monster_targets =  ["stompy", "bgoo", "rgoo", "crabxx", "franky", "icegolem"];
+var monster_targets =  ["plantoid", "bgoo", "rgoo", "crabxx", "franky", "icegolem"];
 async function attackLoop() {
     let delay = 15;
     try { 
@@ -14,12 +14,12 @@ async function attackLoop() {
 			if(character.hp < character.max_hp - character.heal){
 				await heal(character);
 			}
-  var target = find_viable_targets()[0];
+            var target = find_viable_targets()[0];
 	    if(is_in_range(target)){
             await attack(target);
                     delay = ms_to_next_skill('attack');
-				        }
-			      }
+				}
+			}
         }
     } catch (e) {
         console.error(e)

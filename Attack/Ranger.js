@@ -13,13 +13,12 @@ async function attackLoop() {
 			var arr = Object.values(parent.entities)
                 .filter(e => e.type == "monster")
                 .filter(e => e.target)
-                .filter((a)=> a.target === "CrownTown" || 
-						      a.target === "CrownPriest")
+                .filter((a)=> a.target === "CrownPriest" || 
+			      a.target === "CrownTown")
  				  .map(e => e.id);
             if( arr.length > 1 && arr.length < 4 ) use("3shot",arr);
             if( arr.length > 4 ) use("5shot",arr);
             await attack(nearest)
-
             delay = ms_to_next_skill('attack');
         }
     } catch (e) {

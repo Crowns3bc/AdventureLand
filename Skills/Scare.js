@@ -4,10 +4,9 @@ function scare() {
      let mobnum = 0
     for( id in parent.entities) {
         var current = parent.entities[id];
-        if(current.type == "monster"  && current.target == 'CrownsAnal') mobnum ++;
+        if(current.type == "monster"  && current.target == character.name) mobnum ++;
     }
       if( mobnum > 0) {
-      
           if(!is_on_cooldown("scare")) {
               equip(slot)
               use("scare")

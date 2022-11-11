@@ -15,12 +15,12 @@ async function SkillLoop() {
 		equip(7); //location in inventory of zapper
       		use_skill("zapperzap", entity);
 		equip(7);
-						}
-					}
-				}
-			}
-		}
-	}
+             	        }
+    		    }
+             	}
+            }
+        }
+    }
 	    if  (character.party){
         for (let char_name in get_party()) {
 	if (character.name == char_name) continue;

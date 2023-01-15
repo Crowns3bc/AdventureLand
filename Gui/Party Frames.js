@@ -21,6 +21,7 @@ parent.$('head').append(`<style>${css}</style>`);
     if (partied){
         for (let x=0; x < partied.children().length; x++){
         	let info = get(Object.entries(parent.party)[x][0]);
+		//possibly broken... been here for hours and now getting errors saying info is null when ive litterally changed nothing..............
 		let lvl = info.level
 		let exp = info.xp / G.levels[lvl] * 100;
         	let infoHTML = `<div>${info.name}</div>`;

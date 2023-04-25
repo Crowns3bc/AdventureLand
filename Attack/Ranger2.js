@@ -25,13 +25,13 @@ async function attackLoop() {
             }
         }
 
-        const monsterIds = Object.values(parent.entities)
+        let monsterIds = Object.values(parent.entities)
             .filter((e) => e.type === "monster")
             .filter((e) => e.target)
             .filter((a) => a.target === "CrownPriest" || a.target === "CrownMerch")
             .map((e) => e.id);
 
-        const nearest = getNearestMonster({ target: ["CrownPriest", "CrownMerch"] });
+        let nearest = getNearestMonster({ target: ["CrownPriest", "CrownMerch"] });
         if (is_in_range(nearest)) {
             if (monsterIds.length === 1) {
                 if (!is_on_cooldown("huntersmark")) {
@@ -81,7 +81,6 @@ async function attackLoop() {
     }
     setTimeout(attackLoop, delay);
 }
-
 attackLoop();
 
 

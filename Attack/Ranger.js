@@ -6,19 +6,67 @@ function ms_to_next_skill(skill) {
 }
 
 async function attackLoop() {
-    let delay = 5;
+    let delay = 1;
     try {
-        let nearest = getNearestMonster({target: ["CrownPriest", "CrownTown"]});
-        if (can_attack(nearest)) {
-			var arr = Object.values(parent.entities)
+        let nearest = getNearestMonster({ target: ["CrownPriest", "CrownMerch"] });
+        for (let x in parent.entities) {
+            let entity = parent.entities[x];
+            if (entity.mtype == "" ||
+                (entity.mtype == "pinkgoo" ||
+                    (entity.mtype == "bgoo" ||
+                        (entity.mtype == "rgoo")))) {
+                if (is_in_range(entity)) {
+                    if (!is_on_cooldown("huntersmark")) {
+                        use("huntersmark", entity);
+                    }
+                    if (!is_on_cooldown("supershot")) {
+                        use("supershot", entity);
+                    }
+                    await attack(entity)
+                    delay = ms_to_next_skill('attack') - 220;
+                }
+            }
+        }
+        if (is_in_range(nearest)) {
+            var arr = Object.values(parent.entities)
                 .filter(e => e.type == "monster")
                 .filter(e => e.target)
-                .filter((a)=> a.target === "CrownPriest" || 
-			      a.target === "CrownTown")
- 				  .map(e => e.id);
-            if( arr.length > 1 && arr.length < 4 ) use("3shot",arr);
-            if( arr.length > 4 ) use("5shot",arr);
-            	await attack(nearest)
+                .filter((a) => a.target === "CrownPriest" ||
+                    a.target === "CrownMerch")
+                .map(e => e.id);
+            if (!is_on_cooldown("huntersmark") && arr.length == 1) {
+                use("huntersmark", arr);
+            }
+            if (!is_on_cooldown("supershot") && arr.length == 1) {
+                use("supershot", arr);
+            }
+            if (arr.length <= 3 && character.slots.mainhand?.name !== 'bowofthedead') {
+                equip(locate_item("bowofthedead"));
+            }
+            if (arr.length > 1 && arr.length < 4) {
+                use_skill("3shot", arr);
+                delay = ms_to_next_skill('attack');
+            }
+            if (arr.length >= 4 && character.slots.mainhand?.name !== 'pouchbow') {
+                equip(locate_item("pouchbow"));
+            }
+            if (arr.length >= 4) {
+                use_skill("5shot", arr);
+                delay = ms_to_next_skill('attack');
+            }
+            if (arr.length == 1 && character.slots.chest?.name !== 'coat') {
+                equip(locate_item("coat"));
+            }
+            if (arr.length <= 3 && character.slots.gloves?.name !== 'supermittens') {
+                equip(locate_item("supermittens"));
+            }
+            if (arr.length >= 2 && character.slots.chest?.name !== 'tshirt9') {
+                equip(locate_item("tshirt9"));
+            }
+            if (arr.length >= 4 && character.slots.gloves?.name !== 'mpxgloves') {
+                equip(locate_item("mpxgloves"));
+            }
+            await attack(nearest);
             delay = ms_to_next_skill('attack');
         }
     } catch (e) {
@@ -26,7 +74,7 @@ async function attackLoop() {
     }
     setTimeout(attackLoop, delay)
 }
-attackLoop()
+attackLoop();
 
 function getNearestMonster(args) {
     for (const id in parent.entities) {

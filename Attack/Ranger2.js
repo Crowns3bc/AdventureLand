@@ -34,43 +34,43 @@ async function attackLoop() {
         const nearest = getNearestMonster({ target: ["CrownPriest", "CrownMerch"] });
         if (is_in_range(nearest)) {
             if (monsterIds.length === 1) {
-            	if (!is_on_cooldown("huntersmark")) { 
-					await use("huntersmark", monsterIds);
-				}
-				if (!is_on_cooldown("supershot")) {
+                if (!is_on_cooldown("huntersmark")) {
+                    await use("huntersmark", monsterIds);
+                }
+                if (!is_on_cooldown("supershot")) {
                     await use("supershot", monsterIds);
                 }
-                if (Chest !== "coat") {  
-					 equip(locate_item("coat"));
-				}
-				if (Weapon !== "bowofthedead") {
-                     equip(locate_item("bowofthedead"));
+                if (Chest !== "coat") {
+                    equip(locate_item("coat"));
+                }
+                if (Weapon !== "bowofthedead") {
+                    equip(locate_item("bowofthedead"));
                 }
                 await attack(nearest);
                 delay = ms_to_next_skill("attack");
             }
             if (monsterIds.length === 2 || monsterIds.length === 3) {
                 if (Weapon !== "bowofthedead") {
-					 equip(locate_item("bowofthedead"));
-				}
-				if (Gloves !== "supermittens") {
-					 equip(locate_item("supermittens"));
-				}
-				if (Chest !== "tshirt9") {
-                     equip(locate_item("tshirt9"));
+                    equip(locate_item("bowofthedead"));
+                }
+                if (Gloves !== "supermittens") {
+                    equip(locate_item("supermittens"));
+                }
+                if (Chest !== "tshirt9") {
+                    equip(locate_item("tshirt9"));
                 }
                 await use_skill("3shot", monsterIds);
                 delay = ms_to_next_skill("attack");
             }
             if (monsterIds.length >= 4) {
-                if (Gloves !== "mpxgloves") { 
-					 equip(locate_item("mpxgloves"));
-				}
-				if (Weapon !== "pouchbow") {
-					 equip(locate_item("pouchbow"));
-				}
-				if (Chest !== "tshirt9") {
-					 equip(locate_item("tshirt9"));
+                if (Gloves !== "mpxgloves") {
+                    equip(locate_item("mpxgloves"));
+                }
+                if (Weapon !== "pouchbow") {
+                    equip(locate_item("pouchbow"));
+                }
+                if (Chest !== "tshirt9") {
+                    equip(locate_item("tshirt9"));
                 }
                 await use_skill("5shot", monsterIds);
                 delay = ms_to_next_skill("attack");
@@ -83,3 +83,25 @@ async function attackLoop() {
 }
 
 attackLoop();
+
+
+function getNearestMonster(args) {
+    for (const id in parent.entities) {
+        const entity = parent.entities[id];
+        if (entity.type !== 'monster' || entity.dead) {
+            continue;
+        }
+        if (args.target) {
+            if (Array.isArray(args.target)) {
+                if (!args.target.includes(entity.target)) {
+                    continue;
+                }
+            } else {
+                if (entity.target !== args.target) {
+                    continue;
+                }
+            }
+        }
+        return entity;
+    }
+}

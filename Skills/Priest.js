@@ -82,6 +82,6 @@ async function zapThings() {
     const target = entitiesWithoutTarget[0];
 
     await use_skill("zapperzap", target);
-		//reduce_cooldown("zapperzap", Math.min(...parent.pings.slice(parent.pings.length - 5)));
+	reduce_cooldown("zapperzap", Math.min(...parent.pings.slice(parent.pings.length - 5)));
   }
 }

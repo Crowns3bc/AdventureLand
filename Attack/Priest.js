@@ -1,32 +1,32 @@
 function ms_to_next_skill(skill) {
     const next_skill = parent.next_skill[skill]
     if (next_skill == undefined) return 0
-    const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings)
+    const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings) + 15
     return ms < 0 ? 0 : ms
 }
 
-var monster_targets =  ["plantoid", "bgoo", "rgoo", "crabxx", "franky", "icegolem"];
+
+var monster_targets =  ["plantoid"];
 async function attackLoop() {
-    let delay = 15;
-    try { 
-	if(parent.is_disabled(character) == undefined){
-	if(!character.rip){
-	if(character.hp < character.max_hp - character.heal){
-		await heal(character);
-	}
+    let delay = 1;
+    try {
+        if (character.hp < character.max_hp - character.heal) {
+            await heal(character);
+            delay = ms_to_next_skill('attack');
+        } else {
             var target = find_viable_targets()[0];
-	    if(is_in_range(target)){
-            await attack(target);
-                    delay = ms_to_next_skill('attack');
-			}
-		}
+            if (is_in_range(target)) {
+                await attack(target);
+                delay = ms_to_next_skill('attack');
+            }
         }
     } catch (e) {
         console.error(e)
     }
     setTimeout(attackLoop, delay)
 }
-attackLoop())
+attackLoop();
+
 
 function find_viable_targets() {
     var monsters = Object.values(parent.entities).filter(
@@ -65,4 +65,12 @@ function find_viable_targets() {
         }
     });
     return monsters;
+}
+
+async function fixPromise(promise) {
+    const promises = [];
+    promises.push(promise);
+    // Guarantees it will resolve in 2.5s, might want to use reject instead, though
+    promises.push(new Promise((resolve) => setTimeout(resolve, 2500)));
+    return Promise.race(promises);
 }

@@ -3,22 +3,11 @@ async function SkillLoop() {
 	let dead = character.rip;
 	let disabled = (parent.is_disabled(character) == undefined);
 	try {
-		for (let x in parent.entities) {
-			let entity = parent.entities[x];
-			let ready = !is_on_cooldown("zapperzap") && character.mp > G?.skills?.zapperzap?.mp + 3000 && is_in_range(entity, "zapperzap") && character.cc < 125 && character.targets < 100;
-			if (entity.mtype === "fireroamer" && entity.target == undefined ||
-				(entity.mtype === "wabbit" && entity.target == undefined)) {
-				if (!smart.moving) {
-					if (ready) {
-						if (character.slots.ring2?.name !== 'zapper') {
-							await fixPromise(equip(locate_item("zapper")))
-						}
-						await use_skill("zapperzap", entity);
-						if (character.slots.ring2?.name !== 'resistancering') {
-							await fixPromise(equip(locate_item("resistancering")))
-						}
-					}
-				}
+		await zapThings();
+		if (!dead || disabled) {
+			const target = get_targeted_monster();
+				if (!is_on_cooldown("curse")) {
+					use_skill("curse", target);
 			}
 		}
 		if (character.party) {
@@ -32,9 +21,6 @@ async function SkillLoop() {
 				}
 			}
 		}
-		if (character.hp < character.max_hp * .55) {
-			await use_skill("partyheal");
-		}
 		if (character.party) {
 			for (let char_name in get_party()) {
 				if (char_name === character.name) continue; // skip self
@@ -45,16 +31,12 @@ async function SkillLoop() {
 				}
 			}
 		}
+		if (character.hp < character.max_hp * .5) {
+			await use_skill("partyheal")
+		}
 		if (!dead || disabled) {
 			if (!is_on_cooldown("darkblessing")) {
 				use_skill("darkblessing");
-			}
-		}
-		if (!dead || disabled) {
-			if (!home.hasOwnProperty("immune") && home) {
-				if (!is_on_cooldown("curse")) {
-					use_skill("curse", home);
-				}
 			}
 		}
 	} catch (e) {
@@ -64,10 +46,42 @@ async function SkillLoop() {
 }
 SkillLoop();
 
-async function fixPromise(promise) {
-    const promises = [];
-    promises.push(promise);
-    // Guarantees it will resolve in 2.5s, might want to use reject instead, though
-    promises.push(new Promise((resolve) => setTimeout(resolve, 2500)));
-    return Promise.race(promises);
+async function zapThings() {
+  const zapperMobs = ["plantoid", "wabbit"];
+  // this list will contain entities without a target that is in range of zapperzap
+  const entitiesWithoutTarget = Object.values(parent.entities).filter(
+    (entity) =>
+      entity &&
+      !entity.target &&
+      zapperMobs.includes(entity.mtype) &&
+      is_in_range(entity, "zapperzap")
+  );
+
+  // There are no targets to zap, lets equip the ring
+  if (entitiesWithoutTarget.length === 0) {
+    if (character.slots.ring2?.name !== "ringofluck") {
+      await equip(locate_item("ringofluck"));  
+    }
+
+    // no reason to run the rest of this code
+    return;
+  }
+
+  const ready =
+    !is_on_cooldown("zapperzap") &&
+    character.mp > G?.skills?.zapperzap?.mp + 3000 &&
+    character.cc < 125;
+
+  // only equip and use the zapper if it is ready
+  if (!smart.moving && ready) {
+    if (character.slots.ring2?.name !== "zapper") {
+      await equip(locate_item("zapper"));
+    }
+
+    // Set the target to the first target that is in range of the zapperzap
+    const target = entitiesWithoutTarget[0];
+
+    await use_skill("zapperzap", target);
+		//reduce_cooldown("zapperzap", Math.min(...parent.pings.slice(parent.pings.length - 5)));
+  }
 }

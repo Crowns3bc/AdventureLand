@@ -1,13 +1,46 @@
+const [centerX, centerY] = calculateCenterPoint(home);
 async function SkillLoop() {
 	let delay = 25;
 	let dead = character.rip;
 	let disabled = (parent.is_disabled(character) == undefined);
 	try {
-		await zapThings();
+		//await zapThings();
+		const zapperMobs = [home];
+		const entities = Object.values(parent.entities).filter(entity => (
+			entity && !entity.target) && zapperMobs.includes(entity.mtype)
+		);
+		const ready = (
+			!is_on_cooldown("zapperzap") &&
+			character.mp > G?.skills?.zapperzap?.mp + 3000 &&
+			character.cc < 125
+		);
+		const zapperNeeded = entities.some(entity => is_in_range(entity, "zapperzap"));
+		if (!smart.moving && ready && zapperNeeded) {
+			if (character.slots.ring2?.name !== 'zapper') {
+				equip(locate_item("zapper"));
+			}
+			for (const entity of entities) {
+				if (is_in_range(entity, "zapperzap")) {
+					await use_skill("zapperzap", entity);
+				}
+			}
+			if (character.slots.ring2?.name !== 'ringofluck') {
+				equip(locate_item("ringofluck"));
+			}
+		}
 		if (!dead || disabled) {
-			const target = get_targeted_monster();
-				if (!is_on_cooldown("curse")) {
-					use_skill("curse", target);
+			let target = null;
+			if (character.map === 'desertland') {
+				target = get_nearest_monster_v2({ target: 'CrownPriest', check_max_hp: true, max_distance: 35, point_for_distance_check: [centerX, centerY] });
+				if (target.hp / target.max_hp < 0.33) {
+					target = null;
+				}
+			} else {
+				target = get_targeted_monster();
+			}
+
+			if (target && !is_on_cooldown("curse")) {
+				use_skill("curse", target);
 			}
 		}
 		if (character.party) {
@@ -35,7 +68,7 @@ async function SkillLoop() {
 			await use_skill("partyheal")
 		}
 		if (!dead || disabled) {
-			if (!is_on_cooldown("darkblessing")) {
+			if (!is_on_cooldown("darkblessing") && character.s.warcry) {
 				use_skill("darkblessing");
 			}
 		}
@@ -45,43 +78,3 @@ async function SkillLoop() {
 	setTimeout(SkillLoop, delay)
 }
 SkillLoop();
-
-async function zapThings() {
-  const zapperMobs = ["plantoid", "wabbit"];
-  // this list will contain entities without a target that is in range of zapperzap
-  const entitiesWithoutTarget = Object.values(parent.entities).filter(
-    (entity) =>
-      entity &&
-      !entity.target &&
-      zapperMobs.includes(entity.mtype) &&
-      is_in_range(entity, "zapperzap")
-  );
-
-  // There are no targets to zap, lets equip the ring
-  if (entitiesWithoutTarget.length === 0) {
-    if (character.slots.ring2?.name !== "ringofluck") {
-      await equip(locate_item("ringofluck"));  
-    }
-
-    // no reason to run the rest of this code
-    return;
-  }
-
-  const ready =
-    !is_on_cooldown("zapperzap") &&
-    character.mp > G?.skills?.zapperzap?.mp + 3000 &&
-    character.cc < 125;
-
-  // only equip and use the zapper if it is ready
-  if (!smart.moving && ready) {
-    if (character.slots.ring2?.name !== "zapper") {
-      await equip(locate_item("zapper"));
-    }
-
-    // Set the target to the first target that is in range of the zapperzap
-    const target = entitiesWithoutTarget[0];
-
-    await use_skill("zapperzap", target);
-	reduce_cooldown("zapperzap", Math.min(...parent.pings.slice(parent.pings.length - 5)));
-  }
-}

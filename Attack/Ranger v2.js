@@ -13,9 +13,10 @@ function distanceToPointComparator(point) {
 function ms_to_next_skill(skill) {
     const next_skill = parent.next_skill[skill]
     if (next_skill == undefined) return 0
-    const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings) - 100
+    const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings) + 15
     return ms < 0 ? 0 : ms
 }
+var home = 'fireroamer';
 const [centerX, centerY] = calculateCenterPoint(home);
 let farmDistanceComparator = distanceToPointComparator([centerX, centerY]);
 async function attackLoop() {
@@ -78,7 +79,7 @@ async function attackLoop() {
                 }
                 await use_skill("3shot", monsterIds);
                 delay = ms_to_next_skill("attack");
-            } else if (mobTargets_inRange("plantoid", 40, "CrownPriest", [centerX, centerY]) <= 3) {
+            } else if (mobTargets_inRange(home, 40, "CrownPriest", [centerX, centerY]) <= 3) {
                 if (Weapon !== "bowofthedead") {
                      equip(locate_item("bowofthedead"));
                 }
@@ -111,8 +112,7 @@ async function attackLoop() {
 }
 
 attackLoop();
-
-
+//////////////////////////////////////////////////////////////////////////////////////////////////
 function mobTargets_inRange(mtype, radius, mobs_target, point) {
 	if (!point) point = [character.x, character.y];
 	let count = 0;
@@ -127,8 +127,7 @@ function mobTargets_inRange(mtype, radius, mobs_target, point) {
 	}
 	return count;
 }
-
-
+//////////////////////////////////////////
 function calculateCenterPoint(location) {
   const corners = locations[location];
   if (!corners || corners.length === 0) {

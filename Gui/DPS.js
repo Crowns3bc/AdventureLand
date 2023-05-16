@@ -169,3 +169,4 @@ parent.prev_handlersdpsmeter = [];
 
 register_dpsmeterhandler("hit", dpsmeterHitHandler);
 init_dpsmeter(5);
+//handles dropping combat incorrectly, havent fixed

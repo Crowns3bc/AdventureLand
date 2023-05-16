@@ -4,7 +4,6 @@ async function SkillLoop() {
 	let dead = character.rip;
 	let disabled = (parent.is_disabled(character) == undefined);
 	try {
-		//await zapThings();
 		const zapperMobs = [home];
 		const entities = Object.values(parent.entities).filter(entity => (
 			entity && !entity.target) && zapperMobs.includes(entity.mtype)

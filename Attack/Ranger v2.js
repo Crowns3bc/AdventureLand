@@ -16,7 +16,6 @@ function ms_to_next_skill(skill) {
     const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings) + 15
     return ms < 0 ? 0 : ms
 }
-var home = 'fireroamer';
 const [centerX, centerY] = calculateCenterPoint(home);
 let farmDistanceComparator = distanceToPointComparator([centerX, centerY]);
 async function attackLoop() {

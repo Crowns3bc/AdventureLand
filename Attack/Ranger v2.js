@@ -219,7 +219,7 @@ function getNearestMonster(args) {
     }
 }
 
-
+//Additions to get_nearest_monster()
 function get_nearest_monster_v2(args) {
     var min_d = 999999, target = null; // Initialize minimum distance and target variables
     var min_hp = 999999999; // Initialize minimum HP variable

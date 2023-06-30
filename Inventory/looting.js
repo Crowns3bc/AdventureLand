@@ -20,26 +20,26 @@ setInterval(function () {
 function prepForGold() {
     localStorage.setItem("LootState", "gold"); // Set the value of "LootState" in localStorage to "gold"
     var slot = findHighestBoosterSlot(); // Get the inventory slot with the highest level booster
-	equipIfNeeded("wcap", "helmet");
+    equipIfNeeded("wcap", "helmet");
     equipIfNeeded("wattire", "chest");
     equipIfNeeded("wbreeches", "pants");
     equipIfNeeded("wshoes", "shoes");
     equipIfNeeded("handofmidas", "gloves");
-	equipIfNeeded("spookyamulet", "amulet");
-	
+    equipIfNeeded("spookyamulet", "amulet");
+
     shift(slot, "goldbooster"); // Shift the booster to the "goldbooster" slot
 }
 
 function prepForLoot() {
     localStorage.setItem("LootState", "loot"); // Set the value of "LootState" in localStorage to "loot"
     var slot = findHighestBoosterSlot(); // Get the inventory slot with the highest level booster
-	equipIfNeeded("phelmet", "helmet");
+    equipIfNeeded("phelmet", "helmet");
     equipIfNeeded("tshirt88", "chest");
     equipIfNeeded("starkillers", "pants");
     equipIfNeeded("wingedboots", "shoes");
     equipIfNeeded("xgloves", "gloves");
-	equipIfNeeded("t2stramulet", "amulet");
-	
+    equipIfNeeded("t2stramulet", "amulet");
+
     shift(slot, "luckbooster"); // Shift the booster to the "goldbooster" slot
 }
 

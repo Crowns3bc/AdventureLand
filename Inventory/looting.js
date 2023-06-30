@@ -5,7 +5,7 @@ setInterval(function () {
     // Check if enough time has passed since the last loot
     if (lastLoot == null || new Date() - lastLoot > 100) {
         // Check if there is at least one chest available
-        if (getNumChests() >= 1) {
+        if (getNumChests() >= 8) {
             delayedLoot(); // Call the delayedLoot function
             lastLoot = new Date(); // Update the lastLoot variable with the current time
         }
@@ -15,18 +15,32 @@ setInterval(function () {
     if (getNumChests() == 0 && tryloot) {
         timoutRevertLootState(); // Call the timoutRevertLootState function
     }
-}, 100);
+}, 50);
 
 function prepForGold() {
     localStorage.setItem("LootState", "gold"); // Set the value of "LootState" in localStorage to "gold"
     var slot = findHighestBoosterSlot(); // Get the inventory slot with the highest level booster
+	equipIfNeeded("wcap", "helmet");
+    equipIfNeeded("wattire", "chest");
+    equipIfNeeded("wbreeches", "pants");
+    equipIfNeeded("wshoes", "shoes");
+    equipIfNeeded("handofmidas", "gloves");
+	equipIfNeeded("spookyamulet", "amulet");
+	
     shift(slot, "goldbooster"); // Shift the booster to the "goldbooster" slot
 }
 
 function prepForLoot() {
     localStorage.setItem("LootState", "loot"); // Set the value of "LootState" in localStorage to "loot"
     var slot = findHighestBoosterSlot(); // Get the inventory slot with the highest level booster
-    shift(slot, "goldbooster"); // Shift the booster to the "goldbooster" slot
+	equipIfNeeded("phelmet", "helmet");
+    equipIfNeeded("tshirt88", "chest");
+    equipIfNeeded("starkillers", "pants");
+    equipIfNeeded("wingedboots", "shoes");
+    equipIfNeeded("xgloves", "gloves");
+	equipIfNeeded("t2stramulet", "amulet");
+	
+    shift(slot, "luckbooster"); // Shift the booster to the "goldbooster" slot
 }
 
 function findHighestBoosterSlot() {
@@ -77,7 +91,7 @@ function delayedLoot() {
         tryloot = true;
         timeoutLoot(id, new Date()); // Call the timeoutLoot function with the chest's id and current time
         looted++;
-        if (looted == 75) break; // Exit the loop if 75 chests have been looted
+        if (looted == 10) break; // Exit the loop if 10 chests have been looted
     }
 }
 
@@ -119,4 +133,10 @@ function findBoosterSlot() {
     }
 
     return booster; // Return the slot of the booster
+}
+
+function equipIfNeeded(itemName, slotName) {
+    if (character.slots[slotName]?.name !== itemName) {
+        equip(locate_item(itemName), slotName);
+    }
 }

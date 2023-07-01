@@ -1,142 +1,128 @@
+// Variable to store the timestamp of the last loot
 var lastLoot = null;
 
-// Run the code inside the setInterval function every 100 milliseconds
+// Interval function that runs every 100 milliseconds
 setInterval(function () {
     // Check if enough time has passed since the last loot
-    if (lastLoot == null || new Date() - lastLoot > 100) {
+    if ((lastLoot == null || new Date() - lastLoot > 200)) {
         // Check if there is at least one chest available
-        if (getNumChests() >= 8) {
-            delayedLoot(); // Call the delayedLoot function
-            lastLoot = new Date(); // Update the lastLoot variable with the current time
+        if (getNumChests() >= 1) {
+            // Delayed loot function is called
+            delayedLoot();
+            // Update the timestamp of the last loot
+            lastLoot = new Date();
         }
     }
-
-    // Check if there are no chests and tryloot is true
+    // Check if there are no chests left and tryloot flag is true
     if (getNumChests() == 0 && tryloot) {
-        timoutRevertLootState(); // Call the timoutRevertLootState function
+        // Revert the loot state
+        timoutRevertLootState();
     }
-}, 50);
+}, 100);
 
+// Function to prepare for looting gold
 function prepForGold() {
-    localStorage.setItem("LootState", "gold"); // Set the value of "LootState" in localStorage to "gold"
-    var slot = findHighestBoosterSlot(); // Get the inventory slot with the highest level booster
-    equipIfNeeded("wcap", "helmet");
-    equipIfNeeded("wattire", "chest");
-    equipIfNeeded("wbreeches", "pants");
-    equipIfNeeded("wshoes", "shoes");
-    equipIfNeeded("handofmidas", "gloves");
-    equipIfNeeded("spookyamulet", "amulet");
-
-    shift(slot, "goldbooster"); // Shift the booster to the "goldbooster" slot
+    // Set the loot state in the browser's localStorage to "gold"
+    localStorage.setItem("LootState", "gold");
+    // Find the slot index of the highest level booster item
+    var slot = findHighestBoosterSlot();
+    // Shift the booster item to the "goldbooster" slot
+    shift(slot, "goldbooster");
 }
 
+// Function to prepare for looting other items
 function prepForLoot() {
-    localStorage.setItem("LootState", "loot"); // Set the value of "LootState" in localStorage to "loot"
-    var slot = findHighestBoosterSlot(); // Get the inventory slot with the highest level booster
-    equipIfNeeded("phelmet", "helmet");
-    equipIfNeeded("tshirt88", "chest");
-    equipIfNeeded("starkillers", "pants");
-    equipIfNeeded("wingedboots", "shoes");
-    equipIfNeeded("xgloves", "gloves");
-    equipIfNeeded("t2stramulet", "amulet");
-
-    shift(slot, "luckbooster"); // Shift the booster to the "goldbooster" slot
+    // Set the loot state in the browser's localStorage to "loot"
+    localStorage.setItem("LootState", "loot");
+    // Find the slot index of the highest level booster item
+    var slot = findHighestBoosterSlot();
+    // Shift this booster to Luck/XP unless Crab farming
+    shift(slot, "goldbooster");
 }
 
+// Function to find the slot index of the highest level booster item
 function findHighestBoosterSlot() {
     var slot = null;
     var maxLevel = null;
-
-    // Iterate over the inventory slots
     for (var i = 0; i <= 41; i++) {
         var curSlot = character.items[i];
         if (curSlot != null && parent.G.items[curSlot.name].type == "booster") {
-            // Check if the item in the slot is a booster
             if (maxLevel == null || curSlot.level > maxLevel) {
-                // Update the maxLevel and slot variables with the current slot's level and index
                 maxLevel = curSlot.level;
                 slot = i;
             }
         }
     }
-
-    return slot; // Return the slot with the highest level booster
+    return slot;
 }
 
-function getNumChests() {
-    var count = 0;
-
-    // Iterate over the available chests
-    for (id in parent.chests) {
-        count++;
-    }
-
-    return count; // Return the number of chests
-}
-
+// Object to store information about currently looting chests
 var looting = {};
+
+// Flag to indicate if looting is attempted
 var tryloot = false;
 
+// Function for delayed looting of chests
 function delayedLoot() {
     var looted = 0;
     last_loot = new Date();
-
-    // Iterate over the chests
     for (id in parent.chests) {
         var chest = parent.chests[id];
+        // If not already attempting to loot, prepare for gold looting
         if (!tryloot) {
-            prepForGold(); // Call the prepForGold function
+            prepForGold();
         }
+        // Mark the chest as currently being looted
         looting[id] = true;
         tryloot = true;
-        timeoutLoot(id, new Date()); // Call the timeoutLoot function with the chest's id and current time
+        // Set a timeout for looting the chest
+        timeoutLoot(id, new Date());
         looted++;
-        if (looted == 10) break; // Exit the loop if 10 chests have been looted
+        // Break the loop if 50 chests have been looted
+        if (looted == 50) break;
     }
 }
 
+// Timeout function for looting a chest
 function timeoutLoot(id, lootTimeStart) {
     setTimeout(function () {
         var cid = id;
+        // Remove the chest from the looting object
         delete looting[cid];
         if (parent.chests[cid]) {
             console.log("Merch looting" + cid);
-            parent.open_chest(cid); // Open the chest with the given id
+            // Open the chest
+            parent.open_chest(cid);
         }
         //parent.socket.emit("open_chest",{id:id});
     }, 200);
 }
 
+// Function to revert the loot state
 function timoutRevertLootState() {
+    // Set the tryloot flag to false
     tryloot = false;
-    prepForLoot(); // Call the prepForLoot function
+    // Prepare for looting other items
+    prepForLoot();
 }
 
+// Function to get the number of chests available
 function getNumChests() {
     var count = 0;
-
-    // Iterate over the available chests
     for (id in parent.chests) {
         count++;
     }
-
-    return count; // Return the number of chests
+    return count;
 }
 
+// Function to find the slot index of a booster item
 function findBoosterSlot() {
-    var booster = scanInventoryForItemIndex("xpbooster"); // Check if "xpbooster" is present in the inventory
+    var booster = scanInventoryForItemIndex("xpbooster");
     if (booster == null) {
-        booster = scanInventoryForItemIndex("luckbooster"); // Check if "luckbooster" is present in the inventory
+        booster = scanInventoryForItemIndex("luckbooster");
     }
     if (booster == null) {
-        booster = scanInventoryForItemIndex("goldbooster"); // Check if "goldbooster" is present in the inventory
+        booster = scanInventoryForItemIndex("goldbooster");
     }
-
-    return booster; // Return the slot of the booster
-}
-
-function equipIfNeeded(itemName, slotName) {
-    if (character.slots[slotName]?.name !== itemName) {
-        equip(locate_item(itemName), slotName);
-    }
+    return booster;
 }

@@ -90,7 +90,7 @@ function timeoutLoot(id, lootTimeStart) {
         // Remove the chest from the looting object
         delete looting[cid];
         if (parent.chests[cid]) {
-            console.log("Merch looting" + cid);
+            //console.log("Merch looting" + cid); // testing 
             // Open the chest
             parent.open_chest(cid);
         }

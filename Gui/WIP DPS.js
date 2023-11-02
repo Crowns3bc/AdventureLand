@@ -150,7 +150,7 @@ function dpsmeterHitHandler(event) {
 		if ((attackerEntity.party != null || attacker == character.name) || attackerEntity.party == character.party) {
 			if (event.damage != null) {
 				var hitEvent = {};
-				hitEvent.damage = event.damage;
+				hitEvent.damage = event.damage + (event.dreturn || 0);;
 				hitEvent.time = new Date();
 				hitEvent.attacker = event.hid;
 				damageLog.push(hitEvent);
@@ -169,4 +169,3 @@ parent.prev_handlersdpsmeter = [];
 
 register_dpsmeterhandler("hit", dpsmeterHitHandler);
 init_dpsmeter(5);
-//handles dropping combat incorrectly, havent fixed

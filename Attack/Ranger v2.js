@@ -47,7 +47,8 @@ async function attackLoop() {
         }
 
         const nearest = getNearestMonster({ target: ["CrownPriest"] }); // Get the nearest monster targeting "CrownPriest"
-        const pal = get_entity("CrownPriest"); // Get the entity object of "CrownPriest"
+        /* This doesnt work right 
+        const pal = get_entity("CrownPal"); // Get the entity object of "CrownPal"
 
         if (pal.hp < pal.max_hp * 0.45) {
             if (Weapon !== 'cupid' && Date.now() - mainhandTimestamp > 100) {
@@ -57,7 +58,8 @@ async function attackLoop() {
             }
             await attack(pal); // Attack the "CrownPriest" target
             delay = ms_to_next_skill("attack"); // Update the delay based on the time until the next attack
-        } else if (is_in_range(nearest)) {
+        } else */
+        if (is_in_range(nearest)) {
             if (monsterIds.length === 0) {
                 // do nothing
             } else if (monsterIds.length === 1) {

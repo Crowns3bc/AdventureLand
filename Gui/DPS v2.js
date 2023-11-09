@@ -1,7 +1,7 @@
 // Constants
 const DPS_UPDATE_INTERVAL = 100;
 const DPS_SUM_INTERVAL = 10000;
-const ENTRY_EXPIRATION_TIME = 60 * 1000; // Entries older than 60 seconds
+const ENTRY_EXPIRATION_TIME = 30 * 1000; // Entries older than 30 seconds
 
 // Damage tracking object
 const damageSums = {};
@@ -13,26 +13,22 @@ function initDPSMeter() {
         let $ = parent.$;
         let brc = $('#bottomrightcorner');
 
-        if (!brc || !brc.length) {
-            throw new Error("Bottomrightcorner not found or not available.");
-        }
-
         brc.find('#dpsmeter').remove();
 
-        let dps_container = $('<div id="dpsmeter" class="dps-table"></div>').css({
+        let dps_container = $('<div id="dpsmeter"></div>').css({
             fontSize: '28px',
             color: 'white',
             textAlign: 'center',
             display: 'table',
             overflow: 'hidden',
-            width: "200px", /* Adjust the X axis to your desired position */
-            height: "50px", /* Adjust the Y axis to your desired position */
-            border: '5px solid black', /* Retaining border styling */
-            margin: '-1 auto 5px auto' /* Adjust margin for centering */
+            marginBottom: '-5px',
+            width: "100%"
         });
 
+        //vertical centering in css is fun
         let dpsmeter = $('<div id="dpsmetercontent"></div>')
             .css({
+                //display: 'table-cell',
                 verticalAlign: 'middle'
             })
             .html("")
@@ -41,6 +37,15 @@ function initDPSMeter() {
         brc.children().first().after(dps_container);
     } catch (error) {
         console.error('An error occurred during DPS meter initialization:', error);
+    }
+}
+
+// Update the DPS meter display
+function updateDPSMeter() {
+    try {
+        updateDPSList();
+    } catch (error) {
+        console.error('An error occurred while updating the DPS meter:', error);
     }
 }
 

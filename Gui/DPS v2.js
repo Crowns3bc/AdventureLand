@@ -1,7 +1,7 @@
 // Constants
 const DPS_UPDATE_INTERVAL = 100;
 const DPS_SUM_INTERVAL = 10000;
-const ENTRY_EXPIRATION_TIME = 30 * 1000; // Entries older than 30 seconds
+const ENTRY_EXPIRATION_TIME = 60 * 1000; // Entries older than 60 seconds
 
 // Damage tracking object
 const damageSums = {};

@@ -1,9 +1,6 @@
 // This variable stores the timestamp of the last looted chest
 var lastLoot = null;
-// An array to store chest IDs for looting in batches
-var chestsToLoot = [];
-// Object to track which chests are being looted
-var looting = {};
+
 // Track the current equipment setup (either "regular" or "gold")
 var currentEquipment = "regular";
 
@@ -18,17 +15,13 @@ function lootChests(chests) {
         setTimeout(() => {
             prepForLoot();
             currentEquipment = "regular";
-        }, 40 * chests.length); // Timeout based on the number of chests
+        }, 25 * chests.length); // Timeout based on the number of chests
     }
 
     // Mark chests as being looted and initiate the looting process
     for (let i = 0; i < chests.length; i++) {
-        looting[chests[i]] = true;
-        timeoutLoot(chests[i], new Date());
+        timeoutLoot(chests[i]);
     }
-
-    // Clear the array after looting
-    chestsToLoot = [];
 }
 
 // Prepares the character for using gold looting equipment
@@ -62,32 +55,28 @@ function prepForLoot() {
 }
 
 // Initiate looting chest batches at a regular interval
-setInterval(lootChestBatches, 100);
+setInterval(lootChestBatches, 200);
 
 // Loops through chests to loot them in batches
 function lootChestBatches() {
     if (getNumChests() > 0) {
         // Check conditions for looting chests
         if (lastLoot === null || new Date() - lastLoot > 500) {
-            if (getNumChests() >= 10) {
-                if (chestsToLoot.length === 0) {
-                    chestsToLoot = Object.keys(parent.chests).slice(0, 10); // Get the first 10 chest IDs
-                    lastLoot = new Date();
-                    lootChests(chestsToLoot); // Loot the chests
-                }
+            if (getNumChests() >= 15) {
+                var chestsToLoot = Object.keys(parent.chests).slice(0, 15); // Get the first 10 chest IDs
+                lastLoot = new Date();
+                lootChests(chestsToLoot); // Loot the chests
             }
         }
     }
 }
 
 // Initiates the looting process for individual chests with a timeout
-function timeoutLoot(id, lootTimeStart) {
+function timeoutLoot(id) {
     setTimeout(function () {
-        var cid = id;
-        delete looting[cid];
-        console.log(`Looting chest ID: ${cid}`);
-        if (parent.chests[cid]) {
-            parent.open_chest(cid);
+        console.log(`Looting chest ID: ${id}`);
+        if (parent.chests[id]) {
+            parent.open_chest(id);
         }
     }, 200); // Timeout for looting a single chest
 }

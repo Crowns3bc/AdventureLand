@@ -49,15 +49,6 @@ function updateDPSMeter() {
     }
 }
 
-// Update the DPS meter display
-function updateDPSMeter() {
-    try {
-        updateDPSList();
-    } catch (error) {
-        console.error('An error occurred while updating the DPS meter:', error);
-    }
-}
-
 // Function to format DPS with commas for better readability
 function getFormattedDPS(dps) {
     return dps.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");

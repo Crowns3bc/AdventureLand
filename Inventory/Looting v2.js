@@ -1,32 +1,43 @@
+// This variable stores the timestamp of the last looted chest
 var lastLoot = null;
-var chestsToLoot = []; // Array to store chest IDs for looting in batches
-var looting = {}; // Object to track which chests are being looted
-var currentEquipment = "regular"; // Track the current equipment setup
+// An array to store chest IDs for looting in batches
+var chestsToLoot = [];
+// Object to track which chests are being looted
+var looting = {};
+// Track the current equipment setup (either "regular" or "gold")
+var currentEquipment = "regular";
 
+// This function is responsible for looting chests in batches
 function lootChests(chests) {
+    // If the current equipment is "regular", switch to gold looting equipment and booster
     if (currentEquipment === "regular") {
         prepForGold(); // Switch to gold looting equipment and booster
         currentEquipment = "gold";
 
+        // Revert to regular setup after all chests are looted
         setTimeout(() => {
-            // Revert to regular setup after all chests are looted
-            prepForLoot(); 
+            prepForLoot();
             currentEquipment = "regular";
-        }, 40 * chests.length);
+        }, 40 * chests.length); // Timeout based on the number of chests
     }
 
+    // Mark chests as being looted and initiate the looting process
     for (let i = 0; i < chests.length; i++) {
-        looting[chests[i]] = true; // Mark the chest as being looted
+        looting[chests[i]] = true;
         timeoutLoot(chests[i], new Date());
     }
 
-    chestsToLoot = []; // Clear the array after looting
+    // Clear the array after looting
+    chestsToLoot = [];
 }
 
+// Prepares the character for using gold looting equipment
 function prepForGold() {
     console.log("Switching to equipment for gold looting...");
+    // Set local storage state for gold looting
     localStorage.setItem("LootState", "gold");
     var slot = findHighestBoosterSlot();
+    // Equip various items for gold looting
     equipIfNeeded("wcap", "helmet");
     equipIfNeeded("wattire", "chest");
     equipIfNeeded("wbreeches", "pants");
@@ -35,10 +46,13 @@ function prepForGold() {
     shift(slot, "goldbooster");
 }
 
+// Prepares the character for using regular looting equipment
 function prepForLoot() {
     console.log("Switching to regular looting equipment...");
+    // Set local storage state for regular looting
     localStorage.setItem("LootState", "loot");
     var slot = findHighestBoosterSlot();
+    // Equip various items for regular looting
     equipIfNeeded("xhelmet", "helmet");
     equipIfNeeded("tshirt88", "chest");
     equipIfNeeded("starkillers", "pants");
@@ -47,10 +61,13 @@ function prepForLoot() {
     shift(slot, "luckbooster");
 }
 
+// Initiate looting chest batches at a regular interval
 setInterval(lootChestBatches, 100);
 
+// Loops through chests to loot them in batches
 function lootChestBatches() {
     if (getNumChests() > 0) {
+        // Check conditions for looting chests
         if (lastLoot === null || new Date() - lastLoot > 500) {
             if (getNumChests() >= 10) {
                 if (chestsToLoot.length === 0) {
@@ -63,6 +80,7 @@ function lootChestBatches() {
     }
 }
 
+// Initiates the looting process for individual chests with a timeout
 function timeoutLoot(id, lootTimeStart) {
     setTimeout(function () {
         var cid = id;
@@ -71,9 +89,10 @@ function timeoutLoot(id, lootTimeStart) {
         if (parent.chests[cid]) {
             parent.open_chest(cid);
         }
-    }, 200);
+    }, 200); // Timeout for looting a single chest
 }
 
+// Finds the slot with the highest level booster item
 function findHighestBoosterSlot() {
     var slot = null;
     var maxLevel = null;
@@ -89,6 +108,7 @@ function findHighestBoosterSlot() {
     return slot;
 }
 
+// Counts the number of available chests
 function getNumChests() {
     var count = 0;
     for (id in parent.chests) {

@@ -122,7 +122,7 @@ function updateDPSMeterUI() {
             return;
         }
 
-        let listString = '<div>Damage Meter</div>';
+        let listString = '<div>Crowns Damage Meter</div>';
         listString += '<table border="1" style="width:100%">';
 
         // Header row start with player names

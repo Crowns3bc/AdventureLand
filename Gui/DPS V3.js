@@ -92,9 +92,6 @@ parent.socket.on("hit", function (data) {
 
             partyDamageSums[targetId] = entry;
         }
-
-        // Update the DPS meter UI
-        updateDPSMeterUI();
     } catch (error) {
         console.error('An error occurred in the hit event handler:', error);
     }
@@ -190,5 +187,14 @@ function calculateDPSForPartyMember(entry) {
 // Initialize the DPS meter
 initDPSMeter();
 
-// Start updating the DPS meter UI
-setInterval(updateDPSMeterUI, 1000);
+function updateDPSMeterInterval() {
+    try {
+        // Update the DPS meter UI
+        updateDPSMeterUI();
+    } catch (error) {
+        console.error('An error occurred while updating the DPS meter at the interval:', error);
+    }
+}
+
+// Start updating the DPS meter UI at regular intervals
+setInterval(updateDPSMeterInterval, 1000);

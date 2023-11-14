@@ -1,8 +1,11 @@
 // Initialize the DPS meter
 function initDPSMeter(minref) {
+    // jQuery shorthand
     let $ = parent.$;
+    // Find and remove existing DPS meter container
     let brc = $('#bottomrightcorner');
     brc.find('#dpsmeter').remove();
+    // Create a new container for the DPS meter
     let dpsmeter_container = $('<div id="dpsmeter"></div>').css({
         fontSize: '20px',
         color: 'white',
@@ -14,7 +17,7 @@ function initDPSMeter(minref) {
         backgroundColor: 'rgba(0, 0, 0, 0.5)', // Add a background color
         //padding: '0px', // Add padding for better visibility
     });
-    // vertical centering in CSS is fun
+    // Create a child container for meter content and append to the DPS meter container
     let xptimer = $('<div id="dpsmetercontent"></div>')
         .css({
             display: 'table-cell',
@@ -25,6 +28,7 @@ function initDPSMeter(minref) {
         })
         .html("")
         .appendTo(dpsmeter_container);
+    // Insert the DPS meter container after the first child of the bottomrightcorner container
     brc.children().first().after(dpsmeter_container);
 }
 
@@ -55,6 +59,7 @@ parent.socket.on("hit", function (data) {
         if (data.hid) {
             // Update DPS data for the character and party members
             let targetId = data.hid;
+            // Retrieve existing entry or create a new one
             let entry = partyDamageSums[targetId] || {
                 startTime: performance.now(),
                 sumDamage: 0,
@@ -100,7 +105,9 @@ parent.socket.on("hit", function (data) {
 // Update the DPS meter display
 function updateDPSMeterUI() {
     try {
+        // Calculate elapsed time since the meter start
         let ELAPSED = performance.now() - METER_START;
+        // Calculate various DPS values
         let dps = Math.floor((damage * 1000) / ELAPSED);
         let burnDps = Math.floor((burnDamage * 1000) / ELAPSED);
         let blastDps = Math.floor((blastDamage * 1000) / ELAPSED);
@@ -109,6 +116,7 @@ function updateDPSMeterUI() {
         let $ = parent.$;
         let dpsDisplay = $('#dpsmetercontent');
 
+        // Check if the DPS display element is found
         if (dpsDisplay.length === 0) {
             console.warn('DPS display element not found.');
             return;
@@ -155,6 +163,7 @@ function updateDPSMeterUI() {
     }
 }
 
+// Function to get the value of a specific damage type
 function getTypeValue(type, entry) {
     switch (type) {
         case "DPS":
@@ -175,8 +184,11 @@ function getTypeValue(type, entry) {
 // Calculate DPS for a specific party member
 function calculateDPSForPartyMember(entry) {
     try {
+        // Calculate elapsed time since the entry start time
         const elapsedTime = performance.now() - (entry && entry.startTime || performance.now());
+        // Get the total damage for the entry
         const totalDamage = entry && entry.sumDamage || 0;
+        // Calculate and return the DPS
         return Math.floor((totalDamage * 1000) / elapsedTime);
     } catch (error) {
         console.error('An error occurred while calculating DPS for a party member:', error);
@@ -187,6 +199,7 @@ function calculateDPSForPartyMember(entry) {
 // Initialize the DPS meter
 initDPSMeter();
 
+// Function to update the DPS meter UI at regular intervals
 function updateDPSMeterInterval() {
     try {
         // Update the DPS meter UI

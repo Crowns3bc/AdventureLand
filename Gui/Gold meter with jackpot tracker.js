@@ -18,6 +18,7 @@ function init_goldmeter() {
     marginBottom: '-5px',
 	width: "100%"
   });
+  //vertical centering in css is fun
   let xptimer = $('<div id="goldtimercontent"></div>')
     .css({
       display: 'table-cell',
@@ -35,6 +36,7 @@ function updateGoldTimerList(){
 	goldString += "<div>" + largestGoldDrop.toLocaleString('en') + " Largest Gold Drop</div>";
 	$('#' + "goldtimercontent").html(goldString).css({
     background: 'black',
+	backgroundColor: 'rgba(0, 0, 0, 0.7)', // Add a background color
     border: 'solid gray',
     borderWidth: '5px 5px',
     height: '50px',
@@ -63,6 +65,7 @@ function trackLargestGoldDrop(gold) {
   }
 }
 
+//Clean out any pre-existing listeners
 if (parent.prev_handlersgoldmeter) {
     for (let [event, handler] of parent.prev_handlersgoldmeter) {
       parent.socket.removeListener(event, handler);

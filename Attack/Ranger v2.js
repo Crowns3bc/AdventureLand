@@ -21,7 +21,7 @@ async function attackLoop() {
     try {
         // Define the list of target names and blacklist of monster names
         const targetNames = ["CrownPriest", "CrownTown", "earthWar", "earthPri", "Mommy", "Atlus"];
-        const blacklistTargets = ["nerfedmummy", "bat"];
+        //const blacklistTargets = ["nerfedmummy", "bat"]; // I didnt even end up using this cause it wasnt working
 
         // Filter and map the monster IDs based on type and target name
         let monsterIds = Object.values(parent.entities)
@@ -42,6 +42,15 @@ async function attackLoop() {
                 cursed: true,
             });
         }
+		
+		if (!prio) {
+		for (let i = 0; i < targetNames.length; i++) {
+            prio = get_nearest_monster_v2({
+                target: targetNames[i],
+            });
+            if (prio) break; // Stop searching if a priority target is found
+        	}
+		}
 
         // If a priority monster is found and is in range, apply skills
         if (prio && is_in_range(prio)) {
@@ -53,35 +62,27 @@ async function attackLoop() {
                 await use_skill("supershot", prio);
             }
         }
-
-        // Iterate over each monster ID and perform corresponding actions
-        for (let i = 0; i < monsterIds.length; i++) {
-            const monsterId = monsterIds[i];
-            const monster = parent.entities[monsterId];
-
-            // Check if the monster is in range
-            if (is_in_range(monster)) {
-                // Check the number of monsters in the vicinity
-                if (monsterIds.length === 0) {
-                    // If no monsters present, do nothing
-                } else if (monsterIds.length === 1) {
-                    singleSet(); // Equip the set for a single monster
-                    await attack(prio); // Attack the target
-                    delay = ms_to_next_skill("attack"); // Set delay until the next attack skill
-                }
-                else if (monsterIds.length === 2 || monsterIds.length === 3) {
-                    threeSet(); // Equip the set for two or three monsters
-                    await use_skill("3shot", monsterIds); // Use the 3-shot skill
-                    delay = ms_to_next_skill("attack"); // Set delay until the next attack skill
-                } else if (mobTargets_inRange(home, 45, ['CrownPriest', 'CrownTown'], [X, Y]) <= 3) {
-                    threeSet(); // Equip the set for three or fewer monsters targeting important locations
-                    await use_skill("5shot", monsterIds); // Use the 5-shot skill
-                    delay = ms_to_next_skill("attack"); // Set delay until the next attack skill
-                } else if (mobTargets_inRange(home, 45, ['CrownPriest', 'CrownTown'], [X, Y]) > 3) {
-                    boomSet(); // Equip the set for more than three monsters targeting important locations
-                    await use_skill("5shot", monsterIds); // Use the 5-shot skill
-                    delay = ms_to_next_skill("attack"); // Set delay until the next attack skill
-                }
+        // Check the number of monsters in the vicinity
+        if (monsterIds.length) {
+            if (monsterIds.length === 1) {
+				if (prio != null) {
+                singleSet(); // Equip the set for a single monster
+                await attack(prio); // Attack the target
+                delay = ms_to_next_skill("attack"); // Set delay until the next attack skill
+				}
+            }
+            else if (monsterIds.length === 2 || monsterIds.length === 3) {
+                deadSet(); // Equip the set for two or three monsters
+                await use_skill("3shot", monsterIds); // Use the 3-shot skill
+                delay = ms_to_next_skill("attack"); // Set delay until the next attack skill
+            } else if (mobTargets_inRange(home, 45, ['CrownPriest', 'CrownTown'], [X, Y]) <= 3) {
+                deadSet(); // Equip the set for five or fewer monsters within the location
+                await use_skill("5shot", monsterIds); // Use the 5-shot skill
+                delay = ms_to_next_skill("attack"); // Set delay until the next attack skill
+            } else {
+                boomSet(); // Equip the set for more than five monsters within the location
+                await use_skill("5shot", monsterIds); // Use the 5-shot skill
+                delay = ms_to_next_skill("attack"); // Set delay until the next attack skill
             }
         }
     } catch (e) {
@@ -124,19 +125,18 @@ function mobTargets_inRange(mtypes, radius, mobs_target, point) {
     return count;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////
-// Declate the set's you want to use
 function singleSet() {
     equipIfNeeded("bowofthedead", "mainhand", 11, "l");
-    equipIfNeeded("coat", "coat", 10, "l");
+    equipIfNeeded("coat", "chest", 10, "l");
 }
-function threeSet() {
+function deadSet() {
     equipIfNeeded("bowofthedead", "mainhand", 11, "l");
-    equipIfNeeded("tshirt9", "coat", 7, "l");
+    equipIfNeeded("tshirt9", "chest", 7, "l");
 }
 
 function boomSet() {
     equipIfNeeded("pouchbow", "mainhand", 11, "l");
-    equipIfNeeded("tshirt9", "coat", 7, "l");
+    equipIfNeeded("tshirt9", "chest", 7, "l");
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////
 async function equipIfNeeded(itemName, slotName, level, l) {
@@ -151,37 +151,31 @@ async function equipIfNeeded(itemName, slotName, level, l) {
         name = itemName;
     }
 
+    if (character.slots[slotName] != null) {
+        let slotItem = character.slots[slotName];
+        if (slotItem.name === name && slotItem.level === level && slotItem.l === l) {
+            return;
+        }
+    }
+
     // Iterate over character items
-    for (var i = 0; i < character.items.length; ++i) {
+    for (let i = 0; i < character.items.length; i++) {
         const item = character.items[i];
-        if (item != null) {
-            item.slot = i; // Assign slot index to the item
-            // Check if item matches the specified criteria
-            if (item.name === name && item.level === level && item.l === l) {
-                // Check if the slot is empty or if it's not already equipped with the specified item
-                if (character.slots[slotName]?.name !== itemName) {
-                    // Equip the item to the specified slot
-                    equip(i, slotName); // Can await if needed
-                }
-                return; // Exit the function once the item is equipped
-            }
+        // Check if item matches the specified criteria
+        if (item != null && item.name === name && item.level === level && item.l === l) {
+            // Equip the item to the specified slot
+            return equip(i, slotName); // Exit the function once the item is equipped, can await if needed
         }
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////
-// My edited version of the get_nearest_monster() function
-function get_nearest_monster_v2(args) {
-    var min_d = 999999, target = null;
-    var min_hp = 999999999; // Track the minimum HP of monsters encountered
-    var max_hp = 0; // Track the maximum HP of monsters encountered
+function get_nearest_monster_v2(args = {}) {
+    let min_d = 999999, target = null;
+    let min_hp = 999999999; // Track the minimum HP of monsters encountered
+    let max_hp = 0; // Track the maximum HP of monsters encountered
 
-    if (!args) args = {};
-    if (args && args.target && args.target.name) args.target = args.target.name;
-    if (args && args.type == "monster") game_log("get_nearest_monster: you used monster.type, which is always 'monster', use monster.mtype instead");
-    if (args && args.mtype) game_log("get_nearest_monster: you used 'mtype', you should use 'type'");
-
-    for (id in parent.entities) {
-        var current = parent.entities[id];
+    for (let id in parent.entities) {
+        let current = parent.entities[id];
         if (current.type != "monster" || !current.visible || current.dead) continue;
         if (args.type && current.mtype != args.type) continue;
         if (args.min_level !== undefined && current.level < args.min_level) continue; // Filter monsters based on minimum level
@@ -189,7 +183,7 @@ function get_nearest_monster_v2(args) {
         if (args.target && current.target != args.target) continue;
         if (args.no_target && current.target && current.target != character.name) continue;
         if (args.cursed && !current.s.cursed) continue; // Filter monsters based on curse status
-        var c_dist;
+        let c_dist;
         if (args.point_for_distance_check) {
             c_dist = Math.hypot(args.point_for_distance_check[0] - current.x, args.point_for_distance_check[1] - current.y); // Calculate distance from a specified point
         } else {

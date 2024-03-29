@@ -14,7 +14,7 @@ function initDPSMeter(minref) {
         display: 'table',
         overflow: 'hidden',
         marginBottom: '-3px',
-        width: '100%',
+        width: '100%', //change if its too short or wide for you
         backgroundColor: 'rgba(0, 0, 0, 0.5)', // Add a background color
     });
 
@@ -25,7 +25,7 @@ function initDPSMeter(minref) {
             verticalAlign: 'middle',
             backgroundColor: 'rgba(0, 0, 0, 0.5)', // Add a background color
             padding: '5px', // Add padding for better visibility
-            border: '5px solid grey', // Add a border for better visibility
+            border: '4px solid grey', // Add a border for better visibility
         })
         .html("")
         .appendTo(dpsmeter_container);
@@ -40,6 +40,7 @@ var burnDamage = 0;
 var blastDamage = 0;
 var baseDamage = 0;
 var baseHeal = 0;
+var lifesteal = 0;
 var METER_START = performance.now(); // Record the start time for DPS calculation
 
 // Damage tracking object for party members
@@ -62,6 +63,10 @@ parent.socket.on("hit", function (data) {
             // Update DPS data for the character and party members
             let targetId = data.hid;
 
+            // Log lifesteal data
+            //console.log("Lifesteal Data:", data.lifesteal);
+            //console.log("damage Data:", data.damage);
+
             // Check if the target is in the party
             if (parent.party_list && Array.isArray(parent.party_list) && parent.party_list.includes(targetId)) {
                 let entry = partyDamageSums[targetId] || {
@@ -71,12 +76,13 @@ parent.socket.on("hit", function (data) {
                     sumBurnDamage: 0,
                     sumBlastDamage: 0,
                     sumBaseDamage: 0,
+                    sumLifesteal: 0 // Initialize lifesteal sum
                 };
 
                 if (targetId == character.id) {
                     // Update the character's damage values
                     entry.sumDamage += data.damage || 0;
-                    entry.sumHeal += data.heal || 0;
+                    entry.sumHeal += (data.heal || 0) + (data.lifesteal || 0);
 
                     if (data.source == "burn") {
                         entry.sumBurnDamage += data.damage;
@@ -88,7 +94,7 @@ parent.socket.on("hit", function (data) {
                 } else {
                     // Update party member's damage values
                     entry.sumDamage += data.damage || 0;
-                    entry.sumHeal += data.heal || 0;
+                    entry.sumHeal += (data.heal || 0) + (data.lifesteal || 0);
 
                     if (data.source == "burn") {
                         entry.sumBurnDamage += data.damage;
@@ -132,60 +138,48 @@ function updateDPSMeterUI() {
         let listString = '<div>Crowns Damage Meter</div>';
         listString += '<table border="1" style="width:100%">';
 
-        // Header row start with player names
+        // Header row start with damage types horizontally
         listString += '<tr><th></th>';
-        for (let id in partyDamageSums) {
-            const player = get_player(id);
-            if (player) {
-                listString += `<th>${player.name}</th>`;
-            }
+        for (const type of ["Base", "Blast", "Burn", "HPS", "DPS"]) {
+            listString += `<th>${type}</th>`;
         }
         listString += '</tr>';
 
-        // Rows for each damage type
-        const damageTypes = ["Base", "Blast", "Burn", "HPS", "DPS"];
+        // Rows for each player with character names vertically
+        for (let id in partyDamageSums) {
+            const player = get_player(id);
+            if (player) {
+                listString += '<tr>';
+                listString += `<td>${player.name}</td>`;
 
-        // Initialize total DPS outside the loop
-        let totalDPS = 0;
+                for (const type of ["Base", "Blast", "Burn", "HPS", "DPS"]) {
+                    const entry = partyDamageSums[id];
+                    const value = getTypeValue(type, entry);
+                    listString += `<td>${getFormattedDPS(value)}</td>`;
+                }
 
-        // Create an array to store individual DPS values
-        let individualDPSValues = [];
+                listString += '</tr>';
+            }
+        }
 
-        for (const type of damageTypes) {
-            listString += '<tr>';
-            listString += `<td>${type}</td>`;
-
-            // Initialize total DPS for the current damage type
+        // Add a row for Total DPS with colspan
+        listString += '<tr><td>Total DPS</td>';
+        for (const type of ["Base", "Blast", "Burn", "HPS", "DPS"]) {
             let typeTotalDPS = 0;
 
-            // Update damage values for each player and add to total DPS
             for (let id in partyDamageSums) {
                 const entry = partyDamageSums[id];
                 const value = getTypeValue(type, entry);
                 typeTotalDPS += value;
-
-                // Store the individual DPS value for each player for the current damage type
-                if (type === "DPS") {
-                    individualDPSValues.push(value);
-                }
-
-                listString += `<td>${getFormattedDPS(value)}</td>`;
             }
 
-            // Add the total DPS for the current damage type to the overall total
             if (type === "DPS") {
-                totalDPS += typeTotalDPS;
+                listString += `<td colspan="${Object.keys(partyDamageSums).length}">${getFormattedDPS(typeTotalDPS)}</td>`;
+            } else {
+                listString += `<td>${getFormattedDPS(typeTotalDPS)}</td>`;
             }
-
-            listString += '</tr>';
         }
-
-        // Add a row for Total DPS with colspan
-        listString += `<tr><td>Total DPS</td><td colspan="${Object.keys(partyDamageSums).length}">${getFormattedDPS(totalDPS)}</td></tr>`;
-
-        // Log individual DPS values and total DPS to the console for verification
-        console.log('Individual DPS Values:', individualDPSValues);
-        console.log('Total DPS:', totalDPS);
+        listString += '</tr>';
 
         listString += '</table>'; // Table end
 

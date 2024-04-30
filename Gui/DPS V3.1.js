@@ -35,16 +35,17 @@ function initDPSMeter(minref) {
 }
 
 // Initialize your variables
-var damage = 0;
-var burnDamage = 0;
-var blastDamage = 0;
-var baseDamage = 0;
-var baseHeal = 0;
-var lifesteal = 0;
-var METER_START = performance.now(); // Record the start time for DPS calculation
+let damage = 0;
+let burnDamage = 0;
+let blastDamage = 0;
+let baseDamage = 0;
+let baseHeal = 0;
+let lifesteal = 0;
+let manasteal = 0;
+let METER_START = performance.now(); // Record the start time for DPS calculation
 
 // Damage tracking object for party members
-var partyDamageSums = {};
+let partyDamageSums = {};
 
 // Function to format DPS with commas for better readability
 function getFormattedDPS(dps) {
@@ -76,13 +77,15 @@ parent.socket.on("hit", function (data) {
                     sumBurnDamage: 0,
                     sumBlastDamage: 0,
                     sumBaseDamage: 0,
-                    sumLifesteal: 0 // Initialize lifesteal sum
+                    sumLifesteal: 0, // Initialize lifesteal sum
+                    sumManaSteal: 0,
                 };
 
                 if (targetId == character.id) {
                     // Update the character's damage values
                     entry.sumDamage += data.damage || 0;
-                    entry.sumHeal += (data.heal || 0) + (data.lifesteal || 0);
+                    entry.sumHeal += (data.heal || 0) + (data.lifesteal || 0); // Add both heal and lifesteal
+                    entry.sumManaSteal += data.manasteal || 0; // Add manasteal
 
                     if (data.source == "burn") {
                         entry.sumBurnDamage += data.damage;
@@ -94,7 +97,8 @@ parent.socket.on("hit", function (data) {
                 } else {
                     // Update party member's damage values
                     entry.sumDamage += data.damage || 0;
-                    entry.sumHeal += (data.heal || 0) + (data.lifesteal || 0);
+                    entry.sumHeal += (data.heal || 0) + (data.lifesteal || 0); // Add both heal and lifesteal
+                    entry.sumManaSteal += data.manasteal || 0; // Add manasteal
 
                     if (data.source == "burn") {
                         entry.sumBurnDamage += data.damage;
@@ -113,9 +117,12 @@ parent.socket.on("hit", function (data) {
     }
 });
 
-// Update the DPS meter display
 function updateDPSMeterUI() {
     try {
+        //All supported types can freely be added or removed
+        //Supported types:  ["Base", "Blast", Burn", "MPS", "HPS", "DPS"];
+        const damageTypes = ["Base", "MPS", "HPS", "DPS"];
+
         // Calculate elapsed time since DPS meter start
         let ELAPSED = performance.now() - METER_START;
 
@@ -125,6 +132,7 @@ function updateDPSMeterUI() {
         let blastDps = Math.floor((blastDamage * 1000) / ELAPSED);
         let baseDps = Math.floor((baseDamage * 1000) / ELAPSED);
         let hps = Math.floor((baseHeal * 1000) / ELAPSED);
+        let mps = Math.floor((manasteal * 1000) / ELAPSED);
 
         let $ = parent.$;
         let dpsDisplay = $('#dpsmetercontent');
@@ -140,7 +148,7 @@ function updateDPSMeterUI() {
 
         // Header row start with damage types horizontally
         listString += '<tr><th></th>';
-        for (const type of ["Base", "Blast", "Burn", "HPS", "DPS"]) {
+        for (const type of damageTypes) {
             listString += `<th>${type}</th>`;
         }
         listString += '</tr>';
@@ -152,7 +160,7 @@ function updateDPSMeterUI() {
                 listString += '<tr>';
                 listString += `<td>${player.name}</td>`;
 
-                for (const type of ["Base", "Blast", "Burn", "HPS", "DPS"]) {
+                for (const type of damageTypes) {
                     const entry = partyDamageSums[id];
                     const value = getTypeValue(type, entry);
                     listString += `<td>${getFormattedDPS(value)}</td>`;
@@ -164,7 +172,7 @@ function updateDPSMeterUI() {
 
         // Add a row for Total DPS with colspan
         listString += '<tr><td>Total DPS</td>';
-        for (const type of ["Base", "Blast", "Burn", "HPS", "DPS"]) {
+        for (const type of damageTypes) {
             let typeTotalDPS = 0;
 
             for (let id in partyDamageSums) {
@@ -203,6 +211,8 @@ function getTypeValue(type, entry) {
             return entry ? Math.floor((entry.sumBaseDamage * 1000) / (performance.now() - entry.startTime)) : 0;
         case "HPS":
             return entry ? Math.floor((entry.sumHeal * 1000) / (performance.now() - entry.startTime)) : 0;
+        case "MPS":
+            return entry ? Math.floor((entry.sumManaSteal * 1000) / (performance.now() - entry.startTime)) : 0;
         default:
             return 0;
     }

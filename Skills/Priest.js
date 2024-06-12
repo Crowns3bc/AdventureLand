@@ -24,7 +24,7 @@ SkillLoop();
 
 async function handlePriestSkills(X, Y, dead, disabled, targetNames, mapsToExclude, eventMobs, eventMaps, zapperMobs) {
 	if (!dead || disabled) {
-		handleZapper(zapperMobs);
+		//handleZapper(zapperMobs); // this is broken like always...
 		handleCursing(X, Y, targetNames);
 		handleAbsorb(dead, mapsToExclude, eventMobs, eventMaps);
 		handlePartyHeal(dead);
@@ -32,6 +32,17 @@ async function handlePriestSkills(X, Y, dead, disabled, targetNames, mapsToExclu
 	}
 }
 
+// im just actually retarded and dont know what im doing
+/*
+	if (there are mobs to zap) {
+ 		equip(zapper) && zap each one until theres no more
+   	}  
+    	if (there are no more mobs to zap) {
+    		equip(luckring);
+      }
+*/
+// thats too hard for me to do apparently so idk what else to do
+/*
 async function handleZapper(zapperMobs) {
     const entities = Object.values(parent.entities).filter(entity => entity && !entity.target && zapperMobs.includes(entity.mtype));
     const zapperReady = !is_on_cooldown("zapperzap") && character.mp > G?.skills?.zapperzap?.mp + 3250 && character.cc < 175;
@@ -47,6 +58,7 @@ async function handleZapper(zapperMobs) {
         equipIfNeeded("ringofluck", "ring2", 1, "s");
     }
 }
+*/
 
 async function handleCursing(X, Y, targetNames) {
     let target = get_nearest_monster_v2({ type: 'rharpy' }) || get_nearest_monster_v2({ type: 'skeletor' });

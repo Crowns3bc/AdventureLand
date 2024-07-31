@@ -125,7 +125,7 @@ function updateDPSMeterUI() {
 
         if (dpsDisplay.length === 0) return;
 
-        let listString = '<div>Crowns Damage Meter</div>';
+        let listString = '<div>👑 Crowns Damage Meter 👑</div>';
         listString += '<table border="1" style="width:100%">';
 
         // Header row

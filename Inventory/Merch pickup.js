@@ -1,22 +1,34 @@
-//Farmers
-setInterval(function () {
-	if (character.s.mluck == undefined || character.s.mluck.f != "CrownMerch") {
-		send_cm("CrownMerch", {
-			message: "location",
-			x: character.x,
-			y: character.y,
-			map: character.map
-		});
-	}
-}, 1000);
+// Define the player name constant
+const TARGET_PLAYER_NAME = "CrownMerch";
 
-//Merchant
-function on_cm(name, data) {
-  if(name == "CrownsAnal" || name == "CrownPriest" || name == "CrownTown"|| name == "CrownMage"|| name == "CrownSpam" || name == "CrownPal" && data.message === "location") {
-    // If message is from "fighter" and contains "location" data, smart move to the location
-    if (!smart.moving) {
-      smart_move({ x: data.x, y: data.y, map: data.map });
-		game_log("Smart moving to " + name);
+// Function to send location updates
+const sendLocationUpdate = () => {
+    if (!character.s.mluck || character.s.mluck.f !== TARGET_PLAYER_NAME) {
+        send_cm(TARGET_PLAYER_NAME, {
+            message: "location",
+            x: character.x,
+            y: character.y,
+            map: character.map
+        });
     }
-  }
+};
+
+const validPlayerNames = [
+    "CrownsAnal",
+    "CrownPriest",
+    "CrownTown",
+    "CrownMage",
+    "CrownSpam",
+    "CrownPal"
+];
+
+// Function to handle cm messages
+function on_cm(name, data) {
+    if (validPlayerNames.includes(name) && data.message === "location") {
+        // If not already moving, smart move to the location
+        if (!smart.moving) {
+            smart_move({ x: data.x, y: data.y, map: data.map });
+            game_log(`Smart moving to ${name}`);
+        }
+    }
 }

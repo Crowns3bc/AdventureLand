@@ -1,22 +1,58 @@
 let scythe = 0;
 let eTime = 0;
 let basher = 0;
-let tank = get_entity("CrownPriest");
 async function skillLoop() {
-    let delay = 15;
+    let delay = 40;
     try {
+        let zap = true;
+        const dead = character.rip;
         const Mainhand = character.slots.mainhand?.name;
         const aoe = character.mp >= character.mp_cost * 2 + G.skills.cleave.mp + 320;
         const cc = character.cc < 135;
-        const stMaps = ["level2w", "winter_cove", "arena", ""];
-        const aoeMaps = ["halloween", "desertland", "goobrawl", "spookytown", "tunnel", "main", "", "level2n", "cave"];
-
+        const zapperMobs = ["gscorpion"];
+        const stMaps = ["", "winter_cove", "arena", "",];
+        const aoeMaps = ["halloween", "goobrawl", "spookytown", "tunnel", "main", "winterland", "cave", "level2n", "level2w", "desertland"];
+        let tank = get_entity("CrownPriest");
         if (character.ctype === "warrior") {
             if (tank && tank.hp < tank.max_hp * 0.5) {
-                handleStomp(Mainhand, stMaps, aoeMaps);
+                handleStomp(Mainhand, stMaps, aoeMaps, tank);
             }
-            handleCleave(Mainhand, aoe, cc, stMaps, aoeMaps);
-            handleWarriorSkills();
+            if (character.name === "CrownTown") {
+                handleCleave(Mainhand, aoe, cc, stMaps, aoeMaps, tank);
+                handleWarriorSkills(tank);
+            }
+        }
+
+
+        if (!dead && zap && character.ctype === "paladin") {
+            // Filter entities for zapper skill
+            const entities = Object.values(parent.entities).filter(
+                entity => entity && !entity.target && zapperMobs.includes(entity.mtype)
+            );
+
+            // Check if zapper skill is ready
+            const ready = (
+                !is_on_cooldown("zapperzap") &&
+                character.mp > G?.skills?.zapperzap?.mp + 400 &&
+                character.cc < 175
+            );
+
+            // Check if zapper skill is needed
+            const zapperNeeded = entities.some(entity => is_in_range(entity, "zapperzap"));
+            //game_log("zapperNeeded");
+            // Use zapper skill if conditions are met
+            if (!smart.moving && ready && zapperNeeded) {
+                equipIfNeeded("zapper", "ring2", 1, "l");
+                //game_log("Equip Zapper");
+                for (const entity of entities) {
+                    if (is_in_range(entity, "zapperzap")) {
+                        await use_skill("zapperzap", entity);
+                        //game_log("Use Zapper");
+                    }
+                }
+                equipIfNeeded("suckerpunch", "ring2", 1, "l");
+                //game_log("Equip Luck Ring");
+            }
         }
 
         if (character.ctype === 'paladin') {
@@ -32,7 +68,7 @@ async function skillLoop() {
     setTimeout(skillLoop, delay);
 }
 
-async function handleStomp(Mainhand, stMaps, aoeMaps) {
+async function handleStomp(Mainhand, stMaps, aoeMaps, tank) {
     if (!is_on_cooldown("stomp")) {
         if (Mainhand !== "basher" && performance.now() - basher > 200) {
             basher = performance.now();
@@ -41,8 +77,8 @@ async function handleStomp(Mainhand, stMaps, aoeMaps) {
         use_skill("stomp");
         game_log("Using STOMP", "#B900FF");
     } else {
-		handleWeaponSwap(stMaps, aoeMaps);
-	}
+        handleWeaponSwap(stMaps, aoeMaps);
+    }
 }
 
 function handleWeaponSwap(stMaps, aoeMaps) {
@@ -56,25 +92,32 @@ function handleWeaponSwap(stMaps, aoeMaps) {
     }
 }
 
-function handleCleave(Mainhand, aoe, cc, stMaps, aoeMaps) {
+async function handleCleave(Mainhand, aoe, cc, stMaps, aoeMaps, tank) {
+    //console.log(`handleCleave called with: Mainhand=${Mainhand}, aoe=${aoe}, cc=${cc}, map=${character.map}`);
+
     if (!smart.moving && cc && aoe && !is_on_cooldown("cleave")) {
         const monstersInRange = Object.values(parent.entities)
             .filter(entity => entity.type === "monster" && entity.visible && !entity.dead && distance(character, entity) <= G.skills.cleave.range);
-
+        const untargetedMonsters = monstersInRange.filter((monster) => !monster.target);
         const mapsToInclude = ["desertland", "goobrawl", "main", "level2w", "cave", "halloween", "spookytown", "tunnel", "winterland", "level2n"];
-        if (monstersInRange.length >= 1 && mapsToInclude.includes(character.map) && tank) {
+        //console.log(`Monsters in range: ${monstersInRange.length}, map included: ${mapsToInclude.includes(character.map)}`);
+
+        if (monstersInRange.length >= 1 /*&& untargetedMonsters.length === 0*/ && mapsToInclude.includes(character.map) && tank) {
             if (Mainhand !== "scythe" && performance.now() - scythe > 200) {
                 scythe = performance.now();
-                scytheSet();
+                await scytheSet();
             }
-            use_skill("cleave");
+            await use_skill("cleave");
+            //console.log("Using CLEAVE");
+        } else {
+            //console.log(`Conditions not met for CLEAVE: Monsters in range: ${monstersInRange.length}, map: ${character.map}, tank: ${tank ? 'present' : 'absent'}`);
         }
     } else {
         handleWeaponSwap(stMaps, aoeMaps);
     }
 }
 
-async function handleWarriorSkills() {
+async function handleWarriorSkills(tank) {
     if (!is_on_cooldown("warcry") && character.s.darkblessing) {
         await use_skill("warcry");
     }
@@ -87,13 +130,16 @@ async function handleWarriorSkills() {
         await use_skill("agitate");
     }
 
-    const mobTypes = ["fireroamer"];
+    const mobTypes = ["fireroamer", "plantoid"];
     const mobsInRange = Object.values(parent.entities)
         .filter(entity => mobTypes.includes(entity.mtype) && entity.visible && !entity.dead && distance(character, entity) <= G.skills.agitate.range);
     const untargetedMobs = mobsInRange.filter(monster => !monster.target);
 
     if (!is_on_cooldown("agitate") && mobsInRange.length >= 3 && untargetedMobs.length >= 3 && !smart.moving && tank) {
-        await use_skill("agitate");
+        let porc = get_nearest_monster({ type: "porcupine" });
+        if (!is_in_range(porc, "agitate")) {
+            //await use_skill("agitate");
+        }
     }
 
     if (!is_on_cooldown("charge")) {
@@ -114,54 +160,4 @@ async function handleWarriorSkills() {
         }
     }
 }
-
-async function handlePaladinSkills() {
-    let nearest = getNearestMonster({ target: ["CrownPriest"], cursed: true });
-    if (!nearest) nearest = getNearestMonster({ target: ["CrownPriest"] });
-
-    if (!is_on_cooldown("smash") && character.mp > 800 && is_in_range(nearest)) {
-        await use_skill("smash", nearest);
-    }
-
-    let prio = get_nearest_monster_v2({ target: "CrownPriest" });
-    if (prio && prio.hp < 2000 && character.mp > 460 && !is_on_cooldown("purify")) {
-        use_skill("purify", prio);
-    }
-}
-
-async function handleMageSkills() {
-    const c1 = get_player("CrownsAnal");
-    const c2 = get_player("CrownPriest");
-
-    if (c1 && c1.mp < 450 && character.mp > 2700) {
-        await use_skill("energize", 'CrownsAnal');
-    }
-
-    if (c2 && c2.mp < 4000 && character.mp > 2700) {
-        await use_skill("energize", 'CrownPriest');
-    }
-
-    let nearest = get_nearest_monster({ target: "CrownPriest" });
-    if (nearest && character.mp > 6000) {
-        await use_skill("zapperzap", nearest);
-    }
-
-    const targets = [];
-    const maxMana = 3000;
-
-    for (let id in parent.entities) {
-        if (parent.entities[id].mtype == home && is_in_range(parent.entities[id], "cburst")) {
-            targets.push([parent.entities[id], 2050]);
-        }
-    }
-
-    const totalManaRequired = targets.length * 2050;
-
-    if (character.mp > totalManaRequired && character.mp - totalManaRequired >= maxMana) {
-        if (targets.some(target => target[0].hp < 1000)) {
-            // await use_skill("cburst", targets);
-        }
-    }
-}
-
 skillLoop();

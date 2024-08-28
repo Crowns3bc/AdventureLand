@@ -150,6 +150,7 @@ async function handleDarkBlessing(dead) {
 		}
 	}
 }
+SkillLoop();
 ///////////////////////////////////////////////////////////////////////////////////
 async function equipIfNeeded(itemName, slotName, level, l) {
 	let name = null;

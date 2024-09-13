@@ -3,18 +3,18 @@ pause();
 const chars = {
     MAGE: "CrownMage",
     MERCHANT: "CrownMerch",
-    //PALADIN: "CrownPal",
-    //PRIEST: "CrownPriest",
-    WARRIOR: "CrownTown",
+    PALADIN: "CrownPal",
+    PRIEST: "CrownPriest",
+    Warrior: "CrownTown",
 };
 
 // Define starting levels
 const codeSlots = {
     MAGE: 28,
     MERCHANT: 95,
-    //PALADIN: 12,
-    //PRIEST: 3,
-    WARRIOR: 2,
+    PALADIN: 12,
+    PRIEST: 3,
+    Warrior: 2,
 };
 
 let startChar = true;
@@ -269,7 +269,7 @@ function drawCirclesAndLines(center, radius) {
     draw_circle(character.x, character.y, G.skills.zapperzap.range, 2, 0x00C7FF);
 
     draw_circle(character.x, character.y, character.range, 2, 0xE8FF00)
-    //draw_all_boxes_on_map();
+    draw_all_boxes_on_map();
     //draw_circle(264,-804,2,2,0x00FF00)
     draw_circle(character.x, character.y, 600, 2, 0x000000)
 }
@@ -577,76 +577,114 @@ async function moveLoop() {
 
 //moveLoop();
 ////////////////////////////////////////////////////////////////////////////////
-// Extra range to add to a monster's attack range to give more wiggle room
-const rangeBuffer = 125;
+//Extra range to add to a monsters attack range, to give a little more wiggle room to the algorithm.
+let rangeBuffer = 125;
 
-// How far away we want to consider monsters
-const calcRadius = 300;
+//How far away we want to consider monsters for
+let calcRadius = 200;
 
-// Types of monsters we want to avoid
-const avoidTypes = ["bscorpion"];
+//What types of monsters we want to try to avoid
+let avoidTypes = ["bscorpion"];
 
-const avoidPlayers = false; // Set to false to not avoid players at all
-const playerBuffer = 0; // Additional range around players
-const avoidPlayersWhitelist = []; // Players to avoid differently
-const avoidPlayersWhitelistRange = 30; // Set to null to not avoid whitelisted players
-const playerRangeOverride = 3; // Overrides how far to avoid, set to null to use player range
-const playerAvoidIgnoreClasses = ["merchant"]; // Classes we don't want to avoid
+let avoidPlayers = false; //Set to false to not avoid players at all
+let playerBuffer = 0; //Additional Range around players
+let avoidPlayersWhitelist = []; //Players want to avoid differently
+let avoidPlayersWhitelistRange = 30; //Set to null here to not avoid whitelisted players
+let playerRangeOverride = 3; //Overrides how far to avoid, set to null to use player range.
+let playerAvoidIgnoreClasses = ["merchant"]; //Classes we don't want to try to avoid
 
-// Tracking when we send movements to avoid flooding the socket
+//Tracking when we send movements to avoid flooding the socket and getting DC'd
 let lastMove;
 
-// Whether we want to draw the various calculations visually
-const drawDebug = false;
+//Whether we want to draw the various calculations done visually
+let drawDebug = false;
 
-function avoidance() {
+setInterval(function () {
+
     if (drawDebug) {
         clear_drawings();
+        draw_circle(character.x, character.y, 263 * 3 + 20, 4, 0x000000)
+    }
+    let goal = null;
+
+    for (id in parent.entities) {
+        let entity = parent.entities[id];
     }
 
-    // Try to avoid monsters
-    const avoiding = avoidMobs();
+    //Try to avoid monsters, 
+    let avoiding = avoidMobs(goal);
 
-    if (!avoiding) {
-        if (!lastMove || new Date() - lastMove > 100) {
-            move(character.real_x, character.real_y); // Move to current position (no goal used)
+    if (!avoiding && goal != null) {
+        if (lastMove == null || new Date() - lastMove > 100) {
+            move(goal.x, goal.y);
             lastMove = new Date();
         }
     }
 
-}
-//setInterval(avoidance, 50);
+}, 25);
 
-function avoidMobs() {
-    let maxWeight = -Infinity;
-    let maxWeightAngle = 0;
+function avoidMobs(goal) {
+    let noGoal = false;
 
-    const monstersInRadius = getMonstersInRadius();
-    const avoidRanges = getAnglesToAvoid(monstersInRadius);
-    const inAttackRange = isInAttackRange(monstersInRadius);
+    if (goal == null || goal.x == null || goal.y == null) {
+        noGoal = true;
+    }
 
-    // If we are in attack range or need to avoid monsters, find the safest direction to move
-    if (inAttackRange || (!can_move_to(character.real_x, character.real_y))) {
-        for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 60) {
+    if (drawDebug && !noGoal) {
+        draw_circle(goal.x, goal.y, 25, 1, 0xDFDC22);
+    }
+
+    let maxWeight;
+    let maxWeightAngle;
+    let movingTowards = false;
+
+    let monstersInRadius = getMonstersInRadius();
+
+    let avoidRanges = getAnglesToAvoid(monstersInRadius);
+    let inAttackRange = isInAttackRange(monstersInRadius);
+    if (!noGoal) {
+        let desiredMoveAngle = angleToPoint(character, goal.x, goal.y);
+
+        let movingTowards = angleIntersectsMonsters(avoidRanges, desiredMoveAngle);
+
+        let distanceToDesired = distanceToPoint(character.real_x, character.real_y, goal.x, goal.y);
+
+        let testMovePos = pointOnAngle(character, desiredMoveAngle, distanceToDesired);
+
+        if (drawDebug) {
+            draw_line(character.real_x, character.real_y, testMovePos.x, testMovePos.y, 1, 0xDFDC22);
+        }
+    }
+
+    //If we can't just directly walk to the goal without being in danger, we have to try to avoid it
+    if (inAttackRange || movingTowards || (!noGoal && !can_move_to(goal.x, goal.y))) {
+        //Loop through the full 360 degrees (2PI Radians) around the character
+        //We'll test each point and see which way is the safest to go
+        for (i = 0; i < Math.PI * 2; i += Math.PI / 60) {
             let weight = 0;
 
-            const position = pointOnAngle(character, angle, 75);
+            let position = pointOnAngle(character, i, 75);
 
+            //Exclude any directions we cannot move to (walls and whatnot)
             if (can_move_to(position.x, position.y)) {
+
+                //If a direction takes us away from a monster that we're too close to, apply some pressure to that direction to make it preferred
                 let rangeWeight = 0;
                 let inRange = false;
+                for (id in monstersInRadius) {
+                    let entity = monstersInRadius[id];
+                    let monsterRange = getRange(entity);
 
-                for (const id in monstersInRadius) {
-                    const entity = monstersInRadius[id];
-                    const monsterRange = getRange(entity);
-                    const distToMonster = distanceToPoint(position.x, position.y, entity.real_x, entity.real_y);
-                    const charDistToMonster = distanceToPoint(character.real_x, character.real_y, entity.real_x, entity.real_y);
+                    let distToMonster = distanceToPoint(position.x, position.y, entity.real_x, entity.real_y);
+
+                    let charDistToMonster = distanceToPoint(character.real_x, character.real_y, entity.real_x, entity.real_y);
 
                     if (charDistToMonster < monsterRange) {
                         inRange = true;
-                        if (distToMonster > charDistToMonster) {
-                            rangeWeight += distToMonster - charDistToMonster;
-                        }
+                    }
+
+                    if (charDistToMonster < monsterRange && distToMonster > charDistToMonster) {
+                        rangeWeight += distToMonster - charDistToMonster;
                     }
                 }
 
@@ -654,22 +692,31 @@ function avoidMobs() {
                     weight = rangeWeight;
                 }
 
-                const intersectsRadius = angleIntersectsMonsters(avoidRanges, angle);
-                if (!can_move_to(character.real_x, character.real_y)) {
-                    weight -= distanceToPoint(position.x, position.y, character.real_x, character.real_y) / 10;
+                //Determine if this direction would cause is to walk towards a monster's radius
+                let intersectsRadius = angleIntersectsMonsters(avoidRanges, i);
+
+                //Apply some selective pressure to this direction based on whether it takes us closer or further from our intended goal
+                if (goal != null && goal.x != null && goal.y != null) {
+                    let tarDistToPoint = distanceToPoint(position.x, position.y, goal.x, goal.y);
+
+                    weight -= tarDistToPoint / 10;
                 }
 
-                if (!intersectsRadius) {
-                    if (weight > maxWeight) {
+                //Exclude any directions which would make us walk towards a monster's radius
+                if (intersectsRadius === false) {
+                    //Update the current max weight direction if this one is better than the others we've tested
+                    if (maxWeight == null || weight > maxWeight) {
                         maxWeight = weight;
-                        maxWeightAngle = angle;
+                        maxWeightAngle = i;
                     }
                 }
             }
         }
 
-        const movePoint = pointOnAngle(character, maxWeightAngle, 20);
-        if (!lastMove || new Date() - lastMove > 100) {
+        //Move towards the direction which has been calculated to be the least dangerous
+        let movePoint = pointOnAngle(character, maxWeightAngle, 20);
+
+        if (lastMove == null || new Date() - lastMove > 100) {
             lastMove = new Date();
             move(movePoint.x, movePoint.y);
         }
@@ -679,105 +726,178 @@ function avoidMobs() {
         }
 
         return true;
+    } else {
+        return false;
+    }
+}
+
+function getRange(entity) {
+    let monsterRange;
+
+    if (entity.type != "character") {
+        if (parent.G.monsters[entity.mtype]) {
+            monsterRange = parent.G.monsters[entity.mtype].range + rangeBuffer;
+        } else {
+            // Default range if monster type is not found, adjust as necessary
+            monsterRange = 100 + rangeBuffer;
+        }
+    } else {
+        if (avoidPlayersWhitelist.includes(entity.id) && avoidPlayersWhitelistRange != null) {
+            monsterRange = avoidPlayersWhitelistRange;
+        } else if (playerRangeOverride != null) {
+            monsterRange = playerRangeOverride + playerBuffer;
+        } else {
+            monsterRange = entity.range + playerBuffer;
+        }
+    }
+
+    return monsterRange;
+}
+
+function isInAttackRange(monstersInRadius) {
+    for (id in monstersInRadius) {
+        let monster = monstersInRadius[id];
+        let monsterRange = getRange(monster);
+
+        let charDistToMonster = distanceToPoint(character.real_x, character.real_y, monster.real_x, monster.real_y);
+
+        if (charDistToMonster < monsterRange) {
+            return true;
+        }
     }
 
     return false;
 }
 
-function getRange(entity) {
-    if (entity.type !== "character") {
-        return (parent.G.monsters[entity.mtype]?.range || 100) + rangeBuffer;
-    } else {
-        if (avoidPlayersWhitelist.includes(entity.id) && avoidPlayersWhitelistRange != null) {
-            return avoidPlayersWhitelistRange;
-        } else if (playerRangeOverride != null) {
-            return playerRangeOverride + playerBuffer;
-        } else {
-            return (entity.range || 100) + playerBuffer;
+function angleIntersectsMonsters(avoidRanges, angle) {
+    for (id in avoidRanges) {
+        let range = avoidRanges[id];
+
+        let between = isBetween(range[1], range[0], angle);
+
+        if (between) {
+            return true;
         }
     }
-}
 
-function isInAttackRange(monstersInRadius) {
-    return monstersInRadius.some(monster => {
-        const monsterRange = getRange(monster);
-        const charDistToMonster = distanceToPoint(character.real_x, character.real_y, monster.real_x, monster.real_y);
-        return charDistToMonster < monsterRange;
-    });
-}
-
-function angleIntersectsMonsters(avoidRanges, angle) {
-    return avoidRanges.some(range => isBetween(range[1], range[0], angle));
+    return false;
 }
 
 function getAnglesToAvoid(monstersInRadius) {
-    const avoidRanges = [];
-    for (const id in monstersInRadius) {
-        const monster = monstersInRadius[id];
-        const monsterRange = getRange(monster);
-        const tangents = findTangents({ x: character.real_x, y: character.real_y }, { x: monster.real_x, y: monster.real_y, radius: monsterRange });
+    let avoidRanges = [];
 
-        if (!isNaN(tangents[0].x)) {
-            const angle1 = angleToPoint(character, tangents[0].x, tangents[0].y);
-            const angle2 = angleToPoint(character, tangents[1].x, tangents[1].y);
-            avoidRanges.push(angle1 < angle2 ? [angle1, angle2] : [angle2, angle1]);
+    if (monstersInRadius.length > 0) {
+        for (id in monstersInRadius) {
+            let monster = monstersInRadius[id];
+
+            let monsterRange = getRange(monster);
+
+            let tangents = findTangents({ x: character.real_x, y: character.real_y }, { x: monster.real_x, y: monster.real_y, radius: monsterRange });
+
+            //Tangents won't be found if we're within the radius
+            if (!isNaN(tangents[0].x)) {
+                let angle1 = angleToPoint(character, tangents[0].x, tangents[0].y);
+                let angle2 = angleToPoint(character, tangents[1].x, tangents[1].y);
+
+                if (angle1 < angle2) {
+                    avoidRanges.push([angle1, angle2]);
+                } else {
+                    avoidRanges.push([angle2, angle1]);
+                }
+                if (drawDebug) {
+                    draw_line(character.real_x, character.real_y, tangents[0].x, tangents[0].y, 1, 0x17F20D);
+                    draw_line(character.real_x, character.real_y, tangents[1].x, tangents[1].y, 1, 0x17F20D);
+                }
+            }
 
             if (drawDebug) {
-                draw_line(character.real_x, character.real_y, tangents[0].x, tangents[0].y, 1, 0x17F20D);
-                draw_line(character.real_x, character.real_y, tangents[1].x, tangents[1].y, 1, 0x17F20D);
+                draw_circle(monster.real_x, monster.real_y, monsterRange, 1, 0x17F20D);
             }
         }
-
-        if (drawDebug) {
-            draw_circle(monster.real_x, monster.real_y, monsterRange, 1, 0x17F20D);
-        }
     }
+
     return avoidRanges;
 }
 
 function getMonstersInRadius() {
-    return Object.values(parent.entities).filter(entity => {
-        const distanceToEntity = distanceToPoint(entity.real_x, entity.real_y, character.real_x, character.real_y);
-        const range = getRange(entity);
-        return (entity.type === "monster" && avoidTypes.includes(entity.mtype) && distanceToEntity < calcRadius) ||
-               (avoidPlayers && entity.type === "character" && !entity.npc && !playerAvoidIgnoreClasses.includes(entity.ctype) &&
-                (!avoidPlayersWhitelist.includes(entity.id) || avoidPlayersWhitelistRange != null) &&
-                (distanceToEntity < calcRadius || distanceToEntity < range));
-    });
+    let monstersInRadius = [];
+
+    for (id in parent.entities) {
+        let entity = parent.entities[id];
+        let distanceToEntity = distanceToPoint(entity.real_x, entity.real_y, character.real_x, character.real_y);
+
+        let range = getRange(entity);
+
+        if (entity.type === "monster" && avoidTypes.includes(entity.mtype)) {
+
+            let monsterRange = getRange(entity);
+
+            if (distanceToEntity < calcRadius) {
+                monstersInRadius.push(entity);
+            }
+        } else {
+            if (avoidPlayers && entity.type === "character" && !entity.npc && !playerAvoidIgnoreClasses.includes(entity.ctype)) {
+                if (!avoidPlayersWhitelist.includes(entity.id) || avoidPlayersWhitelistRange != null) {
+                    if (distanceToEntity < calcRadius || distanceToEntity < range)
+                        monstersInRadius.push(entity);
+                }
+            }
+        }
+    }
+
+    return monstersInRadius;
 }
 
 function normalizeAngle(angle) {
     return Math.atan2(Math.sin(angle), Math.cos(angle));
 }
 
+//Source: https://stackoverflow.com/questions/11406189/determine-if-angle-lies-between-2-other-angles
 function isBetween(angle1, angle2, target) {
     if (angle1 <= angle2) {
-        return angle2 - angle1 <= Math.PI ? angle1 <= target && target <= angle2 : angle2 <= target || target <= angle1;
+        if (angle2 - angle1 <= Math.PI) {
+            return angle1 <= target && target <= angle2;
+        } else {
+            return angle2 <= target || target <= angle1;
+        }
     } else {
-        return angle1 - angle2 <= Math.PI ? angle2 <= target && target <= angle1 : angle1 <= target || target <= angle2;
+        if (angle1 - angle2 <= Math.PI) {
+            return angle2 <= target && target <= angle1;
+        } else {
+            return angle1 <= target || target <= angle2;
+        }
     }
 }
 
+//Source: https://stackoverflow.com/questions/1351746/find-a-tangent-point-on-circle
 function findTangents(point, circle) {
-    const dx = circle.x - point.x;
-    const dy = circle.y - point.y;
-    const dd = Math.sqrt(dx * dx + dy * dy);
-    const a = Math.asin(circle.radius / dd);
-    const b = Math.atan2(dy, dx);
+    let dx = circle.x - point.x;
+    let dy = circle.y - point.y;
+    let dd = Math.sqrt(dx * dx + dy * dy);
+    let a = Math.asin(circle.radius / dd);
+    let b = Math.atan2(dy, dx);
 
-    const ta = { x: circle.x + circle.radius * Math.sin(b - a), y: circle.y - circle.radius * Math.cos(b - a) };
-    const tb = { x: circle.x - circle.radius * Math.sin(b + a), y: circle.y + circle.radius * Math.cos(b + a) };
+    let t = b - a;
+
+    let ta = { x: circle.x + (circle.radius * Math.sin(t)), y: circle.y + (circle.radius * -Math.cos(t)) };
+
+    t = b + a;
+    let tb = { x: circle.x + circle.radius * -Math.sin(t), y: circle.y + circle.radius * Math.cos(t) };
 
     return [ta, tb];
 }
 
 function offsetToPoint(x, y) {
-    const angle = angleToPoint(x, y) + Math.PI / 2;
+    let angle = angleToPoint(x, y) + Math.PI / 2;
+
     return angle - characterAngle();
 }
 
 function pointOnAngle(entity, angle, distance) {
-    return { x: entity.real_x + distance * Math.cos(angle), y: entity.real_y + distance * Math.sin(angle) };
+    let circX = entity.real_x + (distance * Math.cos(angle));
+    let circY = entity.real_y + (distance * Math.sin(angle));
+
+    return { x: circX, y: circY };
 }
 
 function entityAngle(entity) {
@@ -785,8 +905,9 @@ function entityAngle(entity) {
 }
 
 function angleToPoint(entity, x, y) {
-    const deltaX = entity.real_x - x;
-    const deltaY = entity.real_y - y;
+    let deltaX = entity.real_x - x;
+    let deltaY = entity.real_y - y;
+
     return Math.atan2(deltaY, deltaX) + Math.PI;
 }
 
@@ -808,413 +929,6 @@ function suicide() {
     }
 }
 setInterval(suicide, 100);
-
-const skinConfigs = {
-    ranger: { skin: "tm_yellow", skinRing: { name: "tristone", level: 2, locked: "l" }, normalRing: { name: "suckerpunch", level: 1, locked: "l" } },
-    priest: { skin: "tm_white", skinRing: { name: "tristone", level: 1, locked: "l" }, normalRing: { name: "zapper", level: 1, locked: "l" } },
-    paladin: { skin: "tf_pink", skinRing: { name: "tristone", level: 1, locked: "l" }, normalRing: { name: "suckerpunch", level: 1, locked: "l" } },
-    warrior: { skin: "tf_pink", skinRing: { name: "tristone", level: 1, locked: "l" }, normalRing: { name: "suckerpunch", level: 1, locked: "l" } },
-    mage: { skin: "tf_green", skinRing: { name: "tristone", level: 1, locked: "l" }, normalRing: { name: "cring", level: 4, locked: "l" } }
-};
-
-// Function to equip a ring if needed and emit 'activate' if required
-function skinNeeded(ringName, ringLevel, slot = 'ring1', locked = "l", ccThreshold = 135) {
-    if (character.cc <= ccThreshold) {
-        if (character.slots[slot]?.name !== ringName || character.slots[slot]?.level !== ringLevel) {
-            equipIfNeeded(ringName, slot, ringLevel, locked);
-        }
-        parent.socket.emit('activate', { slot });
-    }
-}
-
-// Main function for checking skin and equipping rings
-async function skinChanger() {
-    const delay = 500;
-    try {
-        const config = skinConfigs[character.ctype];
-
-        if (config) {
-            if (character.skin !== config.skin) {
-                // Equip skinRing if skin doesn't match
-                skinNeeded(config.skinRing.name, config.skinRing.level, 'ring1', config.skinRing.locked);
-            } else {
-                // Equip normalRing when skin matches
-                if (character.slots.ring1?.name !== config.normalRing.name || character.slots.ring1?.level !== config.normalRing.level) {
-                    equipIfNeeded(config.normalRing.name, 'ring1', config.normalRing.level, config.normalRing.locked);
-                }
-                return; // Exit if the normal ring is equipped
-            }
-        }
-    } catch (e) {
-        console.error(e);
-    }
-
-    setTimeout(skinChanger, delay);
-}
-
-skinChanger();
-
-function equipSet(setName) {
-    const set = equipmentSets[setName];
-    if (set) {
-        equipBatch(set);
-    } else {
-        console.error(`Set "${setName}" not found.`);
-    }
-}
-
-function lowest_health_partymember() {
-    // Get all party members that are not dead (rip) and filter out specific names
-    let party_mems = Object.keys(parent.party)
-        .filter(e => parent.entities[e] && !parent.entities[e].rip && e !== character.name);
-    let the_party = [];
-
-    for (let key of party_mems) {
-        if (parent.entities[key]) {
-            let hp_ratio = (parent.entities[key].hp / parent.entities[key].max_hp) * 100;  // Convert to percentage
-            // Add valid party members to the array
-            the_party.push(parent.entities[key]);
-        }
-    }
-
-    // Optionally, add yourself to the list if needed for another purpose
-    // the_party.push(character); 
-
-    // Sort the party by HP ratio (ascending), so lowest HP comes first
-    let res = the_party.sort(function (a, b) {
-        let a_rat = a.hp / a.max_hp;
-        let b_rat = b.hp / b.max_hp;
-        return a_rat - b_rat;
-    });
-
-    if (res.length > 0) {
-        //console.log("Lowest HP member: " + res[0].name + " with HP Percentage " + ((res[0].hp / res[0].max_hp) * 100).toFixed(2) + "%");
-        return res[0];  // Return the member with the lowest HP
-    } else {
-        return null;  // Return null if no valid party member is found
-    }
-}
-
-
-function ms_to_next_skill(skill) {
-    const next_skill = parent.next_skill[skill]
-    if (next_skill == undefined) return 0
-    const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings) - 200
-    return ms < 0 ? 0 : ms
-}
-
-function mobTargets_inRange(mtypes, radius, mobs_target, point) {
-    // If point is not provided, default to character's current position
-    if (!point) point = [character.x, character.y];
-
-    let count = 0;
-
-    // Loop through all entities in the game
-    for (let id in parent.entities) {
-        let entity = parent.entities[id];
-
-        // Skip entities that are not monsters or are not visible
-        if (!entity || entity.type !== 'monster' || entity.dead || !entity.visible) {
-            continue;
-        }
-        // Check if the monster type is included in the provided list of monster types
-        if (!mtypes.includes(entity.mtype)) continue;
-
-        //Check if the monster's target is included in the provided list of target names
-        if (!mobs_target.includes(entity.target)) continue;
-
-        // Calculate the distance between the monster and the provided point
-        if (Math.hypot(point[0] - entity.x, point[1] - entity.y) <= radius) {
-            // If the distance is within the specified radius, increment the count
-            ++count;
-        }
-    }
-
-    // Return the total count of monsters within the specified radius and meeting the criteria
-    return count;
-}
-
-function get_nearest_monster_v2(args = {}) {
-    let min_d = 999999, target = null;
-    let min_hp = 999999999; // Track the minimum HP of monsters encountered
-    let max_hp = 0; // Track the maximum HP of monsters encountered
-
-    for (let id in parent.entities) {
-        let current = parent.entities[id];
-        if (current.type != "monster" || !current.visible || current.dead) continue;
-        if (args.type && current.mtype != args.type) continue;
-        if (args.min_level !== undefined && current.level < args.min_level) continue;
-        if (args.max_level !== undefined && current.level > args.max_level) continue;
-        if (args.target && !args.target.includes(current.target)) continue;
-        if (args.no_target && current.target && current.target != character.name) continue;
-        if (args.cursed && !current.s.cursed) continue;
-        if (args.min_xp !== undefined && current.xp < args.min_xp) continue;
-        if (args.max_att !== undefined && current.attack > args.max_att) continue;
-        if (args.path_check && !can_move_to(current)) continue;
-
-        let c_dist;
-        if (args.point_for_distance_check) {
-            c_dist = Math.hypot(args.point_for_distance_check[0] - current.x, args.point_for_distance_check[1] - current.y); // Calculate distance from a specified point
-        } else {
-            c_dist = parent.distance(character, current);
-        }
-        if (args.max_distance !== undefined && c_dist > args.max_distance) continue;
-
-        if (args.check_min_hp) {
-            let c_hp = current.hp;
-            if (c_hp < min_hp) min_hp = c_hp, target = current; // Update target based on minimum HP
-            continue;
-        } else if (args.check_max_hp) {
-            let c_hp = current.hp;
-            if (c_hp > max_hp) max_hp = c_hp, target = current; // Update target based on maximum HP
-            continue;
-        }
-        if (c_dist < min_d) min_d = c_dist, target = current;
-    }
-    return target;
-}
-
-function item_quantity(name) {
-    for (let i = 0; i < 42; i++) {
-        if (character.items[i]?.name === name) {
-            return character.items[i].q;
-        }
-    }
-    return 0;
-}
-
-function elixirUsage() {
-    try {
-        let elixir = character.slots.elixir?.name;
-        let isPriest = character.ctype === "priest";
-        let requiredElixir = isPriest ? "elixirluck" : "pumpkinspice";
-
-        // Use the required elixir if it's not currently equipped
-        if (elixir !== requiredElixir) {
-            let item = locate_item(requiredElixir);
-            if (item) {
-                use(item);
-            }
-        }
-
-        // Ensure the priest always has 2 elixirs
-        if (isPriest) {
-            let currentQuantity = item_quantity("elixirluck");
-            if (currentQuantity < 2) {
-                buy("elixirluck", 2 - currentQuantity);
-            }
-        }
-    } catch (e) {
-        console.error("Error in elixirUsage function:", e);
-    }
-}
-
-// Run elixirUsage every 5 seconds
-setInterval(elixirUsage, 5000);
-
-let lastPotion = 0; // Track the time of the last potion usage
-let lastBuy = 0; // Track the time of the last purchase
-
-async function handle_potions() {
-    const hpThreshold = character.max_hp - 400;
-    const mpThreshold = character.max_mp - 500;
-    const potAmount = 100;
-    const tomeAmount = 1;
-    const potionCooldown = 1000; // Minimum time between potion usages
-    const buyCooldown = 1000; // Minimum time between purchases
-    let delay = 100; // Shorter delay to handle frequent checks
-
-    try {
-        const currentTime = Date.now();
-
-        // Use MP potion if needed
-        if (character.mp <= mpThreshold && !is_on_cooldown('use_mp') && item_quantity("mpot1") > 0 && currentTime - lastPotion > potionCooldown) {
-            await use('use_mp');
-            lastPotion = currentTime;
-        }
-
-        // Use HP potion if needed
-        if (character.hp <= hpThreshold && !is_on_cooldown('use_hp') && item_quantity("hpot1") > 0 && currentTime - lastPotion > potionCooldown) {
-            await use('use_hp');
-            lastPotion = currentTime;
-        }
-
-        // Buy potions if quantities are low
-        if (currentTime - lastBuy > buyCooldown) {
-            if (item_quantity("mpot1") < potAmount) {
-                buy("mpot1", potAmount);
-                lastBuy = currentTime;
-            }
-            if (item_quantity("hpot1") < potAmount) {
-                buy("hpot1", potAmount);
-                lastBuy = currentTime;
-            }
-            if (item_quantity("xptome") < tomeAmount) {
-                buy("xptome", tomeAmount - item_quantity("xptome"));
-                lastBuy = currentTime;
-            }
-        }
-    } catch (e) {
-        console.error("Error in handle_potions function:", e);
-    }
-
-    setTimeout(handle_potions, delay);
-}
-
-handle_potions();
-
-async function fixPromise(promise) {
-    const promises = [];
-    promises.push(promise);
-    // Guarantees it will resolve in 2.5s, might want to use reject instead, though
-    promises.push(new Promise((resolve) => setTimeout(resolve, 150)));
-    return Promise.race(promises);
-}
-
-let group = ["OlDrippy", "CrownsAnal", "CrownTown", "CrownPriest", "CrownMerch", "CrownMage"];
-
-function partyMaker() {
-    let partyLead = group[0]; // The first character in the group is the leader
-    let currentParty = character.party; // Get the current party details
-    let healer = get_entity("OlDrippy");
-    // If you're the leader and party size is less than 3, invite group members
-    if (character.name === group[0]) {
-        console.log("Party leader inviting members.");
-        for (let i = 1; i < group.length; i++) {
-            let name = group[i];
-            send_party_invite(name);
-        }
-    } else {
-        // If you're in a party that's not led by the group leader, leave it
-        if (currentParty && currentParty !== group[0] && healer) {
-            console.log(`In a party with ${currentParty}, but leader should be ${group[0]}. Leaving party.`);
-            leave_party();
-        }
-
-        // If not in a party and the leader exists, send a party request
-        if (!currentParty && partyLead) {
-            console.log(`Requesting to join ${group[0]}'s party.`);
-            send_cm("OlDrippy", "party");
-            send_party_request(group[0]);
-        }
-    }
-}
-
-// Call this function every second to manage the party
-setInterval(partyMaker, 1000);
-
-// Automatically accept party requests from group members
-function on_party_request(name) {
-    console.log("Party Request from " + name);
-    if (group.indexOf(name) != -1) {
-        console.log("Accepting party request from " + name);
-        accept_party_request(name);
-    }
-}
-
-// Automatically accept party invites from group members
-function on_party_invite(name) {
-    console.log("Party Invite from " + name);
-    if (group.indexOf(name) != -1) {
-        console.log("Accepting party invite from " + name);
-        accept_party_invite(name);
-    }
-}
-
-async function equipBatch(data) {
-    if (!Array.isArray(data)) {
-        game_log("Can't equipBatch non-array");
-        return handleEquipBatchError("Invalid input: not an array");
-    }
-    if (data.length > 15) {
-        game_log("Can't equipBatch more than 15 items");
-        return handleEquipBatchError("Too many items");
-    }
-
-    let validItems = [];
-
-    for (let i = 0; i < data.length; i++) {
-        let itemName = data[i].itemName;
-        let slot = data[i].slot;
-        let level = data[i].level;
-        let l = data[i].l;
-
-        if (!itemName) {
-            game_log("Item name not provided. Skipping.");
-            continue;
-        }
-
-        let found = false;
-        if (parent.character.slots[slot]) {
-            let slotItem = parent.character.items[parent.character.slots[slot]];
-            if (slotItem && slotItem.name === itemName && slotItem.level === level && slotItem.l === l) {
-                found = true;
-            }
-        }
-
-        if (found) {
-            game_log("Item " + itemName + " is already equipped in " + slot + " slot. Skipping.");
-            continue;
-        }
-
-        for (let j = 0; j < parent.character.items.length; j++) {
-            const item = parent.character.items[j];
-            if (item && item.name === itemName && item.level === level && item.l === l) {
-                validItems.push({ num: j, slot: slot });
-                break;
-            }
-        }
-    }
-
-    if (validItems.length === 0) {
-        return //handleEquipBatchError("No valid items to equip");
-    }
-
-    try {
-        parent.socket.emit("equip_batch", validItems);
-        await parent.push_deferred("equip_batch");
-    } catch (error) {
-        console.error('Error in equipBatch:', error);
-        return handleEquipBatchError("Failed to equip items");
-    }
-}
-
-// Helper function to handle errors
-function handleEquipBatchError(message) {
-    game_log(message);
-    // You may decide to implement a delay or other error handling mechanism here
-    return Promise.reject({ reason: "invalid", message });
-}
-
-async function equipIfNeeded(itemName, slotName, level, l) {
-    let name = null;
-
-    // Check if itemName is an object, if so, extract item properties
-    if (typeof itemName === 'object') {
-        name = itemName.name;
-        level = itemName.level;
-        l = itemName.l;
-    } else {
-        name = itemName;
-    }
-
-    if (character.slots[slotName] != null) {
-        let slotItem = character.slots[slotName];
-        if (slotItem.name === name && slotItem.level === level && slotItem.l === l) {
-            return;
-        }
-    }
-
-    // Iterate over character items
-    for (let i = 0; i < character.items.length; i++) {
-        const item = character.items[i];
-        // Check if item matches the specified criteria
-        if (item != null && item.name === name && item.level === level && item.l === l) {
-            // Equip the item to the specified slot
-            return equip(i, slotName); // Exit the function once the item is equipped, can await if needed
-        }
-    }
-}
 
 function rareItemPickup() {
     const itemsToLookFor = ["platinumnugget", "pvptoken",];
@@ -1760,6 +1474,413 @@ function find_item(filter) {
     return [-1, null];
 }
 
+const skinConfigs = {
+    ranger: { skin: "tm_yellow", skinRing: { name: "tristone", level: 2, locked: "l" }, normalRing: { name: "suckerpunch", level: 1, locked: "l" } },
+    priest: { skin: "tm_white", skinRing: { name: "tristone", level: 1, locked: "l" }, normalRing: { name: "zapper", level: 1, locked: "l" } },
+    paladin: { skin: "tf_pink", skinRing: { name: "tristone", level: 1, locked: "l" }, normalRing: { name: "suckerpunch", level: 1, locked: "l" } },
+    warrior: { skin: "tf_pink", skinRing: { name: "tristone", level: 1, locked: "l" }, normalRing: { name: "suckerpunch", level: 1, locked: "l" } },
+    mage: { skin: "tf_green", skinRing: { name: "tristone", level: 1, locked: "l" }, normalRing: { name: "cring", level: 4, locked: "l" } }
+};
+
+// Function to equip a ring if needed and emit 'activate' if required
+function skinNeeded(ringName, ringLevel, slot = 'ring1', locked = "l", ccThreshold = 135) {
+    if (character.cc <= ccThreshold) {
+        if (character.slots[slot]?.name !== ringName || character.slots[slot]?.level !== ringLevel) {
+            equipIfNeeded(ringName, slot, ringLevel, locked);
+        }
+        parent.socket.emit('activate', { slot });
+    }
+}
+
+// Main function for checking skin and equipping rings
+async function skinChanger() {
+    const delay = 500;
+    try {
+        const config = skinConfigs[character.ctype];
+
+        if (config) {
+            if (character.skin !== config.skin) {
+                // Equip skinRing if skin doesn't match
+                skinNeeded(config.skinRing.name, config.skinRing.level, 'ring1', config.skinRing.locked);
+            } else {
+                // Equip normalRing when skin matches
+                if (character.slots.ring1?.name !== config.normalRing.name || character.slots.ring1?.level !== config.normalRing.level) {
+                    equipIfNeeded(config.normalRing.name, 'ring1', config.normalRing.level, config.normalRing.locked);
+                }
+                return; // Exit if the normal ring is equipped
+            }
+        }
+    } catch (e) {
+        console.error(e);
+    }
+
+    setTimeout(skinChanger, delay);
+}
+
+skinChanger();
+
+function equipSet(setName) {
+    const set = equipmentSets[setName];
+    if (set) {
+        equipBatch(set);
+    } else {
+        console.error(`Set "${setName}" not found.`);
+    }
+}
+
+function lowest_health_partymember() {
+    // Get all party members that are not dead (rip) and filter out specific names
+    let party_mems = Object.keys(parent.party)
+        .filter(e => parent.entities[e] && !parent.entities[e].rip && e !== character.name);
+    let the_party = [];
+
+    for (let key of party_mems) {
+        if (parent.entities[key]) {
+            let hp_ratio = (parent.entities[key].hp / parent.entities[key].max_hp) * 100;  // Convert to percentage
+            // Add valid party members to the array
+            the_party.push(parent.entities[key]);
+        }
+    }
+
+    // Optionally, add yourself to the list if needed for another purpose
+    // the_party.push(character); 
+
+    // Sort the party by HP ratio (ascending), so lowest HP comes first
+    let res = the_party.sort(function (a, b) {
+        let a_rat = a.hp / a.max_hp;
+        let b_rat = b.hp / b.max_hp;
+        return a_rat - b_rat;
+    });
+
+    if (res.length > 0) {
+        //console.log("Lowest HP member: " + res[0].name + " with HP Percentage " + ((res[0].hp / res[0].max_hp) * 100).toFixed(2) + "%");
+        return res[0];  // Return the member with the lowest HP
+    } else {
+        return null;  // Return null if no valid party member is found
+    }
+}
+
+
+function ms_to_next_skill(skill) {
+    const next_skill = parent.next_skill[skill]
+    if (next_skill == undefined) return 0
+    const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings) - 165
+    return ms < 0 ? 0 : ms
+}
+
+function mobTargets_inRange(mtypes, radius, mobs_target, point) {
+    // If point is not provided, default to character's current position
+    if (!point) point = [character.x, character.y];
+
+    let count = 0;
+
+    // Loop through all entities in the game
+    for (let id in parent.entities) {
+        let entity = parent.entities[id];
+
+        // Skip entities that are not monsters or are not visible
+        if (!entity || entity.type !== 'monster' || entity.dead || !entity.visible) {
+            continue;
+        }
+        // Check if the monster type is included in the provided list of monster types
+        if (!mtypes.includes(entity.mtype)) continue;
+
+        //Check if the monster's target is included in the provided list of target names
+        if (!mobs_target.includes(entity.target)) continue;
+
+        // Calculate the distance between the monster and the provided point
+        if (Math.hypot(point[0] - entity.x, point[1] - entity.y) <= radius) {
+            // If the distance is within the specified radius, increment the count
+            ++count;
+        }
+    }
+
+    // Return the total count of monsters within the specified radius and meeting the criteria
+    return count;
+}
+
+function get_nearest_monster_v2(args = {}) {
+    let min_d = 999999, target = null;
+    let min_hp = 999999999; // Track the minimum HP of monsters encountered
+    let max_hp = 0; // Track the maximum HP of monsters encountered
+
+    for (let id in parent.entities) {
+        let current = parent.entities[id];
+        if (current.type != "monster" || !current.visible || current.dead) continue;
+        if (args.type && current.mtype != args.type) continue;
+        if (args.min_level !== undefined && current.level < args.min_level) continue;
+        if (args.max_level !== undefined && current.level > args.max_level) continue;
+        if (args.target && !args.target.includes(current.target)) continue;
+        if (args.no_target && current.target && current.target != character.name) continue;
+        if (args.cursed && !current.s.cursed) continue;
+        if (args.min_xp !== undefined && current.xp < args.min_xp) continue;
+        if (args.max_att !== undefined && current.attack > args.max_att) continue;
+        if (args.path_check && !can_move_to(current)) continue;
+
+        let c_dist;
+        if (args.point_for_distance_check) {
+            c_dist = Math.hypot(args.point_for_distance_check[0] - current.x, args.point_for_distance_check[1] - current.y); // Calculate distance from a specified point
+        } else {
+            c_dist = parent.distance(character, current);
+        }
+        if (args.max_distance !== undefined && c_dist > args.max_distance) continue;
+
+        if (args.check_min_hp) {
+            let c_hp = current.hp;
+            if (c_hp < min_hp) min_hp = c_hp, target = current; // Update target based on minimum HP
+            continue;
+        } else if (args.check_max_hp) {
+            let c_hp = current.hp;
+            if (c_hp > max_hp) max_hp = c_hp, target = current; // Update target based on maximum HP
+            continue;
+        }
+        if (c_dist < min_d) min_d = c_dist, target = current;
+    }
+    return target;
+}
+
+function item_quantity(name) {
+    for (let i = 0; i < 42; i++) {
+        if (character.items[i]?.name === name) {
+            return character.items[i].q;
+        }
+    }
+    return 0;
+}
+
+function elixirUsage() {
+    try {
+        let elixir = character.slots.elixir?.name;
+        let isPriest = character.ctype === "priest";
+        let requiredElixir = isPriest ? "elixirluck" : "pumpkinspice";
+
+        // Use the required elixir if it's not currently equipped
+        if (elixir !== requiredElixir) {
+            let item = locate_item(requiredElixir);
+            if (item) {
+                use(item);
+            }
+        }
+
+        // Ensure the priest always has 2 elixirs
+        if (isPriest) {
+            let currentQuantity = item_quantity("elixirluck");
+            if (currentQuantity < 2) {
+                buy("elixirluck", 2 - currentQuantity);
+            }
+        }
+    } catch (e) {
+        console.error("Error in elixirUsage function:", e);
+    }
+}
+
+// Run elixirUsage every 5 seconds
+setInterval(elixirUsage, 5000);
+
+let lastPotion = 0; // Track the time of the last potion usage
+let lastBuy = 0; // Track the time of the last purchase
+
+async function handle_potions() {
+    const hpThreshold = character.max_hp - 400;
+    const mpThreshold = character.max_mp - 500;
+    const potAmount = 100;
+    const tomeAmount = 1;
+    const potionCooldown = 1000; // Minimum time between potion usages
+    const buyCooldown = 1000; // Minimum time between purchases
+    let delay = 100; // Shorter delay to handle frequent checks
+
+    try {
+        const currentTime = Date.now();
+
+        // Use MP potion if needed
+        if (character.mp <= mpThreshold && !is_on_cooldown('use_mp') && item_quantity("mpot1") > 0 && currentTime - lastPotion > potionCooldown) {
+            await use('use_mp');
+            lastPotion = currentTime;
+        }
+
+        // Use HP potion if needed
+        if (character.hp <= hpThreshold && !is_on_cooldown('use_hp') && item_quantity("hpot1") > 0 && currentTime - lastPotion > potionCooldown) {
+            await use('use_hp');
+            lastPotion = currentTime;
+        }
+
+        // Buy potions if quantities are low
+        if (currentTime - lastBuy > buyCooldown) {
+            if (item_quantity("mpot1") < potAmount) {
+                buy("mpot1", potAmount);
+                lastBuy = currentTime;
+            }
+            if (item_quantity("hpot1") < potAmount) {
+                buy("hpot1", potAmount);
+                lastBuy = currentTime;
+            }
+            if (item_quantity("xptome") < tomeAmount) {
+                buy("xptome", tomeAmount - item_quantity("xptome"));
+                lastBuy = currentTime;
+            }
+        }
+    } catch (e) {
+        console.error("Error in handle_potions function:", e);
+    }
+
+    setTimeout(handle_potions, delay);
+}
+
+handle_potions();
+
+async function fixPromise(promise) {
+    const promises = [];
+    promises.push(promise);
+    // Guarantees it will resolve in 2.5s, might want to use reject instead, though
+    promises.push(new Promise((resolve) => setTimeout(resolve, 150)));
+    return Promise.race(promises);
+}
+
+let group = ["OlDrippy", "CrownsAnal", "CrownTown", "CrownPriest", "CrownMerch", "CrownMage"];
+
+function partyMaker() {
+    let partyLead = group[0]; // The first character in the group is the leader
+    let currentParty = character.party; // Get the current party details
+    let healer = get_entity("OlDrippy");
+    // If you're the leader and party size is less than 3, invite group members
+    if (character.name === group[0]) {
+        console.log("Party leader inviting members.");
+        for (let i = 1; i < group.length; i++) {
+            let name = group[i];
+            send_party_invite(name);
+        }
+    } else {
+        // If you're in a party that's not led by the group leader, leave it
+        if (currentParty && currentParty !== group[0] && healer) {
+            console.log(`In a party with ${currentParty}, but leader should be ${group[0]}. Leaving party.`);
+            leave_party();
+        }
+
+        // If not in a party and the leader exists, send a party request
+        if (!currentParty && partyLead) {
+            console.log(`Requesting to join ${group[0]}'s party.`);
+            send_cm("OlDrippy", "party");
+            send_party_request(group[0]);
+        }
+    }
+}
+
+// Call this function every second to manage the party
+setInterval(partyMaker, 1000);
+
+// Automatically accept party requests from group members
+function on_party_request(name) {
+    console.log("Party Request from " + name);
+    if (group.indexOf(name) != -1) {
+        console.log("Accepting party request from " + name);
+        accept_party_request(name);
+    }
+}
+
+// Automatically accept party invites from group members
+function on_party_invite(name) {
+    console.log("Party Invite from " + name);
+    if (group.indexOf(name) != -1) {
+        console.log("Accepting party invite from " + name);
+        accept_party_invite(name);
+    }
+}
+
+async function equipBatch(data) {
+    if (!Array.isArray(data)) {
+        game_log("Can't equipBatch non-array");
+        return handleEquipBatchError("Invalid input: not an array");
+    }
+    if (data.length > 15) {
+        game_log("Can't equipBatch more than 15 items");
+        return handleEquipBatchError("Too many items");
+    }
+
+    let validItems = [];
+
+    for (let i = 0; i < data.length; i++) {
+        let itemName = data[i].itemName;
+        let slot = data[i].slot;
+        let level = data[i].level;
+        let l = data[i].l;
+
+        if (!itemName) {
+            game_log("Item name not provided. Skipping.");
+            continue;
+        }
+
+        let found = false;
+        if (parent.character.slots[slot]) {
+            let slotItem = parent.character.items[parent.character.slots[slot]];
+            if (slotItem && slotItem.name === itemName && slotItem.level === level && slotItem.l === l) {
+                found = true;
+            }
+        }
+
+        if (found) {
+            game_log("Item " + itemName + " is already equipped in " + slot + " slot. Skipping.");
+            continue;
+        }
+
+        for (let j = 0; j < parent.character.items.length; j++) {
+            const item = parent.character.items[j];
+            if (item && item.name === itemName && item.level === level && item.l === l) {
+                validItems.push({ num: j, slot: slot });
+                break;
+            }
+        }
+    }
+
+    if (validItems.length === 0) {
+        return //handleEquipBatchError("No valid items to equip");
+    }
+
+    try {
+        parent.socket.emit("equip_batch", validItems);
+        await parent.push_deferred("equip_batch");
+    } catch (error) {
+        console.error('Error in equipBatch:', error);
+        return handleEquipBatchError("Failed to equip items");
+    }
+}
+
+// Helper function to handle errors
+function handleEquipBatchError(message) {
+    game_log(message);
+    // You may decide to implement a delay or other error handling mechanism here
+    return Promise.reject({ reason: "invalid", message });
+}
+
+async function equipIfNeeded(itemName, slotName, level, l) {
+    let name = null;
+
+    // Check if itemName is an object, if so, extract item properties
+    if (typeof itemName === 'object') {
+        name = itemName.name;
+        level = itemName.level;
+        l = itemName.l;
+    } else {
+        name = itemName;
+    }
+
+    if (character.slots[slotName] != null) {
+        let slotItem = character.slots[slotName];
+        if (slotItem.name === name && slotItem.level === level && slotItem.l === l) {
+            return;
+        }
+    }
+
+    // Iterate over character items
+    for (let i = 0; i < character.items.length; i++) {
+        const item = character.items[i];
+        // Check if item matches the specified criteria
+        if (item != null && item.name === name && item.level === level && item.l === l) {
+            // Equip the item to the specified slot
+            return equip(i, slotName); // Exit the function once the item is equipped, can await if needed
+        }
+    }
+}
+
 let ui_gamelog = function () {
     let gamelog_data = {
         kills: {
@@ -2168,7 +2289,6 @@ function initDPSMeter() {
 
     // Create a container for the DPS meter
     let dpsmeter_container = $('<div id="dpsmeter"></div>').css({
-		position: 'relative',
         fontSize: '20px',
         color: 'white',
         textAlign: 'center',
@@ -2400,8 +2520,8 @@ function modifyGamelogAppearance() {
             background: 'black',
             border: 'solid gray',
             borderWidth: '4px 4px',
-            width: "92%", //310px
-            height: '85px', // 85px
+            width: "98%", //310px
+            height: '85px', // Adjust height as needed
             fontSize: '20px', // Adjust font size as needed
             color: '#FFFFFF', // Adjust text color as needed
             textAlign: 'left',
@@ -2413,7 +2533,7 @@ function modifyGamelogAppearance() {
     }
 }
 // Call the function after 30 seconds
-setTimeout(modifyGamelogAppearance, 40000);
+//setTimeout(modifyGamelogAppearance, 40000);
 
 function modifyServerDivAppearance() {
     let $ = parent.$;
@@ -2531,38 +2651,35 @@ function removeChatWithParty() {
 // Call the function after 30 seconds
 setTimeout(removeChatWithParty, 40000);
 //////////////////////////////////////////////////////////////////////////////////////////
-let Deaths = 0; // Variable to track the number of deaths
-let StartTime = new Date(); // Start time to calculate elapsed time
-game.on('death', function (data) {
-    if (parent.entities[data.id]) { // Check if the entity exists
-        const mob = parent.entities[data.id];
-        const mobName = mob.type;
-
-        // Check if the mob is a monster
-        if (mobName === 'monster') {
-            const mobTarget = mob.target; // Get the mob's target
-            const party = get_party(); // Get your party members
-
-            // If party exists, extract party member names into an array
-            const partyMembers = party ? Object.keys(party) : [];
-
-            // Check if the mob's target was the player or someone in the party
-            if (mobTarget === character.name || partyMembers.includes(mobTarget)) {
-                //console.log("slain", data); // Log the death event
-                Deaths++; // Increment the death count
-                killHandler(); // Call the killHandler function
-            }
-        }
+if (parent.prev_handlersranger) {
+    for (let [event, handler] of parent.prev_handlersranger) {
+        parent.socket.removeListener(event, handler);
     }
-});
-function killHandler() {
-    let elapsed = (new Date() - StartTime) / 1000; // Calculate elapsed time in seconds
-    let DeathsPerSec = Deaths / elapsed; // Calculate deaths per second
-   let dailyKillRate = Math.round(DeathsPerSec * 60); // Calculate deaths per day
-    add_top_button("kpm", Math.round(dailyKillRate).toLocaleString() + ' kpm');
-    add_top_button("kph", Math.round(dailyKillRate * 60).toLocaleString() + ' kph');
-    add_top_button("kpd", Math.round(dailyKillRate * 60 * 24).toLocaleString() + ' kpd');
 }
+parent.prev_handlersranger = [];
+
+function register_rangerhandler(event, handler) {
+    parent.prev_handlersranger.push([event, handler]);
+    parent.socket.on(event, handler);
+}
+
+let ratKills = 0;
+let ratKillStart = new Date();
+
+function killHandler(data) {
+    if (typeof data == "string" && data.includes("killed")) {
+        ratKills++;
+        let elapsed = (new Date() - ratKillStart) / 1000;
+        let killsPerSec = ratKills / elapsed;
+        let dailyKillRate = (killsPerSec * 60);
+
+        add_top_button("kpm", Math.round(dailyKillRate).toLocaleString() + ' kpm');
+        add_top_button("kph", Math.round(dailyKillRate * 60).toLocaleString() + ' kph');
+        add_top_button("kpd", Math.round(dailyKillRate * 60 * 24).toLocaleString() + ' kpd');
+    }
+}
+
+register_rangerhandler("game_log", killHandler);
 //////////////////////////////////////////////////////////////////////////////
 let lastGoldCheck = character.gold;  // Store the last known gold value
 let totalGoldAcquired = 0;           // Track the total gold acquired since the script started

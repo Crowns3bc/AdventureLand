@@ -740,7 +740,7 @@ function getMonstersInRadius() {
         const distanceToEntity = distanceToPoint(entity.real_x, entity.real_y, character.real_x, character.real_y);
         const range = getRange(entity);
         return (entity.type === "monster" && avoidTypes.includes(entity.mtype) && distanceToEntity < calcRadius) ||
-               (avoidPlayers && entity.type === "character" && !entity.npc && !playerAvoidIgnoreClasses.includes(entity.ctype) &&
+            (avoidPlayers && entity.type === "character" && !entity.npc && !playerAvoidIgnoreClasses.includes(entity.ctype) &&
                 (!avoidPlayersWhitelist.includes(entity.id) || avoidPlayersWhitelistRange != null) &&
                 (distanceToEntity < calcRadius || distanceToEntity < range));
     });
@@ -1982,7 +1982,7 @@ function init_goldmeter() {
     let brc = $('#bottomrightcorner');
     brc.find('#goldtimer').remove();
     let xpt_container = $('<div id="goldtimer"></div>').css({
-		//position: 'relative',
+        //position: 'relative',
         fontSize: '25px',
         color: 'white',
         textAlign: 'center',
@@ -2086,7 +2086,7 @@ function init_xptimer(minref) {
     let brc = $('#bottomrightcorner');
     brc.find('#xptimer').remove();
     let xpt_container = $('<div id="xptimer"></div>').css({
-		//position: 'relative',
+        //position: 'relative',
         background: 'black',
         border: 'solid gray',
         borderWidth: '4px 4px',
@@ -2170,7 +2170,7 @@ function initDPSMeter() {
 
     // Create a container for the DPS meter
     let dpsmeter_container = $('<div id="dpsmeter"></div>').css({
-		//position: 'relative',
+        //position: 'relative',
         fontSize: '20px',
         color: 'white',
         textAlign: 'center',
@@ -2279,7 +2279,7 @@ function getElapsedTime() {
 // Update the DPS meter UI
 function updateDPSMeterUI() {
     try {
-		//all damageTypes are ["Base", "Blast", "Burn",  "HPS", "MPS", "DPS"];
+        //all damageTypes are ["Base", "Blast", "Burn",  "HPS", "MPS", "DPS"];
         const damageTypes = ["Base", "Blast", "HPS", "DPS"];
         let elapsed = performance.now() - METER_START;
 
@@ -2392,38 +2392,44 @@ function calculateDPSForPartyMember(entry) {
 initDPSMeter();
 setInterval(updateDPSMeterUI, 250);
 ////////////////////////////////////////////////////////////////////////////
+//This is the best fix ive found for this without ruining spacing
 function modifyGamelogAppearance() {
     let $ = parent.$;
     let gamelog = $('#gamelog');
+    let referenceElement = $('#dpsmeter'); // Replace with your reference element ID
 
-    if (gamelog.length) {
+    if (gamelog.length && referenceElement.length) {
+        // Get the width of the reference element, including padding and border
+        let referenceWidth = referenceElement.outerWidth(); // true includes margin
+
         // Modify the appearance of the gamelog window
         gamelog.css({
-            position: 'relative', // Ensures the element is positioned properly
-            background: 'rgb(0,0,0,0.7)', // Matches the default background color
-            border: '5px solid gray', // Matches the default border
-            width: '300px', // Matches the default width
-            height: '150px', // Matches the default height
-            fontSize: '20px', // Matches the default font size
-            color: 'white', // Matches the default text color
-            textAlign: 'left', // Matches the default text alignment
-            overflowY: 'scroll', // Matches the default overflow setting
-            lineHeight: '24px', // Matches the default line height
-            padding: '10px', // Matches the default padding
-            fontFamily: 'pixel', // Matches the default font family
-            wordWrap: 'break-word', // Matches the default word wrapping
-            WebkitFontSmoothing: 'subpixel-antialiased', // Matches the default font smoothing
-            pointerEvents: 'auto', // Matches the default pointer events
-            fontWeight: 'normal', // Matches the default font weight
-            verticalAlign: 'middle' // Matches the default vertical alignment
+            position: 'relative',
+            background: 'rgba(0,0,0,0.7)',
+            border: '4px solid gray',
+            width: referenceWidth + 'px', // Set width to match the reference element
+            height: '150px', // Set a fixed height, or adjust as needed
+            fontSize: '20px',
+            color: 'white',
+            textAlign: 'left',
+            overflowY: 'scroll',
+            lineHeight: '24px',
+            padding: '10px',
+            fontFamily: 'pixel',
+            wordWrap: 'break-word',
+            WebkitFontSmoothing: 'subpixel-antialiased',
+            pointerEvents: 'auto',
+            fontWeight: 'normal',
+            verticalAlign: 'middle',
+            boxSizing: 'border-box' // Ensures padding and border are included in the width
         });
     } else {
-        console.log("Element with ID 'gamelog' not found.");
+        console.log("Element with ID 'gamelog' or reference element not found.");
     }
 }
 
-// Call the function after 30 seconds
-setTimeout(modifyGamelogAppearance, 5000);
+// Call the function after 5 seconds to ensure UI is ready
+setInterval(modifyGamelogAppearance, 5000);
 
 function modifyServerDivAppearance() {
     let $ = parent.$;
@@ -2568,7 +2574,7 @@ game.on('death', function (data) {
 function killHandler() {
     let elapsed = (new Date() - StartTime) / 1000; // Calculate elapsed time in seconds
     let DeathsPerSec = Deaths / elapsed; // Calculate deaths per second
-   let dailyKillRate = Math.round(DeathsPerSec * 60); // Calculate deaths per day
+    let dailyKillRate = Math.round(DeathsPerSec * 60); // Calculate deaths per day
     add_top_button("kpm", Math.round(dailyKillRate).toLocaleString() + ' kpm');
     add_top_button("kph", Math.round(dailyKillRate * 60).toLocaleString() + ' kph');
     add_top_button("kpd", Math.round(dailyKillRate * 60 * 24).toLocaleString() + ' kpd');

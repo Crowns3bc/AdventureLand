@@ -1443,8 +1443,8 @@ function lowest_health_partymember() {
 function ms_to_next_skill(skill) {
     const next_skill = parent.next_skill[skill]
     if (next_skill == undefined) return 0
-    const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings) - 200
-    return ms < 0 ? 0 : ms
+    const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings) - character.ping;
+    return ms < 0 ? 0 : ms;
 }
 
 function mobTargets_inRange(mtypes, radius, mobs_target, point) {

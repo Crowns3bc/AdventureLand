@@ -1,18 +1,18 @@
 pause();
 // Define constants for character names
 const chars = {
-    MAGE: "CrownMage",
+    //MAGE: "CrownMage",
     MERCHANT: "CrownMerch",
-    //PALADIN: "CrownPal",
+    PALADIN: "CrownPal",
     //PRIEST: "CrownPriest",
     WARRIOR: "CrownTown",
 };
 
 // Define starting levels
 const codeSlots = {
-    MAGE: 28,
+    //MAGE: 28,
     MERCHANT: 95,
-    //PALADIN: 12,
+    PALADIN: 18,
     //PRIEST: 3,
     WARRIOR: 2,
 };
@@ -259,7 +259,7 @@ function drawCirclesAndLines(center, radius) {
     draw_circle(center.x, center.y, 25, 3, 0xFF00FB); // warr path
     draw_circle(center.x, center.y, 35, 3, 0xFFFFFF); //priest path
     draw_circle(center.x, center.y, 1, 3, 0x00FF00); // center point
-    draw_circle(center.x, center.y, 65, 3, 0x00FF00); //kill zone
+    draw_circle(center.x, center.y, 55, 3, 0x00FF00); //kill zone
 
     //draw_line(topLeftX, topLeftY, bottomRightX, topLeftY, 2, 0xFF0000);
     //draw_line(bottomRightX, topLeftY, bottomRightX, bottomRightY, 2, 0xFF0000);
@@ -442,15 +442,16 @@ const switchCooldown = 750; // Cooldown period in milliseconds (0.75 seconds)
 let state = "attacking"; // Default state
 
 async function attackLoop() {
-    let delay = 10; // Initial delay
+    let delay = null; // Initial delay
     const X = locations[home][0].x; // X coordinate of home location
     const Y = locations[home][0].y; // Y coordinate of home location
-    const rangeThreshold = 90; // Range threshold for counting monsters
-    const targetNames = ["Miau", "BamBam", "Atlus", "DoubleG", "SingleG", "OlDrippy"];
+    const rangeThreshold = 55; // Range threshold for counting monsters
+    //const targetNames = ["CrownPriest", "CrownTown"];
+	const targetNames = ["Miau", "Atlus", "Mommy", "DoubleG", "SingleG", "Scoliosis"];
 
     // Set heal threshold based on healer presence
     let healThreshold = 0.4;
-    const healer = get_entity("OlDrippy"); // Check if healer is present
+    const healer = get_entity("Mommy"); // Check if healer is present
 
     if (!healer || healer.rip) {
         healThreshold = .9; // Increase threshold if healer is not around
@@ -501,7 +502,8 @@ async function attackLoop() {
 
                     if (monstersInRangeList.length >= 4) {
                         if (performance.now() - lastSwitchTime > switchCooldown) {
-                            equipSet('boom');
+                            //equipSet('boom');
+							equipSet('dead');
                             lastSwitchTime = performance.now();
                         }
                         await use_skill("5shot", monstersInRangeList.slice(0, 5).map(e => e.id)); // Use the 5-shot skill
@@ -740,7 +742,7 @@ function getMonstersInRadius() {
         const distanceToEntity = distanceToPoint(entity.real_x, entity.real_y, character.real_x, character.real_y);
         const range = getRange(entity);
         return (entity.type === "monster" && avoidTypes.includes(entity.mtype) && distanceToEntity < calcRadius) ||
-            (avoidPlayers && entity.type === "character" && !entity.npc && !playerAvoidIgnoreClasses.includes(entity.ctype) &&
+               (avoidPlayers && entity.type === "character" && !entity.npc && !playerAvoidIgnoreClasses.includes(entity.ctype) &&
                 (!avoidPlayersWhitelist.includes(entity.id) || avoidPlayersWhitelistRange != null) &&
                 (distanceToEntity < calcRadius || distanceToEntity < range));
     });
@@ -951,36 +953,30 @@ async function sendLocationUpdate() {
 // Run sendLocationUpdate every second
 setInterval(sendLocationUpdate, 1000);
 
-const scareThreshold = 1000; // 1 second
-
 let lastScareTime = 0;
+const SCARE_THRESHOLD = 1000; // 1 second
 
 function scare() {
-    // Find the index of the "jacko" item and an empty slot
-    const jackoSlot = character.items.findIndex(item => item && item.name === "jacko");
-    const emptySlot = character.items.findIndex(item => !item);
+    const slot = character.items.findIndex(i => i && i.name === "jacko");
+    const orb = character.items.findIndex(i => !i);
+    let mobnum = 0;
 
-    // Count the number of monsters targeting the character
-    const mobCount = Object.values(parent.entities).filter(entity =>
-        entity.type === "monster" && entity.target === character.name
-    ).length;
+    for (let id in parent.entities) {
+        let current = parent.entities[id];
+        if (current.type === "monster" && current.target === character.name) mobnum++;
+    }
 
-    const currentTime = performance.now();
+    const currentTime = new Date().getTime();
     const timeSinceLastScare = currentTime - lastScareTime;
 
-    // Check if we need to use the scare
-    if (mobCount > 0 && timeSinceLastScare >= scareThreshold && !is_on_cooldown("scare")) {
-        if (jackoSlot !== -1) {
-            equip(jackoSlot);
-            use("scare");
-            game_log("Scare!!!", "#ff6822");
-            equip(emptySlot); // Re-equip the original item if an empty slot was found
-            lastScareTime = currentTime;
-        }
+    if (mobnum > 0 && timeSinceLastScare >= SCARE_THRESHOLD && !is_on_cooldown("scare")) {
+        equip(slot);
+        use("scare");
+        game_log("Scare!!!", "#ff6822");
+        equip(slot); // Re-equipping the original orb
+        lastScareTime = currentTime;
     }
 }
-
-// Run scare every 100 milliseconds
 setInterval(scare, 100);
 
 let lastSwapTime = 0;
@@ -988,8 +984,8 @@ const swapCooldown = 500; // 500ms cooldown between swaps
 let capeSwapTime = 0;
 
 async function itemSwap() {
-    const delay = 150;
-    const hpThreshold = 30000;
+    const delay = 25;
+    const hpThreshold = 25000;
     const now = Date.now();
 
     try {
@@ -1015,9 +1011,9 @@ async function itemSwap() {
         // Cape Swap
         if (now - capeSwapTime > swapCooldown) {
             // Equip stealthSet if enough chests are present
-            if (getNumChests() >= 6 && character.slots?.cape?.name !== "stealthcape") {
+            if (getNumChests() >= 7 && character.slots?.cape?.name !== "stealthcape") {
                 equipSet('stealth');
-                console.log("Equipping Stealth Cape");
+                //console.log("Equipping Stealth Cape");
                 game_log("Equipping Stealth Cape", "white");
                 capeSwapTime = now; // Update last swap time
             }
@@ -1220,7 +1216,8 @@ function findBoosterSlot() {
 
 sell_whitelist = [
     'vitearring', 'iceskates', 'cclaw', 'hpbelt', 'ringsj', 'hpamulet', 'warmscarf',
-    'quiver', 'snowball', 'vitring', 'wcap', 'wattire', 'wbreeches', 'wshoes', 'wgloves'
+    'quiver', 'snowball', 'vitring', 'wcap', 'wattire', 'wbreeches', 'wshoes', 
+	'wgloves', "strring", "dexring", "intring",
 ];
 function sellItems() {
     for (let i = 0; i < character.items.length; i++) {
@@ -1441,10 +1438,14 @@ function lowest_health_partymember() {
 
 
 function ms_to_next_skill(skill) {
-    const next_skill = parent.next_skill[skill]
-    if (next_skill == undefined) return 0
-    const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings) - character.ping;
-    return ms < 0 ? 0 : ms;
+    const next_skill = parent.next_skill[skill];
+	let time = Math.min(...parent.pings)
+    if (!next_skill) return 0; // Return immediately if no cooldown info is available
+
+    // Use performance.now() for more precise timing, with a small ping adjustment factor (0.95)
+     const ms = next_skill.getTime() - Date.now() - time - (character.ping);
+
+    return ms < 0 ? 0 : ms; // Return 0 if cooldown is ready, otherwise return the exact delay
 }
 
 function mobTargets_inRange(mtypes, radius, mobs_target, point) {
@@ -1566,7 +1567,7 @@ async function handle_potions() {
     const tomeAmount = 1;
     const potionCooldown = 1000; // Minimum time between potion usages
     const buyCooldown = 1000; // Minimum time between purchases
-    let delay = 100; // Shorter delay to handle frequent checks
+    let delay = null; // Shorter delay to handle frequent checks
 
     try {
         const currentTime = Date.now();
@@ -1574,6 +1575,7 @@ async function handle_potions() {
         // Use MP potion if needed
         if (character.mp <= mpThreshold && !is_on_cooldown('use_mp') && item_quantity("mpot1") > 0 && currentTime - lastPotion > potionCooldown) {
             await use('use_mp');
+			delay = ms_to_next_skill('use_mp');
             lastPotion = currentTime;
         }
 
@@ -1615,12 +1617,12 @@ async function fixPromise(promise) {
     return Promise.race(promises);
 }
 
-let group = ["OlDrippy", "CrownsAnal", "CrownTown", "CrownPriest", "CrownMerch", "CrownMage"];
+let group = ["Mommy", "CrownsAnal", "CrownTown", "CrownPriest", "CrownMerch", "CrownMage"];
 
 function partyMaker() {
-    let partyLead = group[0]; // The first character in the group is the leader
+    let partyLead = get_entity(group[0]); // The first character in the group is the leader
     let currentParty = character.party; // Get the current party details
-    let healer = get_entity("OlDrippy");
+    let healer = get_entity("Mommy");
     // If you're the leader and party size is less than 3, invite group members
     if (character.name === group[0]) {
         console.log("Party leader inviting members.");
@@ -1636,9 +1638,9 @@ function partyMaker() {
         }
 
         // If not in a party and the leader exists, send a party request
-        if (!currentParty && partyLead) {
+        if (!currentParty && partyLead ) {
             console.log(`Requesting to join ${group[0]}'s party.`);
-            send_cm("OlDrippy", "party");
+            send_cm(group[0], "party");
             send_party_request(group[0]);
         }
     }
@@ -1763,7 +1765,7 @@ async function equipIfNeeded(itemName, slotName, level, l) {
 let ui_gamelog = function () {
     let gamelog_data = {
         kills: {
-            show: true,
+            show: false,
             regex: /killed/,
             tab_name: 'Kills'
         },
@@ -1982,7 +1984,7 @@ function init_goldmeter() {
     let brc = $('#bottomrightcorner');
     brc.find('#goldtimer').remove();
     let xpt_container = $('<div id="goldtimer"></div>').css({
-        //position: 'relative',
+		//position: 'relative',
         fontSize: '25px',
         color: 'white',
         textAlign: 'center',
@@ -2086,7 +2088,7 @@ function init_xptimer(minref) {
     let brc = $('#bottomrightcorner');
     brc.find('#xptimer').remove();
     let xpt_container = $('<div id="xptimer"></div>').css({
-        //position: 'relative',
+		//position: 'relative',
         background: 'black',
         border: 'solid gray',
         borderWidth: '4px 4px',
@@ -2170,7 +2172,7 @@ function initDPSMeter() {
 
     // Create a container for the DPS meter
     let dpsmeter_container = $('<div id="dpsmeter"></div>').css({
-        //position: 'relative',
+		//position: 'relative',
         fontSize: '20px',
         color: 'white',
         textAlign: 'center',
@@ -2279,7 +2281,7 @@ function getElapsedTime() {
 // Update the DPS meter UI
 function updateDPSMeterUI() {
     try {
-        //all damageTypes are ["Base", "Blast", "Burn",  "HPS", "MPS", "DPS"];
+		//all damageTypes are ["Base", "Blast", "Burn",  "HPS", "MPS", "DPS"];
         const damageTypes = ["Base", "Blast", "HPS", "DPS"];
         let elapsed = performance.now() - METER_START;
 
@@ -2392,7 +2394,6 @@ function calculateDPSForPartyMember(entry) {
 initDPSMeter();
 setInterval(updateDPSMeterUI, 250);
 ////////////////////////////////////////////////////////////////////////////
-//This is the best fix ive found for this without ruining spacing
 function modifyGamelogAppearance() {
     let $ = parent.$;
     let gamelog = $('#gamelog');
@@ -2574,7 +2575,7 @@ game.on('death', function (data) {
 function killHandler() {
     let elapsed = (new Date() - StartTime) / 1000; // Calculate elapsed time in seconds
     let DeathsPerSec = Deaths / elapsed; // Calculate deaths per second
-    let dailyKillRate = Math.round(DeathsPerSec * 60); // Calculate deaths per day
+   let dailyKillRate = Math.round(DeathsPerSec * 60); // Calculate deaths per day
     add_top_button("kpm", Math.round(dailyKillRate).toLocaleString() + ' kpm');
     add_top_button("kph", Math.round(dailyKillRate * 60).toLocaleString() + ' kph');
     add_top_button("kpd", Math.round(dailyKillRate * 60 * 24).toLocaleString() + ' kpd');
@@ -2637,7 +2638,7 @@ let css = `
 parent.$('head').append(`<style id="style-party-frames">${css}</style>`);
 parent.party_style_prepared = true;
 
-const includeThese = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'name', 'cc', 'xp', 'level'];
+const includeThese = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'name', 'cc', 'xp', 'level', 'share'];
 const partyFrameWidth = 80; // Set the desired width for the party frames
 
 function updatePartyData() {
@@ -2663,7 +2664,8 @@ let show_party_frame_property = {
     mp: true,
     xp: true,
     cc: false,
-    ping: true,
+    ping: false,
+    share: true
 };
 
 function get_toggle_text(key) {
@@ -2704,7 +2706,7 @@ function addPartyFramePropertiesToggles() {
         return toggle;
     }
 
-    for (let key of ['img', 'hp', 'mp', 'xp', 'cc', '']) {
+    for (let key of ['img', 'hp', 'mp', 'xp', 'cc', 'share']) {
         toggles.appendChild(create_toggle(key));
     }
 
@@ -2776,13 +2778,20 @@ function updatePartyFrames() {
                 ccWidth = info.cc / info.max_cc * 100;
                 cc = info.cc.toFixed(2);
             }
-            /*
+            
             let pingWidth = 0;
             let ping = '??';
             if (character.ping !== undefined) {
                 pingWidth = -10;
                 ping = character.ping.toFixed(0);
-            }*/
+            }
+
+            let shareWidth = 0;
+            let share = '??';
+            if (parent.party[party_member_name] && parent.party[party_member_name].share !== undefined) {
+                shareWidth = parent.party[party_member_name].share * 100;
+                share = (parent.party[party_member_name].share * 100).toFixed(0) + '%'; // Display share percentage with % sign
+            }
 
             let data = {
                 hp: hp,
@@ -2797,12 +2806,15 @@ function updatePartyFrames() {
                 cc: cc,
                 ccWidth: ccWidth,
                 ccColor: 'grey',
-                //ping: ping,
-                //pingWidth: pingWidth,
-                //pingColor: 'black',
+                ping: ping,
+                pingWidth: pingWidth,
+                pingColor: 'black',
+                share: share,
+                shareWidth: shareWidth*3,
+                shareColor: 'teal',
             };
 
-            for (let key of ['hp', 'mp', 'xp', 'cc', '']) {
+            for (let key of ['hp', 'mp', 'xp', 'share']) {
                 const text = key.toUpperCase();
                 const value = data[key];
                 const width = data[key + 'Width'];

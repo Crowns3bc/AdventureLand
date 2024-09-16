@@ -3,18 +3,18 @@ pause();
 const chars = {
     //MAGE: "CrownMage",
     MERCHANT: "CrownMerch",
-    //PALADIN: "CrownPal",
+    PALADIN: "CrownPal",
     //PRIEST: "CrownPriest",
-    //WARRIOR: "CrownTown",
+    WARRIOR: "CrownTown",
 };
 
 // Define starting levels
 const codeSlots = {
     //MAGE: 28,
     MERCHANT: 95,
-    //PALADIN: 18,
+    PALADIN: 18,
     //PRIEST: 3,
-    //WARRIOR: 2,
+    WARRIOR: 2,
 };
 
 let startChar = true;

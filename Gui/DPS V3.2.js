@@ -8,13 +8,14 @@ function initDPSMeter() {
 
     // Create a container for the DPS meter
     let dpsmeter_container = $('<div id="dpsmeter"></div>').css({
+        //position: 'relative',
         fontSize: '20px',
         color: 'white',
         textAlign: 'center',
         display: 'table',
         overflow: 'hidden',
         marginBottom: '-3px',
-        width: '100%',
+        width: "100%",
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
     });
 
@@ -23,7 +24,7 @@ function initDPSMeter() {
         display: 'table-cell',
         verticalAlign: 'middle',
         backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        padding: '5px',
+        padding: '2px',
         border: '4px solid grey',
     }).appendTo(dpsmeter_container);
 
@@ -105,12 +106,19 @@ parent.socket.on("hit", function (data) {
     }
 });
 
+// Function to calculate the elapsed time in hours and minutes
+function getElapsedTime() {
+    let elapsedMs = performance.now() - METER_START;
+    let elapsedHours = Math.floor(elapsedMs / (1000 * 60 * 60));
+    let elapsedMinutes = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
+    return `${elapsedHours}h ${elapsedMinutes}m`;
+}
+
 // Update the DPS meter UI
 function updateDPSMeterUI() {
     try {
-        //All supported types can freely be added or removed
-        //const damageTypes = ["Base", "Blast", "Burn", "HPS", "MPS", "DPS"]; are all that are currently available
-        const damageTypes = ["Base", "Blast", "Burn", "HPS", "MPS", "DPS"];
+        //all damageTypes are ["Base", "Blast", "Burn",  "HPS", "MPS", "DPS"];
+        const damageTypes = ["Base", "Blast", "HPS", "DPS"];
         let elapsed = performance.now() - METER_START;
 
         let dps = Math.floor((damage * 1000) / elapsed);
@@ -125,7 +133,9 @@ function updateDPSMeterUI() {
 
         if (dpsDisplay.length === 0) return;
 
-        let listString = '<div>👑 Crowns Damage Meter 👑</div>';
+        let elapsedTime = getElapsedTime();
+
+        let listString = `<div>👑 Elapsed Time: ${elapsedTime} 👑</div>`;
         listString += '<table border="1" style="width:100%">';
 
         // Header row

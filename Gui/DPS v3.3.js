@@ -105,14 +105,14 @@ parent.socket.on("hit", function (data) {
         }
         if (data.dreturn) {
             let playerId = data.id;
-            
+
             if (!playerDamageReturns[playerId]) {
                 playerDamageReturns[playerId] = {
                     startTime: performance.now(), // Initialize startTime
                     sumDamageReturn: 0,
                 };
             }
-            
+
             let entry = playerDamageReturns[playerId];
             entry.sumDamageReturn += data.dreturn || 0;
         }
@@ -251,7 +251,6 @@ function getTypeValue(type, entry) {
     }
 }
 
-// Calculate DPS for a specific party member
 // Calculate DPS for a specific party member
 function calculateDPSForPartyMember(entry) {
     try {

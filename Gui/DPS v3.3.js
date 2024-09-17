@@ -132,6 +132,7 @@ function getElapsedTime() {
 // Update the DPS meter UI
 function updateDPSMeterUI() {
     try {
+        //damageTypes = ["Base", "Blast", "Burn", "HPS", "MPS", "DR", "DPS"];
         const damageTypes = ["Base", "Blast", "HPS", "DR", "DPS"];
         let elapsed = performance.now() - METER_START;
 

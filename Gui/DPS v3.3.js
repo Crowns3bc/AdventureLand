@@ -105,14 +105,14 @@ parent.socket.on("hit", function (data) {
         }
         if (data.dreturn) {
             let playerId = data.id;
-
+            
             if (!playerDamageReturns[playerId]) {
                 playerDamageReturns[playerId] = {
                     startTime: performance.now(), // Initialize startTime
                     sumDamageReturn: 0,
                 };
             }
-
+            
             let entry = playerDamageReturns[playerId];
             entry.sumDamageReturn += data.dreturn || 0;
         }
@@ -132,7 +132,6 @@ function getElapsedTime() {
 // Update the DPS meter UI
 function updateDPSMeterUI() {
     try {
-        //damageTypes ["Base", "Blast", "Burn", "DR",  "HPS", "MPS", "DPS"];
         const damageTypes = ["Base", "Blast", "HPS", "DR", "DPS"];
         let elapsed = performance.now() - METER_START;
 
@@ -162,13 +161,13 @@ function updateDPSMeterUI() {
 
         let elapsedTime = getElapsedTime();
 
-        let listString = <div>👑 Elapsed Time: ${elapsedTime} 👑</div>;
+        let listString = `<div>👑 Elapsed Time: ${elapsedTime} 👑</div>`;
         listString += '<table border="1" style="width:100%">';
 
         // Header row
         listString += '<tr><th></th>';
         for (const type of damageTypes) {
-            listString += <th>${type}</th>;
+            listString += `<th>${type}</th>`;
         }
         listString += '</tr>';
 
@@ -186,7 +185,7 @@ function updateDPSMeterUI() {
             const player = get_player(id);
             if (player) {
                 listString += '<tr>';
-                listString += <td>${player.name}</td>;
+                listString += `<td>${player.name}</td>`;
 
                 for (const type of damageTypes) {
                     let value;
@@ -195,7 +194,7 @@ function updateDPSMeterUI() {
                     } else {
                         value = getTypeValue(type, entry);
                     }
-                    listString += <td>${getFormattedDPS(value)}</td>;
+                    listString += `<td>${getFormattedDPS(value)}</td>`;
                 }
 
                 listString += '</tr>';
@@ -217,7 +216,7 @@ function updateDPSMeterUI() {
                 }
             }
 
-            listString += <td>${getFormattedDPS(totalDPS)}</td>;
+            listString += `<td>${getFormattedDPS(totalDPS)}</td>`;
         }
         listString += '</tr>';
 
@@ -252,6 +251,7 @@ function getTypeValue(type, entry) {
     }
 }
 
+// Calculate DPS for a specific party member
 // Calculate DPS for a specific party member
 function calculateDPSForPartyMember(entry) {
     try {

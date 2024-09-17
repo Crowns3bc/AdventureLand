@@ -105,14 +105,14 @@ parent.socket.on("hit", function (data) {
         }
         if (data.dreturn) {
             let playerId = data.id;
-            
+
             if (!playerDamageReturns[playerId]) {
                 playerDamageReturns[playerId] = {
                     startTime: performance.now(), // Initialize startTime
                     sumDamageReturn: 0,
                 };
             }
-            
+
             let entry = playerDamageReturns[playerId];
             entry.sumDamageReturn += data.dreturn || 0;
         }
@@ -132,7 +132,7 @@ function getElapsedTime() {
 // Update the DPS meter UI
 function updateDPSMeterUI() {
     try {
-		//damageTypes ["Base", "Blast", "Burn", "DR",  "HPS", "MPS", "DPS"];
+        //damageTypes ["Base", "Blast", "Burn", "DR",  "HPS", "MPS", "DPS"];
         const damageTypes = ["Base", "Blast", "HPS", "DR", "DPS"];
         let elapsed = performance.now() - METER_START;
 
@@ -163,7 +163,7 @@ function updateDPSMeterUI() {
         let elapsedTime = getElapsedTime();
 
         let listString = <div>👑 Elapsed Time: ${elapsedTime} 👑</div>;
-        listString += '<table border="1" style="width:100%">' ;
+        listString += '<table border="1" style="width:100%">';
 
         // Header row
         listString += '<tr><th></th>';
@@ -174,7 +174,7 @@ function updateDPSMeterUI() {
 
         // Sort players by DPS
         let sortedPlayers = Object.entries(partyDamageSums)
-            .map(([id, entry]) => ( {
+            .map(([id, entry]) => ({
                 id,
                 dps: calculateDPSForPartyMember(entry),
                 entry

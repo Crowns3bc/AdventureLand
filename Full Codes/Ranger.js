@@ -5,7 +5,7 @@ const chars = {
     MERCHANT: "CrownMerch",
     //PALADIN: "CrownPal",
     //PRIEST: "CrownPriest",
-	ROGUE: "CrownZone",
+    ROGUE: "CrownZone",
     WARRIOR: "CrownTown",
 };
 
@@ -15,7 +15,7 @@ const codeSlots = {
     MERCHANT: 95,
     //PALADIN: 18,
     //PRIEST: 3,
-	ROGUE: 18,
+    ROGUE: 18,
     WARRIOR: 2,
 };
 
@@ -230,35 +230,35 @@ let lastUpdateTime = performance.now();
 let prevMove = 0;
 const moveThreshold = 150; // Limit calls to avoid limitDC
 function walkInCircle() {
-	if (!smart.moving) {
-		const center = locations[home][0];
-		const radius = 45;
-		let now = Date.now();
+    if (!smart.moving) {
+        const center = locations[home][0];
+        const radius = 45;
+        let now = Date.now();
 
-		// Calculate time elapsed since the last update
-		const currentTime = performance.now();
-		const deltaTime = currentTime - lastUpdateTime;
-		lastUpdateTime = currentTime;
+        // Calculate time elapsed since the last update
+        const currentTime = performance.now();
+        const deltaTime = currentTime - lastUpdateTime;
+        lastUpdateTime = currentTime;
 
-		// Calculate the new angle based on elapsed time and speed
-		const deltaAngle = speed * (deltaTime / 1000); 
-		angle = (angle + deltaAngle) % (2 * Math.PI);
+        // Calculate the new angle based on elapsed time and speed
+        const deltaAngle = speed * (deltaTime / 1000);
+        angle = (angle + deltaAngle) % (2 * Math.PI);
 
-		// Calculate the new position on the circle
-		const offsetX = Math.cos(angle) * radius;
-		const offsetY = Math.sin(angle) * radius;
-		const targetX = center.x + offsetX;
-		const targetY = center.y + offsetY;
+        // Calculate the new position on the circle
+        const offsetX = Math.cos(angle) * radius;
+        const offsetY = Math.sin(angle) * radius;
+        const targetX = center.x + offsetX;
+        const targetY = center.y + offsetY;
 
-		// Only move if enough time has passed and avoid frequent xmove calls
-		if (now - prevMove > moveThreshold) {
-				xmove(targetX, targetY); // Move when a significant distance needs to be covered
-				prevMove = now;
-		}
+        // Only move if enough time has passed and avoid frequent xmove calls
+        if (now - prevMove > moveThreshold) {
+            xmove(targetX, targetY); // Move when a significant distance needs to be covered
+            prevMove = now;
+        }
 
-		// Optional: Draw circles for visualization
-		drawCirclesAndLines(center, radius);
-	}
+        // Optional: Draw circles for visualization
+        drawCirclesAndLines(center, radius);
+    }
 }
 
 function drawCirclesAndLines(center, radius) {
@@ -451,110 +451,110 @@ const switchCooldown = 750; // Cooldown period in milliseconds (0.75 seconds)
 let state = "attacking"; // Default state
 
 async function attackLoop() {
-	let delay = null; // Initial delay
-	const X = locations[home][0].x; // X coordinate of home location
-	const Y = locations[home][0].y; // Y coordinate of home location
-	const rangeThreshold = 45; // Range threshold for counting monsters
-	//const targetNames = ["CrownPriest", "CrownTown"];
-	const targetNames = ["Miau", "Atlus", "Mommy", "DoubleG", "SingleG", "Scoliosis"];
+    let delay = null; // Initial delay
+    const X = locations[home][0].x; // X coordinate of home location
+    const Y = locations[home][0].y; // Y coordinate of home location
+    const rangeThreshold = 45; // Range threshold for counting monsters
+    //const targetNames = ["CrownPriest", "CrownTown"];
+    const targetNames = ["Miau", "Atlus", "Mommy", "DoubleG", "SingleG", "Scoliosis"];
 
-	// Set heal threshold based on healer presence
-	let healThreshold = 0.4;
-	const healer = get_entity("Mommy"); // Check if healer is present
+    // Set heal threshold based on healer presence
+    let healThreshold = 0.4;
+    const healer = get_entity("Mommy"); // Check if healer is present
 
-	if (!healer || healer.rip) {
-		healThreshold = .9; // Increase threshold if healer is not around
-	}
+    if (!healer || healer.rip) {
+        healThreshold = .9; // Increase threshold if healer is not around
+    }
 
-	try {
-		// Count monsters within range and out of range
-		let monsters = Object.values(parent.entities)
-		.filter(e => e.type === "monster" && e.target && targetNames.includes(e.target))
-		// Count monsters within range and out of range sorted by hp
-		let sortedByHP = Object.values(parent.entities)
-		.filter(e => e.type === "monster" && e.target && targetNames.includes(e.target))
-		.sort((a, b) => b.hp - a.hp);
+    try {
+        // Count monsters within range and out of range
+        let monsters = Object.values(parent.entities)
+            .filter(e => e.type === "monster" && e.target && targetNames.includes(e.target))
+        // Count monsters within range and out of range sorted by hp
+        let sortedByHP = Object.values(parent.entities)
+            .filter(e => e.type === "monster" && e.target && targetNames.includes(e.target))
+            .sort((a, b) => b.hp - a.hp);
 
-		let monstersInRangeList = sortedByHP.filter(e => Math.hypot(e.x - X, e.y - Y) <= rangeThreshold);
-		let monstersOutOfRangeList = sortedByHP.filter(e => Math.hypot(e.x - X, e.y - Y) > rangeThreshold);
+        let monstersInRangeList = sortedByHP.filter(e => Math.hypot(e.x - X, e.y - Y) <= rangeThreshold);
+        let monstersOutOfRangeList = sortedByHP.filter(e => Math.hypot(e.x - X, e.y - Y) > rangeThreshold);
 
-		// Determine the state based on healing needs
-		let heal_target = lowest_health_partymember();
+        // Determine the state based on healing needs
+        let heal_target = lowest_health_partymember();
 
-		if (heal_target && heal_target.hp < heal_target.max_hp * healThreshold) {
-			state = "healing";  // Set to healing if someone is below the heal threshold
-		} else {
-			state = "attacking";  // Otherwise, focus on attacking
-		}
+        if (heal_target && heal_target.hp < heal_target.max_hp * healThreshold) {
+            state = "healing";  // Set to healing if someone is below the heal threshold
+        } else {
+            state = "attacking";  // Otherwise, focus on attacking
+        }
 
-		// Switch behavior based on the current state
-		switch (state) {
-			case "healing":
-				if (performance.now() - lastSwitchTime > switchCooldown) {
-					equipSet('heal');  // Switch to healing set
-					lastSwitchTime = performance.now();
-				}
-				//game_log("Attempting to heal: " + heal_target.name, "#ac1414");
-				await attack(heal_target); // Heal the target
-				delay = ms_to_next_skill('attack');
-				break;
+        // Switch behavior based on the current state
+        switch (state) {
+            case "healing":
+                if (performance.now() - lastSwitchTime > switchCooldown) {
+                    equipSet('heal');  // Switch to healing set
+                    lastSwitchTime = performance.now();
+                }
+                //game_log("Attempting to heal: " + heal_target.name, "#ac1414");
+                await attack(heal_target); // Heal the target
+                delay = ms_to_next_skill('attack');
+                break;
 
-			case "attacking":
-				if (sortedByHP.length) {
-					let highestHPMonster = sortedByHP[0];
-					if (highestHPMonster) {
-						change_target(highestHPMonster);
-						if (!is_on_cooldown("huntersmark")) {
-							await use_skill("huntersmark", highestHPMonster.id);
-						}
-						if (!is_on_cooldown("supershot")) {
-							await use_skill("supershot", highestHPMonster.id);
-						}
-					}
+            case "attacking":
+                if (sortedByHP.length) {
+                    let highestHPMonster = sortedByHP[0];
+                    if (highestHPMonster) {
+                        change_target(highestHPMonster);
+                        if (!is_on_cooldown("huntersmark")) {
+                            await use_skill("huntersmark", highestHPMonster.id);
+                        }
+                        if (!is_on_cooldown("supershot")) {
+                            await use_skill("supershot", highestHPMonster.id);
+                        }
+                    }
 
-					if (monstersInRangeList.length >= 4) {
-						if (performance.now() - lastSwitchTime > switchCooldown) {
-							equipSet('boom');
-							//equipSet('dead');
-							lastSwitchTime = performance.now();
-						}
-						await use_skill("5shot", monstersInRangeList.slice(0, 5).map(e => e.id)); // Use the 5-shot skill
-						delay = ms_to_next_skill("attack");
-					} else if (monstersOutOfRangeList.length >= 4) {
-						if (performance.now() - lastSwitchTime > switchCooldown) {
-							equipSet('dead');
-							lastSwitchTime = performance.now();
-						}
-						await use_skill("5shot", monstersOutOfRangeList.slice(0, 5).map(e => e.id)); // Use the 5-shot skill
-						delay = ms_to_next_skill("attack");
-					} else if (monsters.length >= 2) {
-						let targets = sortedByHP.slice(0, 3).map(e => e.id); // Top 3 monsters overall
-						if (performance.now() - lastSwitchTime > switchCooldown) {
-							equipSet('dead');
-							lastSwitchTime = performance.now();
-						}
-						await use_skill("3shot", targets); // Use the 3-shot skill
-						delay = ms_to_next_skill("attack");
-					} else if (monsters.length === 1) {
-						let target = sortedByHP[0].id; // Single monster overall
-						if (performance.now() - lastSwitchTime > switchCooldown) {
-							equipSet('single');
-							lastSwitchTime = performance.now();
-						}
-						await attack(target); // Use the attack skill
-						delay = ms_to_next_skill("attack");
-					}
-				}
-				break;
+                    if (monstersInRangeList.length >= 4) {
+                        if (performance.now() - lastSwitchTime > switchCooldown) {
+                            equipSet('boom');
+                            //equipSet('dead');
+                            lastSwitchTime = performance.now();
+                        }
+                        await use_skill("5shot", monstersInRangeList.slice(0, 5).map(e => e.id)); // Use the 5-shot skill
+                        delay = ms_to_next_skill("attack");
+                    } else if (monstersOutOfRangeList.length >= 4) {
+                        if (performance.now() - lastSwitchTime > switchCooldown) {
+                            equipSet('dead');
+                            lastSwitchTime = performance.now();
+                        }
+                        await use_skill("5shot", monstersOutOfRangeList.slice(0, 5).map(e => e.id)); // Use the 5-shot skill
+                        delay = ms_to_next_skill("attack");
+                    } else if (monsters.length >= 2) {
+                        let targets = sortedByHP.slice(0, 3).map(e => e.id); // Top 3 monsters overall
+                        if (performance.now() - lastSwitchTime > switchCooldown) {
+                            equipSet('dead');
+                            lastSwitchTime = performance.now();
+                        }
+                        await use_skill("3shot", targets); // Use the 3-shot skill
+                        delay = ms_to_next_skill("attack");
+                    } else if (monsters.length === 1) {
+                        let target = sortedByHP[0].id; // Single monster overall
+                        if (performance.now() - lastSwitchTime > switchCooldown) {
+                            equipSet('single');
+                            lastSwitchTime = performance.now();
+                        }
+                        await attack(target); // Use the attack skill
+                        delay = ms_to_next_skill("attack");
+                    }
+                }
+                break;
 
-			default:
-				console.error("Unknown state: " + state);
-				break;
-		}
-	} catch (e) {
-		//console.error(e);
-	}
-	setTimeout(attackLoop, delay); // Recursive call with the updated delay
+            default:
+                console.error("Unknown state: " + state);
+                break;
+        }
+    } catch (e) {
+        //console.error(e);
+    }
+    setTimeout(attackLoop, delay); // Recursive call with the updated delay
 }
 
 // Start the attack loop
@@ -765,7 +765,7 @@ function getMonstersInRadius() {
         const distanceToEntity = distanceToPoint(entity.real_x, entity.real_y, character.real_x, character.real_y);
         const range = getRange(entity);
         return (entity.type === "monster" && avoidTypes.includes(entity.mtype) && distanceToEntity < calcRadius) ||
-               (avoidPlayers && entity.type === "character" && !entity.npc && !playerAvoidIgnoreClasses.includes(entity.ctype) &&
+            (avoidPlayers && entity.type === "character" && !entity.npc && !playerAvoidIgnoreClasses.includes(entity.ctype) &&
                 (!avoidPlayersWhitelist.includes(entity.id) || avoidPlayersWhitelistRange != null) &&
                 (distanceToEntity < calcRadius || distanceToEntity < range));
     });
@@ -852,16 +852,16 @@ function pingButton() {
 setInterval(pingButton, 1000);
 
 function getRspeed() {
-	const oneMinute = 60000; // 1 minute in milliseconds
-	if (!character.s.rspeed || (character.s.rspeed.ms < oneMinute)) {
-		//start_character("CrownZone",16);
-	}
+    const oneMinute = 60000; // 1 minute in milliseconds
+    if (!character.s.rspeed || (character.s.rspeed.ms < oneMinute)) {
+        //start_character("CrownZone",16);
+    }
 }
 setInterval(getRspeed, 5000);
 function on_cm(name, data) {
-	if (name === "CrownZone" && data.message === "rspeed done") {
-		stop_character("CrownZone");
-	}
+    if (name === "CrownZone" && data.message === "rspeed done") {
+        stop_character("CrownZone");
+    }
 }
 
 function topButtons() {
@@ -966,7 +966,7 @@ function findSpecialChests() {
 
     for (let chestId in chests) {
         let chest = chests[chestId];
-        
+
         // Check for special chests
         if (chest.skin === "chest6" || chest.skin === "chest7") {
             specialChests.push({ id: chestId, chest: chest });
@@ -975,8 +975,8 @@ function findSpecialChests() {
 
     // Send the chest IDs of special chests to your merchant if any are found
     if (specialChests.length > 0) {
-        send_cm("CrownMerch", { 
-            message: "Chest ID", 
+        send_cm("CrownMerch", {
+            message: "Chest ID",
             chestID: specialChests.id// Sending only chest IDs
         });
     }
@@ -1054,7 +1054,7 @@ async function itemSwap() {
     try {
         // Check if any monster is below hpThreshold
         const monstersBelowThreshold = Object.values(parent.entities).some(entity => entity.mtype === home && entity.hp < hpThreshold);
-		
+
         // Only allow swap if enough time has passed since the last swap
         if (now - lastSwapTime > swapCooldown) {
             // Equip xpSet if any monster is below hpThreshold
@@ -1068,7 +1068,7 @@ async function itemSwap() {
                 lastSwapTime = now; // Update last swap time
             }
         }
-/*
+        /*
         // Cape Swap
         if (now - capeSwapTime > swapCooldown) {
             // Equip stealthSet if enough chests are present
@@ -1277,8 +1277,8 @@ function findBoosterSlot() {
 
 sell_whitelist = [
     'vitearring', 'iceskates', 'cclaw', 'hpbelt', 'ringsj', 'hpamulet', 'warmscarf',
-    'quiver', 'snowball', 'vitring', 'wcap', 'wattire', 'wbreeches', 'wshoes', 
-	'wgloves', "strring", "dexring", "intring",
+    'quiver', 'snowball', 'vitring', 'wcap', 'wattire', 'wbreeches', 'wshoes',
+    'wgloves', "strring", "dexring", "intring",
 ];
 function sellItems() {
     for (let i = 0; i < character.items.length; i++) {
@@ -1500,9 +1500,9 @@ function lowest_health_partymember() {
 
 function ms_to_next_skill(skill) {
     const next_skill = parent.next_skill[skill];
-	let time = Math.min(...parent.pings)
-	let now = Date.now()
-	let ping = character.ping
+    let time = Math.min(...parent.pings)
+    let now = Date.now()
+    let ping = character.ping
     if (next_skill == undefined) return 0;
     const ms = parent.next_skill[skill].getTime() - now - time - ping;
     return ms < 0 ? 0 : ms;
@@ -1635,7 +1635,7 @@ async function handle_potions() {
         // Use MP potion if needed
         if (character.mp <= mpThreshold && !is_on_cooldown('use_mp') && item_quantity("mpot1") > 0 && currentTime - lastPotion > potionCooldown) {
             await use('use_mp');
-			delay = ms_to_next_skill('use_mp');
+            delay = ms_to_next_skill('use_mp');
             lastPotion = currentTime;
         }
 
@@ -1698,7 +1698,7 @@ function partyMaker() {
         }
 
         // If not in a party and the leader exists, send a party request
-        if (!currentParty && partyLead ) {
+        if (!currentParty && partyLead) {
             console.log(`Requesting to join ${group[0]}'s party.`);
             send_cm(group[0], "party");
             send_party_request(group[0]);
@@ -2044,7 +2044,7 @@ function init_goldmeter() {
     let brc = $('#bottomrightcorner');
     brc.find('#goldtimer').remove();
     let xpt_container = $('<div id="goldtimer"></div>').css({
-		//position: 'relative',
+        //position: 'relative',
         fontSize: '25px',
         color: 'white',
         textAlign: 'center',
@@ -2148,7 +2148,7 @@ function init_xptimer(minref) {
     let brc = $('#bottomrightcorner');
     brc.find('#xptimer').remove();
     let xpt_container = $('<div id="xptimer"></div>').css({
-		//position: 'relative',
+        //position: 'relative',
         background: 'black',
         border: 'solid gray',
         borderWidth: '4px 4px',
@@ -2701,7 +2701,7 @@ game.on('death', function (data) {
 function killHandler() {
     let elapsed = (new Date() - StartTime) / 1000; // Calculate elapsed time in seconds
     let DeathsPerSec = Deaths / elapsed; // Calculate deaths per second
-   let dailyKillRate = Math.round(DeathsPerSec * 60); // Calculate deaths per day
+    let dailyKillRate = Math.round(DeathsPerSec * 60); // Calculate deaths per day
     add_top_button("kpm", Math.round(dailyKillRate).toLocaleString() + ' kpm');
     add_top_button("kph", Math.round(dailyKillRate * 60).toLocaleString() + ' kph');
     add_top_button("kpd", Math.round(dailyKillRate * 60 * 24).toLocaleString() + ' kpd');
@@ -2904,7 +2904,7 @@ function updatePartyFrames() {
                 ccWidth = info.cc / info.max_cc * 100;
                 cc = info.cc.toFixed(2);
             }
-            
+
             let pingWidth = 0;
             let ping = '??';
             if (character.ping !== undefined) {
@@ -2936,7 +2936,7 @@ function updatePartyFrames() {
                 pingWidth: pingWidth,
                 pingColor: 'black',
                 share: share,
-                shareWidth: shareWidth*3,
+                shareWidth: shareWidth * 3,
                 shareColor: 'teal',
             };
 

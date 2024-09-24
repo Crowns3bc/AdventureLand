@@ -1,9 +1,9 @@
 // All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "DPS"
 // The order of the array will be the order of the display
-const damageTypes = ["Base", "Blast", "Burn", "HPS", "DPS"];
+const damageTypes = ["Base", "Blast", "Burn", "HPS", "MPS", "DPS"];
 let displayClassTypeColors = true; // Set to false to disable class type colors
-let displayDamageTypeColors = false; // Set to false to disable damage type colors
-let showOverhealing = false; // Set to true to show overhealing
+let displayDamageTypeColors = true; // Set to false to disable damage type colors
+let showOverheal = false; // Set to true to show overhealing
 let showOverManasteal = false; // Set to true to show overMana'ing?
 
 const damageTypeColors = {
@@ -74,10 +74,6 @@ function getFormattedDPS(dps) {
     }
 }
 
-// Define your toggle variables
-let showOverheal = true; // Set to true or false based on your preference
-let showManaSteal = true; // Set to true or false based on your preference
-
 // Handle "hit" events
 parent.socket.on("hit", function (data) {
     try {
@@ -85,9 +81,14 @@ parent.socket.on("hit", function (data) {
         if (data.hid === "CrownsAnal" && data.damage_type === "heal") {
             game_log("Healed " + data.id + " for " + data.heal, "#ac1414");
         }
-
         if (data.hid) {
             let targetId = data.hid;
+            let player = get_entity(targetId);
+            let maxHealth = player.max_hp;
+            let currentHealth = player.hp;
+            let maxMana = player.max_mp;
+            let currentMana = player.mp;
+
             if (parent.party_list && parent.party_list.includes(targetId)) {
                 let entry = partyDamageSums[targetId] || {
                     startTime: performance.now(),
@@ -98,53 +99,29 @@ parent.socket.on("hit", function (data) {
                     sumBaseDamage: 0,
                     sumLifesteal: 0,
                     sumManaSteal: 0,
-                    sumDamageReturn: 0, // Make sure this is included
+                    sumDamageReturn: 0,
                 };
+
+                // Calculate actual heal and lifesteal
+                let actualHeal = (data.heal || 0) + (data.lifesteal || 0);
+
+                // Add healing and lifesteal based on the toggle for showing overheal
+                if (showOverheal) {
+                    entry.sumHeal += actualHeal; // Include all heal and lifesteal
+                } else {
+                    entry.sumHeal += Math.min(actualHeal, maxHealth - currentHealth); // Only actual healing
+                }
+
+                // Handle mana steal based on the toggle for showing overmana steal
+                if (showOverManasteal) {
+                    entry.sumManaSteal += data.manasteal || 0; // Include all manasteal
+                } else {
+                    entry.sumManaSteal += Math.min(data.manasteal || 0, maxMana - currentMana); // Only actual manasteal
+                }
 
                 // Accumulate damage values
                 entry.sumDamage += data.damage || 0;
 
-                // Calculate actual heal/lifesteal to be added to sumHeal
-                let actualHeal = data.heal || 0;
-                let actualLifesteal = data.lifesteal || 0;
-
-                // Check current health to limit heal/lifesteal contribution
-                let player = get_player(targetId);
-                let maxHealth = player.max_hp;
-                let currentHealth = player.hp;
-                let potentialHeal = maxHealth - currentHealth;
-
-                // Limit healing and lifesteal to the potential healing amount
-                if (showOverheal) {
-                    actualHeal = Math.min(actualHeal, potentialHeal);
-                    actualLifesteal = Math.min(actualLifesteal, potentialHeal);
-                } else {
-                    actualHeal = Math.max(0, actualHeal - potentialHeal); // Ignore if above potential
-                    actualLifesteal = Math.max(0, actualLifesteal - potentialHeal); // Ignore if above potential
-                }
-
-                // Add the limited actual heal/lifesteal to the sumHeal
-                entry.sumHeal += (actualHeal + actualLifesteal);
-
-                // Calculate actual mana steal to be added to sumManaSteal
-                let actualManaSteal = data.manasteal || 0;
-
-                // Check current mana to limit mana steal contribution
-                let maxMana = player.max_mp;
-                let currentMana = player.mp;
-                let potentialMana = maxMana - currentMana;
-
-                // Limit mana steal based on the toggle
-                if (showOverManasteal) {
-                    actualManaSteal = Math.min(actualManaSteal, potentialMana);
-                } else {
-                    actualManaSteal = Math.max(0, actualManaSteal - potentialMana); // Ignore if above potential
-                }
-
-                // Add the limited actual mana steal to the sumManaSteal
-                entry.sumManaSteal += actualManaSteal;
-
-                // Accumulate other damage types
                 if (data.source === "burn") {
                     entry.sumBurnDamage += data.damage;
                 } else if (data.splash) {
@@ -182,7 +159,7 @@ parent.socket.on("hit", function (data) {
                         sumBaseDamage: 0,
                         sumLifesteal: 0,
                         sumManaSteal: 0,
-                        sumDamageReturn: 0, // Make sure to include this
+                        sumDamageReturn: 0,
                     };
                     partyEntry.sumDamageReturn += data.dreturn || 0; // Add dreturn to party damage sums
                     partyDamageSums[playerId] = partyEntry; // Update the partyDamageSums

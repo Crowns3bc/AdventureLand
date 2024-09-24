@@ -129,17 +129,16 @@ parent.socket.on("hit", function (data) {
                 // Calculate actual mana steal to be added to sumManaSteal
                 let actualManaSteal = data.manasteal || 0;
 
-                // Check if mana stealing is toggled on
-                if (showOverManasteal) {
-                    // Check current mana to limit mana steal contribution
-                    let maxMana = player.max_mp;
-                    let currentMana = player.mp;
-                    let potentialMana = maxMana - currentMana;
+                // Check current mana to limit mana steal contribution
+                let maxMana = player.max_mp;
+                let currentMana = player.mp;
+                let potentialMana = maxMana - currentMana;
 
-                    // Limit mana steal to the potential mana amount
+                // Limit mana steal based on the toggle
+                if (showOverManasteal) {
                     actualManaSteal = Math.min(actualManaSteal, potentialMana);
                 } else {
-                    actualManaSteal = 0; // No mana stealing if toggle is off
+                    actualManaSteal = Math.max(0, actualManaSteal - potentialMana); // Ignore if above potential
                 }
 
                 // Add the limited actual mana steal to the sumManaSteal

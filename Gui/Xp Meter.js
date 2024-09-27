@@ -100,8 +100,7 @@ const getXpRateColor = (averageXP, targetXpRate) => {
     }
 };
 
-// This is also used in my gold meter so delete/comment out if needed
-//const ncomma = (x) => x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+const ncomma = (x) => x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 // Function to change the interval (can be called externally)
 const setXPInterval = (newInterval) => {

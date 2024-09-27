@@ -9,7 +9,7 @@ let targetXpRate = 40000; // Set as the target xp rate you want to be achieving 
 const initXpTimer = () => {
     const $ = parent.$;
     $('#bottomrightcorner').find('#xptimer').remove();
-
+    
     const xpContainer = $('<div id="xptimer"></div>').css({
         background: 'black',
         border: 'solid gray',
@@ -29,7 +29,7 @@ const initXpTimer = () => {
         .css({ display: 'table-cell', verticalAlign: 'middle' })
         .html('Estimated time until level up:<br><span id="xpcounter" style="font-size: 30px;">Loading...</span><br><span id="xprate">(Kill something!)</span>')
         .appendTo(xpContainer);
-
+    
     $('#bottomrightcorner').children().first().after(xpContainer);
 };
 
@@ -81,7 +81,7 @@ const calculateAverageXP = (elapsedTime, xpGain) => {
             return Math.round(xpGain / (elapsedTime / 86400)); // XP per day
         default:
             console.warn(`Invalid interval: ${xpInterval}. Use 'second', 'minute', 'hour', or 'day'.`);
-            return 0;
+            return 0; 
     }
 };
 
@@ -100,10 +100,7 @@ const getXpRateColor = (averageXP, targetXpRate) => {
     }
 };
 
-//This is used in other codes of mine, delete or comment out if its causing issues
-function ncomma(x) {
-    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); // Format numbers with commas
-}
+const ncomma = (x) => x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 // Function to change the interval (can be called externally)
 const setXPInterval = (newInterval) => {

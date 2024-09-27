@@ -100,7 +100,10 @@ const getXpRateColor = (averageXP, targetXpRate) => {
     }
 };
 
-const ncomma = (x) => x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+//This is used in other codes of mine, delete or comment out if its causing issues
+function ncomma(x) {
+    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); // Format numbers with commas
+}
 
 // Function to change the interval (can be called externally)
 const setXPInterval = (newInterval) => {

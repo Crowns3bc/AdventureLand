@@ -3,6 +3,7 @@ let largestXPGain = 0;
 const timeStart = new Date(); // Record the start time for XP calculation
 const startXP = character.xp; // Record the starting XP
 let xpInterval = 'second'; // Default interval (options: 'second', 'minute', 'hour', 'day')
+let targetXpRate = 40000; // Set as the target xp rate you want to be achieving and the color will automatically update
 
 // Initialize the XP timer display
 const initXpTimer = () => {
@@ -50,7 +51,8 @@ const updateXpTimer = () => {
 
     // Calculate average XP based on the selected interval
     const averageXP = calculateAverageXP(elapsedTime, xpGain);
-    $('#xprate').html(`<span class="xprate-container">${ncomma(Math.round(averageXP))} XP/${xpInterval.charAt(0).toUpperCase() + xpInterval.slice(1)}</span>`);
+    const xpRateColor = getXpRateColor(averageXP, targetXpRate);
+    $('#xprate').css('color', xpRateColor).html(`<span class="xprate-container">${ncomma(Math.round(averageXP))} XP/${xpInterval.charAt(0).toUpperCase() + xpInterval.slice(1)}</span>`);
 };
 
 // Function to calculate XP rate
@@ -80,6 +82,21 @@ const calculateAverageXP = (elapsedTime, xpGain) => {
         default:
             console.warn(`Invalid interval: ${xpInterval}. Use 'second', 'minute', 'hour', or 'day'.`);
             return 0;
+    }
+};
+
+// Function to determine the color based on average XP rate
+const getXpRateColor = (averageXP, targetXpRate) => {
+    if (averageXP < targetXpRate * 0.5) {
+        return '#FF0000'; // Dark Red for way below target
+    } else if (averageXP < targetXpRate) {
+        return '#FFA500'; // Orange for below target
+    } else if (averageXP >= targetXpRate && averageXP <= targetXpRate * 1.2) {
+        return '#FFFF00'; // Yellow for at target
+    } else if (averageXP <= targetXpRate * 1.5) {
+        return '#90EE90'; // Light Green for above target
+    } else {
+        return '#00FF00'; // Green for way above target
     }
 };
 

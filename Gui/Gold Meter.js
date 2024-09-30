@@ -50,7 +50,7 @@ const updateGoldDisplay = () => {
 };
 
 // Set up a timer to update the display
-setInterval(updateGoldDisplay, 400);
+setInterval(updateGoldDisplay, 500);
 
 // Initialize gold meter
 initGoldMeter();
@@ -61,7 +61,7 @@ character.on("loot", (data) => {
 	const partyShare = parent.party[character.name]?.share || 1; // Get the character's party share; default to 1 if solo
 
 	const totalGoldInChest = Math.round(goldReceived / partyShare); // Calculate and round the total gold in the chest
-	sumGold += totalGoldInChest; // Track the total gold, accounting for share
+	sumGold += goldReceived; // Only track the gold this character received
 
 	// Track largest gold drop based on the chest's total value, rounded
 	if (totalGoldInChest > largestGoldDrop) {
@@ -69,9 +69,9 @@ character.on("loot", (data) => {
 	}
 });
 
-// Gold sent event handler
-character.on("gold_sent", (data) => {
-	if (data.receiver === character.name) { // Check if the receiver is this character
+// Gold sent event handler for all characters
+game.on("gold_sent", (data) => {
+	if (data.receiver === character.name) { // Check if the receiver is you
 		sumGold += data.gold; // Add sent gold to the total gold sum
 	}
 });

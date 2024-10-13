@@ -38,7 +38,8 @@ const updateGoldDisplay = () => {
 	const averageGold = calculateAverageGold(); // Calculate average gold based on the selected interval
 	$('#goldtimercontent').html(formatGoldString(averageGold)).css({
 		background: 'black',
-		backgroundColor: 'rgba(0, 0, 0, 0.7)',
+		//backgroundColor: 'rgba(0, 0, 0, 0.7)',
+		backgroundColor: 'rgba(0, 0, 0, 1)',
 		border: 'solid gray',
 		borderWidth: '4px 4px',
 		height: '50px',
@@ -55,33 +56,65 @@ setInterval(updateGoldDisplay, 500);
 // Initialize gold meter
 initGoldMeter();
 
-// Loot event handler
 character.on("loot", (data) => {
-	const goldReceived = data.gold; // The gold this character received
-	const partyShare = parent.party[character.name]?.share || 1; // Get the character's party share; default to 1 if solo
+	// Ensure the gold received is valid
+	if (data.gold && typeof data.gold === 'number' && !Number.isNaN(data.gold)) {
+		const partyShare = parent.party[character.name]?.share || 1; // Default to 1 if not in a party
+		const totalGoldInChest = Math.round(data.gold / partyShare); // Calculate total chest gold
 
-	const totalGoldInChest = Math.round(goldReceived / partyShare); // Calculate and round the total gold in the chest
-	sumGold += goldReceived; // Only track the gold this character received
+		sumGold += totalGoldInChest; // Track the actual total gold received
 
-	// Track largest gold drop based on the chest's total value, rounded
-	if (totalGoldInChest > largestGoldDrop) {
-		largestGoldDrop = totalGoldInChest;
+		// Track the largest gold drop
+		if (totalGoldInChest > largestGoldDrop) {
+			largestGoldDrop = totalGoldInChest;
+		}
+	} else {
+		console.warn("Invalid gold value:", data.gold);
+	}
+
+	// Existing item tracker code for loot...
+	if (data.items && Array.isArray(data.items)) {
+		data.items.forEach((item) => {
+			let quantity = item.q !== undefined ? item.q : 1;
+			let savedLoot = JSON.parse(localStorage.getItem("lootItems") || "{}");
+
+			// Track loot in localStorage
+			if (savedLoot[item.name]) {
+				savedLoot[item.name] += quantity;
+			} else {
+				savedLoot[item.name] = quantity;
+			}
+			localStorage.setItem("lootItems", JSON.stringify(savedLoot));
+
+			console.log(`Looted: ${item.name}, Quantity: ${quantity}`);
+
+			// Check if the item is a rare item by ID
+			if (rareItems[item.name]) {
+				// Send Discord message for rare item
+				sendRareLootToDiscord(item.name, quantity, rareItems[item.name], "212506590950064130");
+			}
+		});
 	}
 });
 
-// Gold sent event handler for all characters
-game.on("gold_sent", (data) => {
-	if (data.receiver === character.name) { // Check if the receiver is you
-		sumGold += data.gold; // Add sent gold to the total gold sum
-	}
-});
+
+// Function to visualize the loot stored in localStorage (optional)
+function logLoot() {
+	let savedLoot = JSON.parse(localStorage.getItem("lootItems") || "{}");
+	console.log(savedLoot);
+}
 
 // Calculate average gold based on the selected interval
 const calculateAverageGold = () => {
 	const elapsedTime = (new Date() - startTime) / 1000; // Elapsed time in seconds
 	const divisor = elapsedTime / (interval === 'minute' ? 60 : interval === 'hour' ? 3600 : 86400);
+
+	// Prevent division by zero or near-zero values
+	if (divisor <= 0) return 0;
+
 	return Math.round(sumGold / divisor); // Return gold per the specified interval
 };
+
 
 // Function to change the interval (can be called externally)
 const setGoldInterval = (newInterval) => {

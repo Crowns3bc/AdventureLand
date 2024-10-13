@@ -71,30 +71,6 @@ character.on("loot", (data) => {
 	} else {
 		console.warn("Invalid gold value:", data.gold);
 	}
-
-	// Existing item tracker code for loot...
-	if (data.items && Array.isArray(data.items)) {
-		data.items.forEach((item) => {
-			let quantity = item.q !== undefined ? item.q : 1;
-			let savedLoot = JSON.parse(localStorage.getItem("lootItems") || "{}");
-
-			// Track loot in localStorage
-			if (savedLoot[item.name]) {
-				savedLoot[item.name] += quantity;
-			} else {
-				savedLoot[item.name] = quantity;
-			}
-			localStorage.setItem("lootItems", JSON.stringify(savedLoot));
-
-			console.log(`Looted: ${item.name}, Quantity: ${quantity}`);
-
-			// Check if the item is a rare item by ID
-			if (rareItems[item.name]) {
-				// Send Discord message for rare item
-				sendRareLootToDiscord(item.name, quantity, rareItems[item.name], "212506590950064130");
-			}
-		});
-	}
 });
 
 

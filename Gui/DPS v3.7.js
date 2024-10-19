@@ -1,10 +1,10 @@
 // All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "DPS"
 // The order of the array will be the order of the display
-const damageTypes = ["Base", "Blast", "Burn", "HPS", "MPS", "DPS"];
+const damageTypes = ["Base", "Blast", "Burn", "HPS", "MPS", "DR", "DPS"];
 let displayClassTypeColors = true; // Set to false to disable class type colors
 let displayDamageTypeColors = true; // Set to false to disable damage type colors
-let showOverheal = false; // Set to true to show overhealing
-let showOverManasteal = false; // Set to true to show overMana'ing?
+let showOverheal = true; // Set to true to show overhealing
+let showOverManasteal = true; // Set to true to show overMana'ing?
 
 const damageTypeColors = {
     Base: '#A92000',
@@ -33,14 +33,14 @@ function initDPSMeter() {
         overflow: 'hidden',
         marginBottom: '-3px',
         width: "100%",
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
     });
 
     // Create a div for the DPS meter content
     let dpsmeter_content = $('<div id="dpsmetercontent"></div>').css({
         display: 'table-cell',
         verticalAlign: 'middle',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0)',
         padding: '2px',
         border: '4px solid grey',
     }).appendTo(dpsmeter_container);
@@ -90,7 +90,7 @@ parent.socket.on("hit", function (data) {
             let currentMana = player.mp;
 
             if (parent.party_list && parent.party_list.includes(targetId)) {
-                let entry = partyDamageSums[targetId] || {
+                let entry = partyDamageSums[targetId] ?? {
                     startTime: performance.now(),
                     sumDamage: 0,
                     sumHeal: 0,
@@ -103,7 +103,7 @@ parent.socket.on("hit", function (data) {
                 };
 
                 // Calculate actual heal and lifesteal
-                let actualHeal = (data.heal || 0) + (data.lifesteal || 0);
+                let actualHeal = (data.heal ?? 0) + (data.lifesteal ?? 0);
 
                 // Add healing and lifesteal based on the toggle for showing overheal
                 if (showOverheal) {
@@ -114,20 +114,20 @@ parent.socket.on("hit", function (data) {
 
                 // Handle mana steal based on the toggle for showing overmana steal
                 if (showOverManasteal) {
-                    entry.sumManaSteal += data.manasteal || 0; // Include all manasteal
+                    entry.sumManaSteal += data.manasteal ?? 0; // Include all manasteal
                 } else {
-                    entry.sumManaSteal += Math.min(data.manasteal || 0, maxMana - currentMana); // Only actual manasteal
+                    entry.sumManaSteal += Math.min(data.manasteal ?? 0, maxMana - currentMana); // Only actual manasteal
                 }
 
                 // Accumulate damage values
-                entry.sumDamage += data.damage || 0;
+                entry.sumDamage += data.damage ?? 0;
 
                 if (data.source === "burn") {
                     entry.sumBurnDamage += data.damage;
                 } else if (data.splash) {
                     entry.sumBlastDamage += data.damage;
                 } else {
-                    entry.sumBaseDamage += data.damage || 0;
+                    entry.sumBaseDamage += data.damage ?? 0;
                 }
 
                 // Update partyDamageSums with the entry
@@ -146,11 +146,11 @@ parent.socket.on("hit", function (data) {
                 }
 
                 let playerEntry = playerDamageReturns[playerId];
-                playerEntry.sumDamageReturn += data.dreturn || 0;
+                playerEntry.sumDamageReturn += data.dreturn ?? 0;
 
                 // Update the partyDamageSums for damage return
                 if (parent.party_list && parent.party_list.includes(playerId)) {
-                    let partyEntry = partyDamageSums[playerId] || {
+                    let partyEntry = partyDamageSums[playerId] ?? {
                         startTime: performance.now(),
                         sumDamage: 0,
                         sumHeal: 0,
@@ -161,7 +161,7 @@ parent.socket.on("hit", function (data) {
                         sumManaSteal: 0,
                         sumDamageReturn: 0,
                     };
-                    partyEntry.sumDamageReturn += data.dreturn || 0; // Add dreturn to party damage sums
+                    partyEntry.sumDamageReturn += data.dreturn ?? 0; // Add dreturn to party damage sums
                     partyDamageSums[playerId] = partyEntry; // Update the partyDamageSums
                 }
             }
@@ -277,23 +277,30 @@ function updateDPSMeterUI() {
 // Get value for a specific damage type
 function getTypeValue(type, entry) {
     const elapsedTime = performance.now() - (entry.startTime || performance.now());
-    switch (type) {
-        case "DPS":
-            return calculateDPSForPartyMember(entry);
-        case "Burn":
-            return Math.floor((entry.sumBurnDamage * 1000) / elapsedTime) || 0; // Default to 0
-        case "Blast":
-            return Math.floor((entry.sumBlastDamage * 1000) / elapsedTime) || 0; // Default to 0
-        case "Base":
-            return Math.floor((entry.sumBaseDamage * 1000) / elapsedTime) || 0; // Default to 0
-        case "HPS":
-            return Math.floor((entry.sumHeal * 1000) / elapsedTime) || 0; // Default to 0
-        case "MPS":
-            return Math.floor((entry.sumManaSteal * 1000) / elapsedTime) || 0; // Default to 0
-        case "DR":
-            return Math.floor((entry.sumDamageReturn * 1000) / elapsedTime) || 0; // Default to 0
-        default:
-            return 0;
+
+    // Ensure elapsedTime is greater than 0 to prevent division by zero
+    if (elapsedTime > 0) {
+        switch (type) {
+            case "DPS":
+                return calculateDPSForPartyMember(entry);
+            case "Burn":
+                return Math.floor((entry.sumBurnDamage * 1000) / elapsedTime) || 0; // Default to 0
+            case "Blast":
+                return Math.floor((entry.sumBlastDamage * 1000) / elapsedTime) || 0; // Default to 0
+            case "Base":
+                return Math.floor((entry.sumBaseDamage * 1000) / elapsedTime) || 0; // Default to 0
+            case "HPS":
+                return Math.floor((entry.sumHeal * 1000) / elapsedTime) || 0; // Default to 0
+            case "MPS":
+                return Math.floor((entry.sumManaSteal * 1000) / elapsedTime) || 0; // Default to 0
+            case "DR":
+                return Math.floor((entry.sumDamageReturn * 1000) / elapsedTime) || 0; // Default to 0
+            default:
+                return 0;
+        }
+    } else {
+        // If elapsedTime is 0 or less, return 0 for safety
+        return 0;
     }
 }
 
@@ -307,7 +314,7 @@ function calculateDPSForPartyMember(entry) {
 
         // Prevent division by zero
         if (elapsedTime > 0) {
-            return Math.floor((totalCombinedDamage * 1000) / elapsedTime) || 0; // Default to 0
+            return Math.floor((totalCombinedDamage * 1000) / elapsedTime);
         } else {
             return 0;
         }

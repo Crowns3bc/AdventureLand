@@ -2,25 +2,26 @@ pause();
 // Define constants for character names
 const chars = {
     //MAGE: "CrownMage",
-    MERCHANT: "CrownMerch",
+    //MERCHANT: "CrownMerch",
     //PALADIN: "CrownPal",
-    //PRIEST: "CrownPriest",
-    ROGUE: "CrownZone",
-    WARRIOR: "CrownTown",
+    PRIEST: "CrownPriest",
+    //ROGUE: "CrownZone",
+    WARRIOR1: "CrownTown",
+    //WARRIOR2: "CrownCity",
 };
 
 // Define starting levels
 const codeSlots = {
     //MAGE: 28,
-    MERCHANT: 95,
+    //MERCHANT: 95,
     //PALADIN: 18,
-    //PRIEST: 3,
-    ROGUE: 18,
-    WARRIOR: 2,
+    PRIEST: 3,
+    //ROGUE: 18,
+    WARRIOR1: 2,
+    //WARRIOR2: 2,
 };
-
+true
 let startChar = true;
-let circleMoves = true;
 
 function teamStarter() {
     // Cache active characters
@@ -71,8 +72,8 @@ const locations = {
     xscorpion: [{ x: -495, y: 685 }]
 };
 
-const home = 'oneeye';
-const mobMap = 'level2w';
+const home = 'plantoid';
+const mobMap = 'desertland';
 const destination = {
     map: mobMap,
     x: locations[home][0].x,
@@ -80,7 +81,7 @@ const destination = {
 };
 
 let angle = 0;
-const speed = 2; // normal 1.5315;
+const speed = 1.5315; // normal 1.5315;
 let events = false;
 
 const harpyRespawnTime = 410000; //400 seconds
@@ -93,6 +94,8 @@ const mvampireRespawnTime = 1151954; // Example time, adjust as needed
 let mvampireActive = false;
 const fvampireRespawnTime = 1151954; // Example time, adjust as needed
 let fvampireActive = false;
+const jrRespawnTime = 420000; // Example time, adjust as needed
+let jrActive = false;
 
 const boundaryOur = Object.values(G.maps[mobMap].monsters).find(e => e.type === home).boundary;
 const [topLeftX, topLeftY, bottomRightX, bottomRightY] = boundaryOur;
@@ -100,18 +103,18 @@ const centerX = (topLeftX + bottomRightX) / 2;
 const centerY = (topLeftY + bottomRightY) / 2;
 
 async function eventer() {
-    const delay = 25;
+    const delay = 100;
     try {
         if (events) {
             //handleEvents();
             //game_log("Event Time");
-        } else if (stompyActive || skeletorActive) {
+        } else if (jrActive) {
             //handleBosses();
             //game_log("Boss Time");
         } else if (!get_nearest_monster({ type: home })) {
             handleHome();
             //game_log("Home Time");
-        } else {
+        } else if (get_nearest_monster({ type: home })) {
             walkInCircle();
             //game_log("Circle Time");
             //clear_drawings();
@@ -125,18 +128,22 @@ async function eventer() {
 
 async function checkRespawnTimers() {
     let delay = 1000;
-    try {
-        if (Date.now() - harpyDeath >= harpyRespawnTime) {
-            harpyActive = true;
-            game_log("Harpy Respawned");
-        }
-        if (Date.now() - skeletorDeath >= skeletorRespawnTime) {
-            skeletorActive = true;
-            game_log("Skeletor Respawned");
-        }
-        if (Date.now() - stompyDeath >= stompyRespawnTime) {
-            stompyActive = true;
-            game_log("Stompy Respawned");
+    try {/*
+		if (Date.now() - harpyDeath >= harpyRespawnTime) {
+			harpyActive = true;
+			game_log("Harpy Respawned");
+		}
+		if (Date.now() - skeletorDeath >= skeletorRespawnTime) {
+			skeletorActive = true;
+			game_log("Skeletor Respawned");
+		}
+		if (Date.now() - stompyDeath >= stompyRespawnTime) {
+			stompyActive = true;
+			game_log("Stompy Respawned");
+		}*/
+        if (Date.now() - jrDeath >= jrRespawnTime) {
+            //jrActive = true;
+            //game_log("JR Respawned");
         }
         // Repeat for other bosses as needed
     } catch (e) {
@@ -144,7 +151,7 @@ async function checkRespawnTimers() {
     }
     setTimeout(checkRespawnTimers, delay);
 }
-//checkRespawnTimers();
+checkRespawnTimers();
 
 function handleEvents() {
     if (parent?.S?.holidayseason && !character?.s?.holidayspirit) {
@@ -166,13 +173,16 @@ function handleEvents() {
 
 function handleBosses() {
     if (harpyActive) {
-        handleHarpyEvent();
+        //handleHarpyEvent();
     }
     if (skeletorActive) {
-        handleSkeletorEvent();
+        //handleSkeletorEvent();
     }
     if (stompyActive) {
-        handleStompyEvent();
+        //handleStompyEvent();
+    }
+    if (jrActive) {
+        //handleJrEvent();
     }
 }
 
@@ -227,13 +237,10 @@ function handleHome() {
 }
 
 let lastUpdateTime = performance.now();
-let prevMove = 0;
-const moveThreshold = 150; // Limit calls to avoid limitDC
-function walkInCircle() {
+async function walkInCircle() {
     if (!smart.moving) {
         const center = locations[home][0];
         const radius = 45;
-        let now = Date.now();
 
         // Calculate time elapsed since the last update
         const currentTime = performance.now();
@@ -241,22 +248,18 @@ function walkInCircle() {
         lastUpdateTime = currentTime;
 
         // Calculate the new angle based on elapsed time and speed
-        const deltaAngle = speed * (deltaTime / 1000);
+        const deltaAngle = speed * (deltaTime / 1000); // Convert milliseconds to seconds
         angle = (angle + deltaAngle) % (2 * Math.PI);
 
-        // Calculate the new position on the circle
         const offsetX = Math.cos(angle) * radius;
         const offsetY = Math.sin(angle) * radius;
         const targetX = center.x + offsetX;
         const targetY = center.y + offsetY;
 
-        // Only move if enough time has passed and avoid frequent xmove calls
-        if (now - prevMove > moveThreshold) {
-            xmove(targetX, targetY); // Move when a significant distance needs to be covered
-            prevMove = now;
+        if (!character.moving && lastUpdateTime > 100) {
+            await xmove(targetX, targetY);
         }
 
-        // Optional: Draw circles for visualization
         drawCirclesAndLines(center, radius);
     }
 }
@@ -364,11 +367,39 @@ function handleStompyEvent() {
     }
 }
 
+function handleJrEvent() {
+    // Move to the jr location if jrActive is true
+    if (!smart.moving) {
+        if (character.x !== -783 || character.y !== -292 || character.map !== "spookytown") {
+            smart_move({ x: -783, y: -292, map: "spookytown" });
+            game_log("Moving to Jr location");
+        }
+    }
+
+    const jr = get_nearest_monster({ type: "jr" });
+
+    // If the jr isn't nearby, mark it as dead and reset the death timer
+    if (!jr && distance(character, { x: -783, y: -292 }) <= 300 && character.map === 'spookytown') {
+        jrDeath = Date.now();
+        jrActive = false;
+        game_log("JR is not here, resetting death time");
+        localStorage.setItem('jrDeath', jrDeath);
+    } else if (jr) {
+        // Manage gear based on jr's health
+        if (jr.hp < 50000 && character.cc < 100) {
+            //equipSet('luck');
+        } else if (jr.hp > 50000 && character.cc < 100) {
+            equipSet('dps');
+        }
+    }
+}
+
 eventer();
 
 let harpyDeath = parseInt(localStorage.getItem('harpyDeath')) || 0;
 let skeletorDeath = parseInt(localStorage.getItem('skeletorDeath')) || 0;
 let stompyDeath = parseInt(localStorage.getItem('stompyDeath')) || 0;
+let jrDeath = parseInt(localStorage.getItem('jrDeath')) || 0;
 
 game.on('death', data => {
     if (parent.entities[data.id]) {
@@ -387,9 +418,15 @@ game.on('death', data => {
             console.log(`The mob "${mobType}" has died.`);
         }
         if (mobType === 'stompy') {
-            skeletorDeath = Date.now();
+            stompyDeath = Date.now();
             localStorage.setItem('stompyDeath', stompyDeath);
             stompyActive = false; // Reset the active flag on death
+            console.log(`The mob "${mobType}" has died.`);
+        }
+        if (mobType === 'jr') {
+            jrDeath = Date.now();
+            localStorage.setItem('jrDeath', jrDeath);
+            jrActive = false; // Reset the active flag on death
             console.log(`The mob "${mobType}" has died.`);
         }
     }
@@ -397,18 +434,10 @@ game.on('death', data => {
 
 const equipmentSets = {
     dps: [
-        //{ itemName: "orbofdex", slot: "orb", level: 5, l: "l" },
+        { itemName: "orbofdex", slot: "orb", level: 5, l: "l" },
         { itemName: "pants", slot: "pants", level: 13, l: "l" },
         { itemName: "suckerpunch", slot: "ring1", level: 1, l: "l" },
         { itemName: "suckerpunch", slot: "ring2", level: 1, l: "s" },
-    ],
-    wabbit: [
-        // { itemName: "orbofdex", slot: "orb", level: 5, l: "l" },
-        { itemName: "pants", slot: "pants", level: 13, l: "l" },
-        { itemName: "coat", slot: "chest", level: 13, l: "l" },
-        { itemName: "suckerpunch", slot: "ring1", level: 1, l: "l" },
-        { itemName: "suckerpunch", slot: "ring2", level: 1, l: "s" },
-        { itemName: "bowofthedead", slot: "mainhand", level: 11, l: "l" },
     ],
     luck: [
         //{ itemName: "rabbitsfoot", slot: "orb", level: 2, l: "l" },
@@ -417,7 +446,7 @@ const equipmentSets = {
     ],
     single: [
         { itemName: "bowofthedead", slot: "mainhand", level: 11, l: "l" },
-        //{ itemName: "coat", slot: "chest", level: 13, l: "l" }
+        //{ itemName: "coat", slot: "chest", level: 12, l: "s" }
     ],
     dead: [
         { itemName: "bowofthedead", slot: "mainhand", level: 11, l: "l" },
@@ -432,7 +461,7 @@ const equipmentSets = {
     ],
     xp: [
         { itemName: "talkingskull", slot: "orb", level: 4, l: "l" },
-        { itemName: "tshirt3", slot: "chest", level: 7, l: "l" },
+        //{ itemName: "tshirt3", slot: "chest", level: 7, l: "l" },
     ],
     stealth: [
         { itemName: "stealthcape", slot: "cape", level: 0, l: "l" },
@@ -442,8 +471,14 @@ const equipmentSets = {
     ],
     orb: [
         { itemName: "orbofdex", slot: "orb", level: 5, l: "l" },
-        { itemName: "tshirt9", slot: "chest", level: 7, l: "l" },
-    ]
+        //{ itemName: "tshirt9", slot: "chest", level: 7, l: "l" },
+    ],
+    mana: [
+        { itemName: "tshirt9", slot: "chest", level: 7, l: "l" }
+    ],
+    stat: [
+        { itemName: "coat", slot: "chest", level: 12, l: "s" }
+    ],
 };
 //////////////////////////////////////////////////////////////////
 let lastSwitchTime = 0; // Timestamp of the last switch
@@ -456,11 +491,13 @@ async function attackLoop() {
     const Y = locations[home][0].y; // Y coordinate of home location
     const rangeThreshold = 45; // Range threshold for counting monsters
     //const targetNames = ["CrownPriest", "CrownTown"];
-    const targetNames = ["Miau", "Atlus", "Mommy", "DoubleG", "SingleG", "Scoliosis"];
+    const targetNames = ["CrownTown", "CrownPriest"];
 
     // Set heal threshold based on healer presence
     let healThreshold = 0.4;
-    const healer = get_entity("Mommy"); // Check if healer is present
+    const healer = get_entity("CrownPriest"); // Check if healer is present
+
+    let isHome = get_nearest_monster({ type: home });
 
     if (!healer || healer.rip) {
         healThreshold = .9; // Increase threshold if healer is not around
@@ -483,7 +520,7 @@ async function attackLoop() {
 
         if (heal_target && heal_target.hp < heal_target.max_hp * healThreshold) {
             state = "healing";  // Set to healing if someone is below the heal threshold
-        } else {
+        } else if (isHome) {
             state = "attacking";  // Otherwise, focus on attacking
         }
 
@@ -500,8 +537,21 @@ async function attackLoop() {
                 break;
 
             case "attacking":
+
                 if (sortedByHP.length) {
                     let highestHPMonster = sortedByHP[0];
+                    //let highestHPMonster = null;
+
+                    // Find the nearest monster based on the targetNames
+                    for (let i = 0; i < targetNames.length; i++) {
+                        highestHPMonster = get_nearest_monster_v2({
+                            target: targetNames[i],
+                            check_min_hp: true,  // Checking for monster with minimum HP
+                            max_distance: 150,  // Consider monsters within 50 units
+                            statusEffects: ["cursed"], // Check for these debuffs
+                        });
+                        if (highestHPMonster) break;
+                    }
                     if (highestHPMonster) {
                         change_target(highestHPMonster);
                         if (!is_on_cooldown("huntersmark")) {
@@ -518,25 +568,26 @@ async function attackLoop() {
                             //equipSet('dead');
                             lastSwitchTime = performance.now();
                         }
-                        await use_skill("5shot", monstersInRangeList.slice(0, 5).map(e => e.id)); // Use the 5-shot skill
+                        await use_skill("5shot", monstersInRangeList.slice(0, 5)); // Use the 5-shot skill
                         delay = ms_to_next_skill("attack");
                     } else if (monstersOutOfRangeList.length >= 4) {
                         if (performance.now() - lastSwitchTime > switchCooldown) {
                             equipSet('dead');
                             lastSwitchTime = performance.now();
                         }
-                        await use_skill("5shot", monstersOutOfRangeList.slice(0, 5).map(e => e.id)); // Use the 5-shot skill
+                        await use_skill("5shot", monstersOutOfRangeList.slice(0, 5)); // Use the 5-shot skill
                         delay = ms_to_next_skill("attack");
-                    } else if (monsters.length >= 2) {
-                        let targets = sortedByHP.slice(0, 3).map(e => e.id); // Top 3 monsters overall
+                    } else if (monstersInRangeList.length >= 2 || monstersOutOfRangeList.length >= 2) {
+                        let targets = sortedByHP.slice(0, 3); // Top 3 monsters overall
                         if (performance.now() - lastSwitchTime > switchCooldown) {
                             equipSet('dead');
                             lastSwitchTime = performance.now();
                         }
                         await use_skill("3shot", targets); // Use the 3-shot skill
                         delay = ms_to_next_skill("attack");
-                    } else if (monsters.length === 1) {
-                        let target = sortedByHP[0].id; // Single monster overall
+                    } else if (monstersInRangeList.length === 1 || monstersOutOfRangeList.length === 1) {
+                        let target = sortedByHP[0]; // Single monster overall
+                        //console.log(sortedByHP[0])
                         if (performance.now() - lastSwitchTime > switchCooldown) {
                             equipSet('single');
                             lastSwitchTime = performance.now();
@@ -546,7 +597,6 @@ async function attackLoop() {
                     }
                 }
                 break;
-
             default:
                 console.error("Unknown state: " + state);
                 break;
@@ -885,12 +935,14 @@ function topButtons() {
             map: character.map
         });
     });
+    /*
     add_top_button("Pause", "PP", () => {
         parent.no_html = true
         parent.no_graphics = true
         pause();
         startChar = true;
-    });
+    });*/
+    add_top_button("showLoot", "I", displayLoot);
     add_top_button("Pause2", "⏸️", () => {
         pause();
         startChar = true;
@@ -898,27 +950,7 @@ function topButtons() {
 }
 topButtons();
 
-function send_merchant() {
-    try {
-        const merchant = get_player("CrownMerch");
-        if (merchant && distance(character, merchant) <= 250) {
-            for (let i = 37; i < 41; i++) {
-                const item = character.items[i];
-                if (item && item.q > 0) { // Check if item exists and has quantity
-                    send_item('CrownMerch', i, item.q); // Send item with its actual quantity
-                }
-            }
-        }
-    } catch (e) {
-        console.error("Error in send_merchant function:", e);
-    }
-}
-
-// Adjusted interval for efficiency
-setInterval(send_merchant, 2000); // Increased interval to 2 seconds
-
 // Define constants
-const lootMuleName = "CrownMerch";
 const goldThreshold = 11 * 1000000;
 const minGoldTransfer = 10 * 1000000;
 const itemsToExclude = [
@@ -930,26 +962,40 @@ const itemsToExclude = [
 // Function to transfer gold
 function transferGold(lootMule) {
     if (character.gold > goldThreshold) {
-        const goldToSend = Math.floor((character.gold - minGoldTransfer) / 1000000) * 1000000;
-        send_gold(lootMule.id, goldToSend);
+        const goldToSend = Math.floor(character.gold - minGoldTransfer);
+        if (distance(character, lootMule) <= 250) {
+            send_gold(lootMule, goldToSend);
+        } else {
+            //console.log("Loot mule out of range for gold transfer.");
+        }
     }
 }
 
-// Function to send items to the loot mule
 function sendItems(lootMule) {
+    if (!lootMule || distance(character, lootMule) > 250) {
+        //console.log("Loot mule out of range for item transfer.");
+        return;
+    }
+
     character.items.forEach((item, index) => {
         if (item && !itemsToExclude.includes(item.name) && !item.l && !item.s) {
-            send_item(lootMule.id, index, item.q ?? 1);
+            send_item(lootMule, index, item.q ?? 1);
         }
     });
+
+    for (let i = 37; i < 41; i++) {
+        const item = character.items[i];
+        if (item /*&& item.q > 0*/) {
+            send_item(lootMule, i, item.q);
+        }
+    }
 }
 
 // Main function to manage loot
 function manageLoot() {
-    const lootMule = get_player(lootMuleName);
-
+    const lootMule = get_entity("CrownMerch");
     if (!lootMule) {
-        lootTransfer = false;
+        console.log("No loot mule found.");
         return;
     }
 
@@ -1042,49 +1088,70 @@ function scare() {
 }
 setInterval(scare, 100);
 
-let lastSwapTime = 0;
-const swapCooldown = 500; // 500ms cooldown between swaps
+let xpSwapTime = 0;
 let capeSwapTime = 0;
+let coatSwapTime = 0;
+const swapCooldown = 500; // 500ms cooldown between swaps
+
+const xpSwap = false;
+const capeSwap = true;
+const coatSwap = true;
 
 async function itemSwap() {
     const delay = 25;
-    const hpThreshold = 30000;
+    const hpThreshold = 15000;
     const now = Date.now();
 
     try {
-        // Check if any monster is below hpThreshold
-        const monstersBelowThreshold = Object.values(parent.entities).some(entity => entity.mtype === home && entity.hp < hpThreshold);
+        if (xpSwap) {
+            // Check if any monster is below hpThreshold
+            const monstersBelowThreshold = Object.values(parent.entities).some(entity => entity.mtype === home && entity.hp < hpThreshold);
 
-        // Only allow swap if enough time has passed since the last swap
-        if (now - lastSwapTime > swapCooldown) {
-            // Equip xpSet if any monster is below hpThreshold
-            if (monstersBelowThreshold && character.slots?.orb?.name !== "talkingskull") {
-                equipSet('xp');
-                lastSwapTime = now; // Update last swap time
-            }
-            // Equip orbSet if no monster is below hpThreshold
-            else if (!monstersBelowThreshold && character.slots?.orb?.name !== "orbofdex") {
-                equipSet('orb');
-                lastSwapTime = now; // Update last swap time
+            // Only allow swap if enough time has passed since the last swap
+            if (now - lastSwapTime > swapCooldown) {
+                // Equip xpSet if any monster is below hpThreshold
+                if (monstersBelowThreshold && character.slots?.orb?.name !== "talkingskull") {
+                    equipSet('xp');
+                    lastSwapTime = now; // Update last swap time
+                }
+                // Equip orbSet if no monster is below hpThreshold
+                else if (!monstersBelowThreshold && character.slots?.orb?.name !== "orbofdex") {
+                    equipSet('orb');
+                    lastSwapTime = now; // Update last swap time
+                }
             }
         }
-        /*
-        // Cape Swap
-        if (now - capeSwapTime > swapCooldown) {
-            // Equip stealthSet if enough chests are present
-            if (getNumChests() >= 6 && character.slots?.cape?.name !== "stealthcape") {
-                equipSet('stealth');
-                //console.log("Equipping Stealth Cape");
-                //game_log("Equipping Stealth Cape", "white");
-                capeSwapTime = now; // Update last swap time
+        if (capeSwap) {
+            // Cape Swap
+            if (now - capeSwapTime > swapCooldown) {
+                // Equip stealthSet if enough chests are present
+                if (getNumChests() >= 12 && character.slots?.cape?.name !== "stealthcape") {
+                    equipSet('stealth');
+                    capeSwapTime = now; // Update last swap time
+                }
+                // Equip capeSet if not already equipped
+                else if (getNumChests() <= 11 && character.slots?.cape?.name !== "gcape") {
+                    equipSet('cape');
+                    capeSwapTime = now; // Update last swap time
+                }
             }
-            // Equip capeSet if not already equipped
-            else if (character.slots?.cape?.name !== "gcape") {
-                equipSet('cape');
-                //game_log("Equipping Normal Cape", "white");
-                capeSwapTime = now; // Update last swap time
+        }
+        // Coat Swap
+        if (coatSwap) {
+            // Only allow swap if enough time has passed since the last swap
+            if (now - coatSwapTime > swapCooldown) {
+                // Equip coatSet if MP is above upper threshold
+                if (character.mp > 1700) {
+                    equipSet('stat');
+                    coatSwapTime = now; // Update last swap time
+                }
+                // Equip manaSet if MP is below lower threshold
+                else if (character.mp < 1600) {
+                    equipSet('mana');
+                    coatSwapTime = now; // Update last swap time
+                }
             }
-        }*/
+        }
     } catch (e) {
         console.error(e);
     }
@@ -1093,10 +1160,6 @@ async function itemSwap() {
 }
 
 itemSwap();
-
-character.on("loot", function (data) {
-    console.log(character.slots?.cape?.name, data);
-});
 
 let moveStuff = {
     armorbox: 38,
@@ -1232,7 +1295,7 @@ function delayedLoot() {
         let timeDifference = currentTime - chestTimer;
         let secondsPassed = timeDifference / 1000;
 
-        if (secondsPassed >= 100) {
+        if (secondsPassed >= 100 || character.map === "spookytown") {
             if (!tryloot) {
                 prepForGold();
             }
@@ -1541,8 +1604,7 @@ function mobTargets_inRange(mtypes, radius, mobs_target, point) {
 
 function get_nearest_monster_v2(args = {}) {
     let min_d = 999999, target = null;
-    let min_hp = 999999999; // Track the minimum HP of monsters encountered
-    let max_hp = 0; // Track the maximum HP of monsters encountered
+    let optimal_hp = args.check_max_hp ? 0 : 999999999; // Set initial optimal HP based on whether we're checking for max or min HP
 
     for (let id in parent.entities) {
         let current = parent.entities[id];
@@ -1552,29 +1614,42 @@ function get_nearest_monster_v2(args = {}) {
         if (args.max_level !== undefined && current.level > args.max_level) continue;
         if (args.target && !args.target.includes(current.target)) continue;
         if (args.no_target && current.target && current.target != character.name) continue;
-        if (args.cursed && !current.s.cursed) continue;
+
+        // Status effects (debuffs/buffs) check
+        if (args.statusEffects && !args.statusEffects.every(effect => current.s[effect])) continue;
+
+        // Min/max XP check
         if (args.min_xp !== undefined && current.xp < args.min_xp) continue;
+        if (args.max_xp !== undefined && current.xp > args.max_xp) continue;
+
+        // Attack power limit
         if (args.max_att !== undefined && current.attack > args.max_att) continue;
+
+        // Path check
         if (args.path_check && !can_move_to(current)) continue;
 
-        let c_dist;
-        if (args.point_for_distance_check) {
-            c_dist = Math.hypot(args.point_for_distance_check[0] - current.x, args.point_for_distance_check[1] - current.y); // Calculate distance from a specified point
-        } else {
-            c_dist = parent.distance(character, current);
-        }
+        // Distance calculation
+        let c_dist = args.point_for_distance_check
+            ? Math.hypot(args.point_for_distance_check[0] - current.x, args.point_for_distance_check[1] - current.y)
+            : parent.distance(character, current);
+
         if (args.max_distance !== undefined && c_dist > args.max_distance) continue;
 
-        if (args.check_min_hp) {
+        // Generalized HP check (min or max)
+        if (args.check_min_hp || args.check_max_hp) {
             let c_hp = current.hp;
-            if (c_hp < min_hp) min_hp = c_hp, target = current; // Update target based on minimum HP
-            continue;
-        } else if (args.check_max_hp) {
-            let c_hp = current.hp;
-            if (c_hp > max_hp) max_hp = c_hp, target = current; // Update target based on maximum HP
+            if ((args.check_min_hp && c_hp < optimal_hp) || (args.check_max_hp && c_hp > optimal_hp)) {
+                optimal_hp = c_hp;
+                target = current;
+            }
             continue;
         }
-        if (c_dist < min_d) min_d = c_dist, target = current;
+
+        // If no specific HP check, choose the closest monster
+        if (c_dist < min_d) {
+            min_d = c_dist;
+            target = current;
+        }
     }
     return target;
 }
@@ -1616,6 +1691,21 @@ function elixirUsage() {
 
 // Run elixirUsage every 5 seconds
 setInterval(elixirUsage, 5000);
+
+function displayLoot() {
+    let savedLoot = JSON.parse(localStorage.getItem("lootItems") || "{}");
+
+    // Sort the loot by item name
+    let sortedLoot = {};
+    Object.keys(savedLoot)
+        .sort()
+        .forEach((key) => {
+            sortedLoot[key] = savedLoot[key];
+        });
+
+    console.log("Saved Loot (Sorted):", sortedLoot);
+    show_json(sortedLoot); // Display the sorted loot
+}
 
 let lastPotion = 0; // Track the time of the last potion usage
 let lastBuy = 0; // Track the time of the last purchase
@@ -1677,34 +1767,41 @@ async function fixPromise(promise) {
     return Promise.race(promises);
 }
 
-let group = ["Mommy", "CrownsAnal", "CrownTown", "CrownPriest", "CrownMerch", "CrownMage"];
+//let group = ["Mommy", "CrownsAnal", "CrownTown", "CrownPriest", "CrownMerch", "CrownMage"];
+let group = ["CrownsAnal", "CrownTown", "CrownPriest", "CrownMerch"];
 
 function partyMaker() {
     let partyLead = get_entity(group[0]); // The first character in the group is the leader
-    let currentParty = character.party; // Get the current party details
-    let healer = get_entity("Mommy");
+    let currentParty = get_party(); // Get the current party details
+    let healer = get_entity("CrownPriest");
+
     // If you're the leader and party size is less than 3, invite group members
     if (character.name === group[0]) {
-        console.log("Party leader inviting members.");
         for (let i = 1; i < group.length; i++) {
             let name = group[i];
-            send_party_invite(name);
+
+            // Check if the member is already in the party
+            if (!currentParty[name]) {
+                send_party_invite(name);
+                console.log("Party leader inviting member:", name);
+            }
         }
     } else {
         // If you're in a party that's not led by the group leader, leave it
-        if (currentParty && currentParty !== group[0] && healer) {
-            console.log(`In a party with ${currentParty}, but leader should be ${group[0]}. Leaving party.`);
+        if (currentParty && currentParty[character.name] && currentParty[character.name].in !== group[0] && healer) {
+            console.log(`In a party with ${currentParty[character.name].in}, but leader should be ${group[0]}. Leaving party.`);
             leave_party();
         }
 
         // If not in a party and the leader exists, send a party request
-        if (!currentParty && partyLead) {
+        if (!currentParty[character.name] && partyLead) {
             console.log(`Requesting to join ${group[0]}'s party.`);
             send_cm(group[0], "party");
             send_party_request(group[0]);
         }
     }
 }
+
 
 // Call this function every second to manage the party
 setInterval(partyMaker, 1000);
@@ -1822,6 +1919,56 @@ async function equipIfNeeded(itemName, slotName, level, l) {
     }
 }
 
+const rareItems = {
+    "ololipop": { name: "Orange Lolipop Mace", imgurLink: "https://imgur.com/PMCUrYx.jpg" },
+    "suckerpunch": { name: "Sucker Punch", imgurLink: "https://imgur.com/a/60Rz6er.jpg" },
+    "ringofluck": { name: "Ring of Luck", imgurLink: "https://imgur.com/cuitOec.jpg" },
+    //"hdagger": { name: "Heartbreaker Dagger", imgurLink: "https://imgur.com/JAlMNrL.jpg" },
+    "mpxbelt": { name: "Mana Belt", imgurLink: "https://imgur.com/kl6TM2j.jpg" },
+    "amuletofm": { name: "Amulet of Mystery", imgurLink: "https://imgur.com/uN97ktu.jpg" },
+    // Add more items here
+};
+
+// Function to determine whether to use "a" or "an"
+function getArticle(itemName) {
+    const vowels = ['A', 'E', 'I', 'O', 'U'];
+    return vowels.includes(itemName[0].toUpperCase()) ? "an" : "a";
+}
+
+// Function to send a Discord message with item details and imgur link
+function sendRareLootToDiscord(itemID, quantity, itemData, mentionUserID) {
+    const article = getArticle(itemData.name);
+    let messageContent = `${character.name} Found ${article} ${itemData.name}!`;
+
+    // If a user ID is provided, mention them in the message
+    if (mentionUserID) {
+        messageContent += ` <@${mentionUserID}>`;  // Mention the user
+    }
+
+    // Prepare the Discord message object
+    const discordMessage = {
+        content: messageContent,
+        username: 'CrownPriest',
+        embeds: [{
+            title: itemData.name,
+            description: `Looted by ${character.name}`,
+            image: {
+                url: itemData.imgurLink
+            }
+        }]
+    };
+
+    // Send message to Discord
+    fetch("https://discord.com/api/webhooks/1292708439524507728/XAAN5RxM-Sp-sEnjwMCh4afEiWuIakFDkHO9ceSIhsGGl49r1Wo_QMM4CIBU8X4vQ9wp", {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(discordMessage)
+    })
+        .then(response => response.json())
+        .then(result => console.log(`Discord message sent: ${itemData.name}`))
+        .catch(error => console.error('Error sending to Discord:', error));
+}
+
 let ui_gamelog = function () {
     let gamelog_data = {
         kills: {
@@ -1879,14 +2026,14 @@ let ui_gamelog = function () {
             margin: '-5px 0',
             display: 'flex',
             fontSize: '20px',
-            fontFamily: 'pixel'
+            fontFamily: 'pixel',
         });
         let gamelog_tab = $('<div class="gamelog-tab enableclicks" />').css({
             height: '100%',
             width: 'calc(100% / 6)',
             textAlign: 'center',
             lineHeight: '24px',
-            cursor: 'default'
+            cursor: 'pointer'
         });
         for (let key in gamelog_data) {
             if (!gamelog_data.hasOwnProperty(key)) continue;
@@ -1979,72 +2126,37 @@ let ui_gamelog = function () {
     }
 }();
 //////////////////////////////////////////////////////////////////////////////////////////
-var till_level = 0; // Kills till level = 0, XP till level = 1
-setInterval(function () {
-    updateGUI();
-}, 1000 / 4);
-function initGUI() {
+function initXP() {
     let $ = parent.$;
-    let brc = $('#bottomrightcorner');
     $('#xpui').css({
         fontSize: '28px',
         width: "100%",
-        borderWidth: '422px 422px',
-        margin: '0px 0',
-    });
-    brc.find('.xpsui').css({
-        background: 'url("https://i.imgur.com/zCb8PGK.png")',
-        backgroundSize: 'cover',
-        width: "96.5%",
-        //borderWidth: '4px 4px',
-        //height: "30px",
     });
 }
-var last_target = null;
-if (till_level === 0)
-    function updateGUI() {
-        let $ = parent.$;
-        let xp_percent = ((character.xp / parent.G.levels[character.level]) * 100).toFixed(2);
-        let xp_string = `LV${character.level} ${xp_percent}%`;
-        if (parent.ctarget && parent.ctarget.type == 'monster') {
-            last_target = parent.ctarget.mtype;
-        }
-        if (last_target) {
-            //let xp_missing = parent.G.levels[character.level] - character.xp;
-            //let monster_xp = parent.G.monsters[last_target].xp;
-            //let party_modifier = character.party ? 1.5 / parent.party_list.length : 1;
-            //let monsters_left = Math.ceil(xp_missing / (monster_xp * party_modifier * character.xpm));
-            //xp_string += ` (${ncomma(monsters_left)} kills to go!)`;
-        }
-        $('#xpui').html(xp_string);
-        $('#goldui').html(ncomma(character.gold) + " GOLD");
-    } else if (till_level === 1)
-    function updateGUI() {
-        let $ = parent.$;
-        let xp_percent = ((character.xp / G.levels[character.level]) * 100).toFixed(2);
-        let xp_missing = ncomma(G.levels[character.level] - character.xp);
-        let xp_string = `LV${character.level} ${xp_percent}% (${xp_missing}) xp to go!`;
-        $('#xpui').html(xp_string);
-        $('#goldui').html(ncomma(character.gold) + " GOLD");
-    }
-function ncomma(x) {
-    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-initGUI();
-//////////////////////////////////////////////////////////////////////////////////////////
-var startTime = new Date();
-var sumGold = 0;
-var largestGoldDrop = 0;
-setInterval(function () {
-    update_goldmeter();
-}, 400);
 
-function init_goldmeter() {
+function displayXP() { // Renamed function
     let $ = parent.$;
-    let brc = $('#bottomrightcorner');
+    let xpPercent = ((character.xp / parent.G.levels[character.level]) * 100).toFixed(2);
+    let xpString = `LV${character.level} ${xpPercent}%`;
+    $('#xpui').html(xpString);
+}
+
+// Initialize GUI and set interval for updates
+initXP();
+setInterval(displayXP, 1000);
+//////////////////////////////////////////////////////////////////////////////////////////
+let sumGold = 0;
+let largestGoldDrop = 0;
+const startTime = new Date(); // Start time to calculate elapsed time
+let interval = 'hour'; // Set default interval (options: 'minute', 'hour', 'day')
+
+// Initialize the gold meter UI
+const initGoldMeter = () => {
+    const $ = parent.$;
+    const brc = $('#bottomrightcorner');
     brc.find('#goldtimer').remove();
-    let xpt_container = $('<div id="goldtimer"></div>').css({
-        //position: 'relative',
+
+    const goldContainer = $('<div id="goldtimer"></div>').css({
         fontSize: '25px',
         color: 'white',
         textAlign: 'center',
@@ -2053,25 +2165,28 @@ function init_goldmeter() {
         marginBottom: '-5px',
         width: "100%",
     });
-    //vertical centering in css is fun
-    let xptimer = $('<div id="goldtimercontent"></div>')
-        .css({
-            display: 'table-cell',
-            verticalAlign: 'middle'
-        })
-        .html("")
-        .appendTo(xpt_container);
-    brc.children().first().after(xpt_container);
-}
 
-function updateGoldTimerList() {
-    let $ = parent.$;
-    var gold = getGold();
-    var goldString = "<div>" + gold.toLocaleString('en') + " Gold/Hr" + "</div>";
-    goldString += "<div>" + largestGoldDrop.toLocaleString('en') + " Largest Gold Drop</div>";
-    $('#' + "goldtimercontent").html(goldString).css({
+    $('<div id="goldtimercontent"></div>')
+        .css({ display: 'table-cell', verticalAlign: 'middle' })
+        .appendTo(goldContainer);
+
+    brc.children().first().after(goldContainer);
+};
+
+// Format gold string to display
+const formatGoldString = (averageGold) => `
+    <div>${averageGold.toLocaleString('en')} Gold/${interval.charAt(0).toUpperCase() + interval.slice(1)}</div>
+    <div>${largestGoldDrop.toLocaleString('en')} Jackpot</div>
+`;
+
+// Update the gold display with current data
+const updateGoldDisplay = () => {
+    const $ = parent.$;
+    const averageGold = calculateAverageGold(); // Calculate average gold based on the selected interval
+    $('#goldtimercontent').html(formatGoldString(averageGold)).css({
         background: 'black',
-        backgroundColor: 'rgba(0, 0, 0, 0.7)', // Add a background color
+        //backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: 'rgba(0, 0, 0, 1)',
         border: 'solid gray',
         borderWidth: '4px 4px',
         height: '50px',
@@ -2080,75 +2195,96 @@ function updateGoldTimerList() {
         color: '#FFD700',
         textAlign: 'center',
     });
-}
-
-function update_goldmeter() {
-    updateGoldTimerList();
-}
-
-init_goldmeter();
-
-function getGold() {
-    var elapsed = new Date() - startTime;
-    var goldPerSecond = parseFloat(Math.round((sumGold / (elapsed / 1000)) * 100) / 100);
-    return parseInt(goldPerSecond * 60 * 60);
-}
-
-function trackLargestGoldDrop(gold) {
-    if (gold > largestGoldDrop) {
-        largestGoldDrop = gold;
-    }
-}
-
-//Clean out any pre-existing listeners
-if (parent.prev_handlersgoldmeter) {
-    for (let [event, handler] of parent.prev_handlersgoldmeter) {
-        parent.socket.removeListener(event, handler);
-    }
-}
-parent.prev_handlersgoldmeter = [];
-
-function register_goldmeterhandler(event, handler) {
-    parent.prev_handlersgoldmeter.push([event, handler]);
-    parent.socket.on(event, handler);
 };
 
-function goldMeterGameResponseHandler(event) {
-    if (event.response == "gold_received") {
-        var gold = event.gold;
-        sumGold += gold;
-        trackLargestGoldDrop(gold);
+// Set up a timer to update the display
+setInterval(updateGoldDisplay, 500);
+
+// Initialize gold meter
+initGoldMeter();
+
+character.on("loot", (data) => {
+    // Ensure the gold received is valid
+    if (data.gold && typeof data.gold === 'number' && !Number.isNaN(data.gold)) {
+        const partyShare = parent.party[character.name]?.share || 1; // Default to 1 if not in a party
+        const totalGoldInChest = Math.round(data.gold / partyShare); // Calculate total chest gold
+
+        sumGold += totalGoldInChest; // Track the actual total gold received
+
+        // Track the largest gold drop
+        if (totalGoldInChest > largestGoldDrop) {
+            largestGoldDrop = totalGoldInChest;
+        }
+    } else {
+        console.warn("Invalid gold value:", data.gold);
     }
+
+    // Existing item tracker code for loot...
+    if (data.items && Array.isArray(data.items)) {
+        data.items.forEach((item) => {
+            let quantity = item.q !== undefined ? item.q : 1;
+            let savedLoot = JSON.parse(localStorage.getItem("lootItems") || "{}");
+
+            // Track loot in localStorage
+            if (savedLoot[item.name]) {
+                savedLoot[item.name] += quantity;
+            } else {
+                savedLoot[item.name] = quantity;
+            }
+            localStorage.setItem("lootItems", JSON.stringify(savedLoot));
+
+            console.log(`Looted: ${item.name}, Quantity: ${quantity}`);
+
+            // Check if the item is a rare item by ID
+            if (rareItems[item.name]) {
+                // Send Discord message for rare item
+                sendRareLootToDiscord(item.name, quantity, rareItems[item.name], "212506590950064130");
+            }
+        });
+    }
+});
+
+
+// Function to visualize the loot stored in localStorage (optional)
+function logLoot() {
+    let savedLoot = JSON.parse(localStorage.getItem("lootItems") || "{}");
+    console.log(savedLoot);
 }
 
-function goldMeterGameLogHandler(event) {
-    if (event.color == "gold") {
-        var gold = parseInt(event.message.replace(" gold", "").replace(",", ""));
-        sumGold += gold;
-        trackLargestGoldDrop(gold);
-    }
-}
+// Calculate average gold based on the selected interval
+const calculateAverageGold = () => {
+    const elapsedTime = (new Date() - startTime) / 1000; // Elapsed time in seconds
+    const divisor = elapsedTime / (interval === 'minute' ? 60 : interval === 'hour' ? 3600 : 86400);
 
-register_goldmeterhandler("game_log", goldMeterGameLogHandler);
-register_goldmeterhandler("game_response", goldMeterGameResponseHandler);
+    // Prevent division by zero or near-zero values
+    if (divisor <= 0) return 0;
+
+    return Math.round(sumGold / divisor); // Return gold per the specified interval
+};
+
+
+// Function to change the interval (can be called externally)
+const setGoldInterval = (newInterval) => {
+    if (['minute', 'hour', 'day'].includes(newInterval)) {
+        interval = newInterval;
+    } else {
+        console.warn("Invalid interval. Use 'minute', 'hour', or 'day'.");
+    }
+};
 //////////////////////////////////////////////////////////////////////////////////////////
-// Initialize the XP timer and set the update interval
-setInterval(update_xptimer, 500);
-
-// Initialize variables
-let minute_refresh;
-let timeStart = new Date(); // Record the start time for XP calculation
-let startXP = character.xp; // Record the starting XP
+let sumXP = 0;
+let largestXPGain = 0;
+const timeStart = new Date(); // Record the start time for XP calculation
+const startXP = character.xp; // Record the starting XP
+let xpInterval = 'second'; // Default interval (options: 'second', 'minute', 'hour', 'day')
+let targetXpRate = 40000; // Set as the target xp rate you want to be achieving and the color will automatically update
 
 // Initialize the XP timer display
-function init_xptimer(minref) {
-    minute_refresh = minref || 1;
-    parent.add_log(minute_refresh.toString() + ' min until tracker refresh!', 0x00FFFF);
-    let $ = parent.$;
-    let brc = $('#bottomrightcorner');
-    brc.find('#xptimer').remove();
-    let xpt_container = $('<div id="xptimer"></div>').css({
-        //position: 'relative',
+const initXpTimer = () => {
+    const $ = parent.$;
+    $('#bottomrightcorner').find('#xptimer').remove();
+
+    const xpContainer = $('<div id="xptimer"></div>').css({
         background: 'black',
         border: 'solid gray',
         borderWidth: '4px 4px',
@@ -2160,73 +2296,108 @@ function init_xptimer(minref) {
         display: 'table',
         overflow: 'hidden',
         marginBottom: '-5px',
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        //backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: 'rgba(0, 0, 0, 1)',
     });
-    let xptimer = $('<div id="xptimercontent"></div>')
-        .css({
-            display: 'table-cell',
-            verticalAlign: 'middle'
-        })
-        .html('Estimated time until level up:<br><span id="xpcounter" style="font-size: 30px !important; line-height: 25px">Loading...</span><br><span id="xprate">(Kill something!)</span>')
-        .appendTo(xpt_container);
-    brc.children().first().after(xpt_container);
-}
+
+    $('<div id="xptimercontent"></div>')
+        .css({ display: 'table-cell', verticalAlign: 'middle' })
+        .html('Estimated time until level up:<br><span id="xpcounter" style="font-size: 30px;">Loading...</span><br><span id="xprate">(Kill something!)</span>')
+        .appendTo(xpContainer);
+
+    $('#bottomrightcorner').children().first().after(xpContainer);
+};
 
 // Update the XP timer display
-function update_xptimer() {
+const updateXpTimer = () => {
     if (character.xp === startXP) return;
 
-    let $ = parent.$;
-    let now = new Date();
-    let time = Math.round((now.getTime() - timeStart.getTime()) / 1000);
+    const $ = parent.$;
+    const now = new Date();
+    const elapsedTime = Math.round((now - timeStart) / 1000);
+    if (elapsedTime < 1) return;
 
-    if (time < 1) return;
+    const xpGain = character.xp - startXP;
+    const xpMissing = parent.G.levels[character.level] - character.xp;
+    const seconds = Math.round(xpMissing / calculateXpRate(elapsedTime, xpGain));
 
-    let elapsedTime = (now.getTime() - timeStart.getTime()) / 1000;
-    let xpGain = character.xp - startXP;
-    let averageXPGain = Math.round(xpGain / elapsedTime);
-
-    let xp_rate = Math.round((character.xp - startXP) / elapsedTime);
-    let xp_missing = parent.G.levels[character.level] - character.xp;
-    let seconds = Math.round(xp_missing / xp_rate);
-    let minutes = Math.round(seconds / 60);
-    let hours = Math.round(minutes / 60);
-    let days = Math.floor(hours / 24);
-
-    let remainingHours = hours % 24;
-    let remainingMinutes = minutes % 60;
-
-    let counter = `${days}d ${remainingHours}h ${remainingMinutes}min`;
+    const counter = formatRemainingTime(seconds);
     $('#xpcounter').css('color', '#87CEEB').text(counter);
 
-    let xpRateDisplay = $('#xpRateDisplay');
-    xpRateDisplay.empty();
+    // Calculate average XP based on the selected interval
+    const averageXP = calculateAverageXP(elapsedTime, xpGain);
+    const xpRateColor = getXpRateColor(averageXP, targetXpRate);
+    $('#xprate').css('color', xpRateColor).html(`<span class="xprate-container">${ncomma(Math.round(averageXP))} XP/${xpInterval.charAt(0).toUpperCase() + xpInterval.slice(1)}</span>`);
+};
 
-    let xprateContainer = $('<div class="xprate-container"></div>')
-        .css({
-            'display': 'flex',
-            'align-items': 'center',
-            'justify-content': 'center' // Center the content horizontally
-        });
+// Function to calculate XP rate
+const calculateXpRate = (elapsedTime, xpGain) => {
+    return Math.round(xpGain / elapsedTime);
+};
 
-    xprateContainer.append('<br>');
-    xprateContainer.append(`<span id="xpRateDisplay">${ncomma(Math.round(averageXPGain))} XP/s</span>`); // Updated to use simplified XP rate calculation
+// Function to format the remaining time based on seconds
+const formatRemainingTime = (seconds) => {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${days}d ${hours}h ${minutes}min`;
+};
 
-    $('#xprate').empty().append(xprateContainer);
-}
+// Function to calculate average XP based on the selected interval
+const calculateAverageXP = (elapsedTime, xpGain) => {
+    switch (xpInterval) {
+        case 'second':
+            return Math.round(xpGain / elapsedTime); // XP per second
+        case 'minute':
+            return Math.round(xpGain / (elapsedTime / 60)); // XP per minute
+        case 'hour':
+            return Math.round(xpGain / (elapsedTime / 3600)); // XP per hour
+        case 'day':
+            return Math.round(xpGain / (elapsedTime / 86400)); // XP per day
+        default:
+            console.warn(`Invalid interval: ${xpInterval}. Use 'second', 'minute', 'hour', or 'day'.`);
+            return 0;
+    }
+};
 
-// Function to format numbers with commas for better readability
-function ncomma(x) {
-    return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
+// Function to determine the color based on average XP rate
+const getXpRateColor = (averageXP, targetXpRate) => {
+    if (averageXP < targetXpRate * 0.5) {
+        return '#FF0000'; // Dark Red for way below target
+    } else if (averageXP < targetXpRate) {
+        return '#FFA500'; // Orange for below target
+    } else if (averageXP >= targetXpRate && averageXP <= targetXpRate * 1.2) {
+        return '#FFFF00'; // Yellow for at target
+    } else if (averageXP <= targetXpRate * 1.5) {
+        return '#90EE90'; // Light Green for above target
+    } else {
+        return '#00FF00'; // Green for way above target
+    }
+};
 
-init_xptimer();
+const ncomma = (x) => x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+// Function to change the interval (can be called externally)
+const setXPInterval = (newInterval) => {
+    if (['second', 'minute', 'hour', 'day'].includes(newInterval)) {
+        xpInterval = newInterval;
+        console.log(`XP interval set to ${xpInterval}.`);
+    } else {
+        console.warn(`Invalid interval: ${newInterval}. Use 'second', 'minute', 'hour', or 'day'.`);
+    }
+};
+
+// Initialize XP timer and set interval to update
+initXpTimer();
+setInterval(updateXpTimer, 500);
 /////////////////////////////////////////////////////////////////////////////////
 // All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "DPS"
 // The order of the array will be the order of the display
-const damageTypes = ["Base", "Blast", "DPS"];
+const damageTypes = ["Base", "Blast", "HPS", "DPS"];
 let displayClassTypeColors = true; // Set to false to disable class type colors
 let displayDamageTypeColors = true; // Set to false to disable damage type colors
+let showOverheal = false; // Set to true to show overhealing
+let showOverManasteal = true; // Set to true to show overMana'ing?
 
 const damageTypeColors = {
     Base: '#A92000',
@@ -2255,7 +2426,8 @@ function initDPSMeter() {
         overflow: 'hidden',
         marginBottom: '-3px',
         width: "100%",
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        //backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 1)',
     });
 
     // Create a div for the DPS meter content
@@ -2299,11 +2471,18 @@ function getFormattedDPS(dps) {
 // Handle "hit" events
 parent.socket.on("hit", function (data) {
     try {
+        // My personal logging for ranger healing
         if (data.hid === "CrownsAnal" && data.damage_type === "heal") {
-            game_log("Healed " + data.id + " for " + data.heal, "#ac1414")
+            game_log("Healed " + data.id + " for " + data.heal, "#ac1414");
         }
         if (data.hid) {
             let targetId = data.hid;
+            let player = get_entity(targetId);
+            let maxHealth = player.max_hp;
+            let currentHealth = player.hp;
+            let maxMana = player.max_mp;
+            let currentMana = player.mp;
+
             if (parent.party_list && parent.party_list.includes(targetId)) {
                 let entry = partyDamageSums[targetId] || {
                     startTime: performance.now(),
@@ -2314,13 +2493,28 @@ parent.socket.on("hit", function (data) {
                     sumBaseDamage: 0,
                     sumLifesteal: 0,
                     sumManaSteal: 0,
-                    sumDamageReturn: 0, // Make sure this is included
+                    sumDamageReturn: 0,
                 };
 
-                // Accumulate damage and return values
+                // Calculate actual heal and lifesteal
+                let actualHeal = (data.heal || 0) + (data.lifesteal || 0);
+
+                // Add healing and lifesteal based on the toggle for showing overheal
+                if (showOverheal) {
+                    entry.sumHeal += actualHeal; // Include all heal and lifesteal
+                } else {
+                    entry.sumHeal += Math.min(actualHeal, maxHealth - currentHealth); // Only actual healing
+                }
+
+                // Handle mana steal based on the toggle for showing overmana steal
+                if (showOverManasteal) {
+                    entry.sumManaSteal += data.manasteal || 0; // Include all manasteal
+                } else {
+                    entry.sumManaSteal += Math.min(data.manasteal || 0, maxMana - currentMana); // Only actual manasteal
+                }
+
+                // Accumulate damage values
                 entry.sumDamage += data.damage || 0;
-                entry.sumHeal += (data.heal || 0) + (data.lifesteal || 0);
-                entry.sumManaSteal += data.manasteal || 0;
 
                 if (data.source === "burn") {
                     entry.sumBurnDamage += data.damage;
@@ -2333,6 +2527,7 @@ parent.socket.on("hit", function (data) {
                 // Update partyDamageSums with the entry
                 partyDamageSums[targetId] = entry;
             }
+
             // Handle damage return
             if (data.dreturn) {
                 let playerId = data.id;
@@ -2358,7 +2553,7 @@ parent.socket.on("hit", function (data) {
                         sumBaseDamage: 0,
                         sumLifesteal: 0,
                         sumManaSteal: 0,
-                        sumDamageReturn: 0, // Make sure to include this
+                        sumDamageReturn: 0,
                     };
                     partyEntry.sumDamageReturn += data.dreturn || 0; // Add dreturn to party damage sums
                     partyDamageSums[playerId] = partyEntry; // Update the partyDamageSums
@@ -2674,8 +2869,9 @@ function removeChatWithParty() {
 // Call the function after 30 seconds
 setTimeout(removeChatWithParty, 40000);
 //////////////////////////////////////////////////////////////////////////////////////////
-let Deaths = 0; // Variable to track the number of deaths
-let StartTime = new Date(); // Start time to calculate elapsed time
+let deaths = 0; // Variable to track the number of deaths
+const killTime = new Date(); // Start time to calculate elapsed time
+
 game.on('death', function (data) {
     if (parent.entities[data.id]) { // Check if the entity exists
         const mob = parent.entities[data.id];
@@ -2691,20 +2887,37 @@ game.on('death', function (data) {
 
             // Check if the mob's target was the player or someone in the party
             if (mobTarget === character.name || partyMembers.includes(mobTarget)) {
-                console.log(data); // Log the death event
-                Deaths++; // Increment the death count
+                //console.log(data); // Log the death event
+                deaths++; // Increment the death count
                 killHandler(); // Call the killHandler function
             }
         }
     }
 });
+
 function killHandler() {
-    let elapsed = (new Date() - StartTime) / 1000; // Calculate elapsed time in seconds
-    let DeathsPerSec = Deaths / elapsed; // Calculate deaths per second
-    let dailyKillRate = Math.round(DeathsPerSec * 60); // Calculate deaths per day
-    add_top_button("kpm", Math.round(dailyKillRate).toLocaleString() + ' kpm');
-    add_top_button("kph", Math.round(dailyKillRate * 60).toLocaleString() + ' kph');
-    add_top_button("kpd", Math.round(dailyKillRate * 60 * 24).toLocaleString() + ' kpd');
+    const elapsed = (new Date() - killTime) / 1000; // Calculate elapsed time in seconds
+    if (elapsed > 0) { // Prevent division by zero
+        const deathsPerSec = deaths / elapsed; // Calculate deaths per second
+        const dailyKillRate = calculateKillRate(deathsPerSec); // Calculate deaths based on interval
+
+        add_top_button("kpm", Math.round(dailyKillRate.kpm).toLocaleString() + ' kpm'); // Deaths per minute
+        add_top_button("kph", Math.round(dailyKillRate.kph).toLocaleString() + ' kph'); // Deaths per hour
+        add_top_button("kpd", Math.round(dailyKillRate.kpd).toLocaleString() + ' kpd'); // Deaths per day
+
+        // If you don't like the buttons and would rather the old set_message version
+        // set_message(Math.round(dailyKillRate.kpd).toLocaleString() + ' kpd');
+    } else {
+        console.warn("Elapsed time is zero, cannot calculate rates.");
+    }
+}
+
+// Function to calculate deaths based on the interval
+function calculateKillRate(deathsPerSec) {
+    let kpm = deathsPerSec * 60; // Convert to deaths per minute
+    let kph = kpm * 60; // Convert to deaths per hour
+    let kpd = kph * 24; // Convert to deaths per day
+    return { kpm, kph, kpd };
 }
 //////////////////////////////////////////////////////////////////////////////
 let lastGoldCheck = character.gold;  // Store the last known gold value
@@ -2754,17 +2967,18 @@ let css = `
         .party-container {
             position: absolute;
             top: 55px;
-            left: 5%;
+            left: -15%;
             width: 1000px; 
             height: 300px;
             transform: translate(0%, 0);
+			fontFamily: 'pixel';
         }
     `;
 //width normal is 480px, translate 8% normal
 parent.$('head').append(`<style id="style-party-frames">${css}</style>`);
 parent.party_style_prepared = true;
 
-const includeThese = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'name', 'cc', 'xp', 'level', 'share'];
+const includeThese = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'name', 'xp', 'level', 'share'];
 const partyFrameWidth = 80; // Set the desired width for the party frames
 
 function updatePartyData() {
@@ -2789,7 +3003,7 @@ let show_party_frame_property = {
     hp: true,
     mp: true,
     xp: true,
-    cc: true,
+    //cc: true,
     ping: true,
     share: true
 };
@@ -2812,27 +3026,37 @@ function addPartyFramePropertiesToggles() {
     toggles.id = 'party-props-toggles';
     toggles.classList.add('hidden');
     toggles.style = `
-	display: block;
-	width: 280px;
-	background-color: black;
-	margin-top: 0px;
-	`;
+    display: flex; 
+    flex-wrap: wrap;
+    width: 100%;
+    max-width: 480px;
+    background-color: black;
+    margin-top: 2px;
+`;
 
     function create_toggle(key) {
         const toggle = parent.document.createElement('button');
         toggle.id = 'party-props-toggles-' + key;
         toggle.setAttribute('data-key', key);
-        toggle.style =
-            "border: 2px #ccc solid; background-color: #000; color: #ccc";
+        toggle.style = `
+        border: 1px #ccc solid; 
+        background-color: #000; 
+        color: #ccc;
+        width: 20%;
+        margin: 0px;
+		font-size: 9px;
+        padding: 5px;
+		cursor: pointer;
+    `;
         toggle.setAttribute(
             'onclick',
-            "parent.code_eval(\`show_party_frame_property['" + key + "'] = !show_party_frame_property['" + key + "']; update_toggle_text('" + key + "')\`);"
+            `parent.code_eval(show_party_frame_property['${key}'] = !show_party_frame_property['${key}']; update_toggle_text('${key}'));`
         );
         toggle.appendChild(parent.document.createTextNode(get_toggle_text(key)));
         return toggle;
     }
 
-    for (let key of ['img', 'hp', 'mp', 'xp', 'share', 'cc']) {
+    for (let key of ['img', 'hp', 'mp', 'xp', 'share']) {
         toggles.appendChild(create_toggle(key));
     }
 
@@ -2897,14 +3121,14 @@ function updatePartyFrames() {
                 //const billion = 1_000_000_000;
                 //xp = (info.xp / billion).toFixed(1) + 'b/' + (max_xp / billion).toFixed(0) + 'b';
             }
-
-            let ccWidth = 0;
-            let cc = '??';
-            if (info.cc !== undefined) {
-                ccWidth = info.cc / info.max_cc * 100;
-                cc = info.cc.toFixed(2);
-            }
-
+            /*
+                        let ccWidth = 0;
+                        let cc = '??';
+                        if (info.cc !== undefined) {
+                            ccWidth = info.cc / info.max_cc * 100;
+                            cc = info.cc.toFixed(2);
+                        }
+            */
             let pingWidth = 0;
             let ping = '??';
             if (character.ping !== undefined) {
@@ -2916,7 +3140,7 @@ function updatePartyFrames() {
             let share = '??';
             if (parent.party[party_member_name] && parent.party[party_member_name].share !== undefined) {
                 shareWidth = parent.party[party_member_name].share * 100;
-                share = (parent.party[party_member_name].share * 100).toFixed(0) + '%'; // Display share percentage with % sign
+                share = (parent.party[party_member_name].share * 100).toFixed(2) + '%'; // Display share percentage with % sign
             }
 
             let data = {
@@ -2929,9 +3153,9 @@ function updatePartyFrames() {
                 xp: xp,
                 xpWidth: xpWidth,
                 xpColor: 'green',
-                cc: cc,
-                ccWidth: ccWidth,
-                ccColor: 'grey',
+                //cc: cc,
+                //ccWidth: ccWidth,
+                //ccColor: 'grey',
                 ping: ping,
                 pingWidth: pingWidth,
                 pingColor: 'black',
@@ -2940,14 +3164,14 @@ function updatePartyFrames() {
                 shareColor: 'teal',
             };
 
-            for (let key of ['hp', 'mp', 'xp', 'share', 'cc']) {
+            for (let key of ['hp', 'mp', 'xp']) {
                 const text = key.toUpperCase();
                 const value = data[key];
                 const width = data[key + 'Width'];
                 const color = data[key + 'Color'];
                 if (show_party_frame_property[key]) {
                     infoHTML += `<div style="position: relative; width: 100%; height: 20px; text-align: center; margin-top: 3px;">
-    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; font-size: 20px; z-index: 1; white-space: nowrap; text-shadow: -1px 0 black, 0 2px black, 2px 0 black, 0 -1px black;">${text}: ${value}</div>
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; font-size: 17px; z-index: 1; white-space: nowrap; text-shadow: -1px 0 black, 0 2px black, 2px 0 black, 0 -1px black;">${text}: ${value}</div>
     <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: ${color}; width: ${width}%; height: 20px; transform: translate(0, 0); border: 1px solid grey;"></div>
 </div>`;
                 }
@@ -2964,7 +3188,7 @@ parent.$('#party-props-toggles').remove();
 
 setInterval(updatePartyFrames, 250);
 ///////////////////////////////////////////////////////////////////////////////////////
-const ALDATA_KEY = "********";
+const ALDATA_KEY = "**********";
 
 function updateTrackerData() {
     parent.socket.once("tracker", (data) => {
@@ -2981,3 +3205,171 @@ function updateTrackerData() {
 parent.socket.emit("tracker");
 // Run the updateTrackerData function every minute (60000 milliseconds)
 setInterval(updateTrackerData, 1000 * 60 * 10);
+
+function modify_parent_function() {
+    const change_parent_function = function () {
+        this.render_tracker = function () {
+            var a = "";
+            a += "<div style='font-size: 32px'>";
+            a += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackerm\").show();'>Monsters</div>";
+            a += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackere\").show();'>Exchanges and Quests</div>";
+            a += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackerx\").show();'>Stats</div>";
+            a += "</div>";
+
+            // Render monsters
+            a += "<div class='trackers trackerm'>";
+            object_sort(G.monsters, "hpsort").forEach(function (b) {
+                if ((!b[1].stationary && !b[1].cute || b[1].achievements) && !b[1].unlist) {
+                    var c = (tracker.monsters[b[0]] || 0) + (tracker.monsters_diff[b[0]] || 0), d = "#50ADDD";
+                    let borderColor = "#9F9FB0";
+
+                    tracker.max.monsters[b[0]] && tracker.max.monsters[b[0]][0] > c && (c = tracker.max.monsters[b[0]][0], d = "#DCC343");
+                    if ((tracker.max.monsters[b[0]] && tracker.max.monsters[b[0]][0] && tracker.max.monsters[b[0]][0]) && (b[1] && b[1].achievements)) {
+                        if (tracker.max.monsters[b[0]][0] >= b[1].achievements[b[1].achievements.length - 1][0]) {
+                            //borderColor = "#22c725";
+                        }
+                    }
+
+                    a += "<div style='background-color:#575983; border: 2px solid" + borderColor + ";position: relative; display: inline-block; margin: 2px;'" +
+                        "class='clickable' onclick='pcs(event); render_monster_info(\"" + b[0] + "\")'>";
+
+                    a = 1 > (G.monsters[b[0]].size || 1) ? a + sprite(b[1].skin || b[0], { scale: 1 }) : a + sprite(b[1].skin || b[0], { scale: 1.5 });
+                    c && (a += "<div style='background-color:#575983; border: 2px solid " + borderColor + "; position: absolute; top: -2px; left: -2px; color:" + d + "; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(c) + "</div>");
+                    tracker.drops && tracker.drops[b[0]] && tracker.drops[b[0]].length && (a += "<div style='background-color:#FD79B0; border: 2px solid " + borderColor + "; position: absolute; bottom: -2px; right: -2px; display: inline-block; padding: 1px 1px 1px 1px; height: 2px; width: 2px'></div>");
+                    a += "</div>";
+                }
+            });
+            a += "</div>";
+
+            // Render exchanges and quests
+            a += "<div class='trackers trackere hidden' style='margin-top: 3px'>";
+            object_sort(G.items).forEach(function (b) {
+                if (b[1].e && !b[1].ignore) {
+                    var c = [[b[0], b[0], void 0]];
+                    if (b[1].upgrade || b[1].compound) {
+                        c = [];
+                        for (var d = 0; 13 > d; d++)
+                            G.drops[b[0] + d] && c.push([b[0], b[0] + d, d]);
+                    }
+
+                    c.forEach(function (b) {
+                        a += "<div style='margin-right: 3px; margin-bottom: 3px; display: inline-block; position: relative;'";
+                        a = G.drops[b[1]] ? a + (" class='clickable' onclick='pcs(event); render_exchange_info(\"" + b[1] + '",' + (tracker.exchanges[b[1]] || 0) + ")'>") : a + ">";
+                        a += item_container({ skin: G.items[b[0]].skin }, { name: b[0], level: b[2] });
+                        tracker.exchanges[b[1]] && (a += "<div style='background-color:#575983; border: 2px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:#ED901C; font-size: 16px; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(tracker.exchanges[b[1]]) + "</div>");
+                        a += "</div>";
+                    });
+                }
+            });
+            a += "</div>";
+
+            // Render achievements
+            const kills = parent.tracker.max.monsters;
+            const achievements = {};
+
+            for (const mtype in kills) {
+                if (!(mtype in G.monsters) || !G.monsters[mtype].achievements) continue;
+
+                const kill_count = kills[mtype][0];
+
+                for (const achievement of G.monsters[mtype].achievements) {
+                    const needed = achievement[0];
+                    const type = achievement[1];
+                    const reward = achievement[2];
+                    const amount = achievement[3];
+                    if (kill_count < needed) {
+                        if (type !== "stat") continue;
+
+                        if (!achievements[reward]) achievements[reward] = { value: 0, maxvalue: 0, monsters: [] };
+                        achievements[reward].value += 0;
+                        achievements[reward].maxvalue += amount;
+                        achievements[reward].monsters.push({ mtype, needed, amount });
+                    }
+                    else {
+                        if (type !== "stat") continue;
+                        if (!achievements[reward]) achievements[reward] = { value: 0, maxvalue: 0, monsters: [] };
+                        achievements[reward].value += amount;
+                        achievements[reward].maxvalue += amount;
+                        achievements[reward].monsters.push({ mtype, needed, amount });
+                    }
+                }
+            }
+
+            // Sort achievements alphabetically
+            const sortedAchievements = Object.entries(achievements)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .reduce((obj, [key, value]) => {
+                    obj[key] = value;
+                    return obj;
+                }, {});
+
+            a += "<div class='trackers trackerx hidden' style='margin-top: 3px'>";
+            a += "<div style='font-size: 28px; display: flex; flex-wrap: wrap; justify-content: space-evenly;'>";
+
+            for (const ac in sortedAchievements) {
+                const achievement = sortedAchievements[ac];
+                const isCompleted = achievement.value >= achievement.maxvalue;
+
+                a += "<div style='background-color:#575983; border: 2px solid #9F9FB0; width: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 2px; padding: 10px; text-align: center; position: relative;' onclick='toggleDropdown(\"" + ac + "\")'>";
+                a += `${ac}: ${achievement.value.toLocaleString()} of ${achievement.maxvalue.toLocaleString()}`;
+                a += "<div id='dropdown-" + ac + "' class='dropdown-content' style='display: none; background-color:#000000; border: 2px solid #9F9FB0; width: 550px; margin-top: 5px; padding: 5px; position: absolute; z-index: 9999; max-height: 500px; overflow-y: auto;'>";
+
+                // Sort monsters by needed value, then alphabetically by monster name
+                achievement.monsters.sort((a, b) => {
+                    if (a.needed !== b.needed) {
+                        return a.needed - b.needed;
+                    }
+                    return a.mtype.localeCompare(b.mtype);
+                }).forEach(monster => {
+                    const isCompleted = tracker.max.monsters[monster.mtype] && tracker.max.monsters[monster.mtype][0] >= monster.needed;
+                    const fontColor = isCompleted ? 'green' : 'white'; // Font color based on completion status
+
+                    a += `<div style='color: ${fontColor};'>Monster: ${monster.mtype} | Needed: ${monster.needed.toLocaleString()} | Amount: ${monster.amount.toLocaleString()}</div>`;
+                });
+
+                a += "</div>";
+                a += "</div>";
+            }
+
+            a += "</div>";
+            a += "</div>";
+
+            show_modal(a, {
+                wwidth: 578,
+                hideinbackground: !0
+            });
+
+            // Function to toggle dropdown visibility
+            window.toggleDropdown = function (achievement) {
+                const dropdown = document.getElementById('dropdown-' + achievement);
+                dropdown.style.display = (dropdown.style.display === 'none' || dropdown.style.display === '') ? 'block' : 'none';
+            }
+        }
+
+        this.render_drop = function (a, b, c) {
+            var d = "";
+            if ("open" == a[1]) {
+                var e = 0;
+                G.drops[a[2]].forEach(function (a) {
+                    e += a[0];
+                });
+                G.drops[a[2]].forEach(function (g) {
+                    d += render_drop(g, b * a[0] / e, c);
+                });
+                return d;
+            }
+            d += "<div style='position: relative; white-space: nowrap;'>";
+            var f = "", g = void 0;
+            G.items[a[1]] ? (f = G.items[a[1]].skin, g = { name: a[1], q: a[2], data: a[3] }) : "empty" == a[1] ? d += "<div style='z-index: 1; background-color:#575983; border: 200px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:#C5C7E0; font-size: 16px; display: inline-block; padding: 1px 1px 1px 3px;'>ZILCH</div>" : "shells" == a[1] ? (d += "<div style='z-index: 1; background-color:#575983; border: 2px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:#8DE33B; font-size: 16px; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(a[2]) + "</div>", f = "shells") : "gold" == a[1] && (d += "<div style='z-index: 1; background-color:#575983; border: 2px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:gold; font-size: 16px; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(a[2]) + "</div>", f = "gold");
+            "cx" == a[1] ? d += cx_sprite(a[2], { mright: 4 }) : "cxbundle" == a[1] ? G.cosmetics.bundle[a[2]].forEach(function (a) {
+                d += cx_sprite(a, { mright: 4 });
+            }) : d += "<span class='clickable' onclick='pcs(event); render_item_info(\"" + a[1] + '",0,"' + (g && g.data || "") + "\")'>" + item_container({ skin: f }, g) + "</span>";
+            d = 1 <= round(a[0] * b) ? d + ("<div style='vertical-align: middle; display: inline-block; font-size: 24px; line-height: 50px; height: 50px; margin-left: 5px; margin-right: 8px'>" + to_pretty_num(round(a[0] * b)) + " / 1</div>") : 1.1 <= 1 / (a[0] * b) && 10 > 1 / (a[0] * b) && 10 * parseInt(1 / (a[0] * b)) != parseInt(10 / (a[0] * b)) ? d + ("<div style='vertical-align: middle; display: inline-block; font-size: 24px; line-height: 50px; height: 50px; margin-left: 5px; margin-right: 8px'>10 / " + to_pretty_num(round(10 / (a[0] * b))) + "</div>") : d + ("<div style='vertical-align: middle; display: inline-block; font-size: 24px; line-height: 50px; height: 50px; margin-left: 5px; margin-right: 8px'>1 / " + to_pretty_num(round(1 / (a[0] * b))) + "</div>");
+            return d += "</div>";
+        }
+    }
+    // Eval the function string to have to defined in parent scope
+    const full_function_text = change_parent_function.toString();
+    parent.smart_eval(full_function_text.slice(full_function_text.indexOf("{") + 1, full_function_text.lastIndexOf("}")));
+}
+modify_parent_function();

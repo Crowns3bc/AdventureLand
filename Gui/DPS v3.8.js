@@ -1,6 +1,6 @@
-// All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "DPS"
+// All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF" "DPS"
 // The order of the array will be the order of the display
-const damageTypes = ["Base", "Blast", "Burn", "HPS", "MPS", "DR", "DPS"];
+const damageTypes = ["Base", "HPS", "RF", "DPS"];
 let displayClassTypeColors = true; // Set to false to disable class type colors
 let displayDamageTypeColors = true; // Set to false to disable damage type colors
 let showOverheal = true; // Set to true to show overhealing
@@ -12,7 +12,8 @@ const damageTypeColors = {
     Blast: '#782D33',
     Burn: '#FF7F27',
     MPS: '#353C9C',
-    DR: '#E94959'
+    DR: '#E94959',
+    RF: '#D880F0',
 };
 
 // Initialize the DPS meter
@@ -57,12 +58,14 @@ let baseDamage = 0;
 let baseHeal = 0;
 let lifesteal = 0;
 let manasteal = 0;
-let dreturn = 0; // Initialize dreturn
+let dreturn = 0;
+let reflect = 0;
 let METER_START = performance.now();
 
 // Damage tracking object for party members
 let partyDamageSums = {};
 let playerDamageReturns = {}; // Initialize playerDamageReturns
+let playerDamageReflects = {}; // Initialize playerDamageReflects
 
 // Format DPS with commas for readability
 function getFormattedDPS(dps) {
@@ -100,6 +103,7 @@ parent.socket.on("hit", function (data) {
                     sumLifesteal: 0,
                     sumManaSteal: 0,
                     sumDamageReturn: 0,
+                    sumReflection: 0,
                 };
 
                 // Calculate actual heal and lifesteal
@@ -160,8 +164,45 @@ parent.socket.on("hit", function (data) {
                         sumLifesteal: 0,
                         sumManaSteal: 0,
                         sumDamageReturn: 0,
+                        sumReflection: 0,
                     };
                     partyEntry.sumDamageReturn += data.dreturn ?? 0; // Add dreturn to party damage sums
+                    partyDamageSums[playerId] = partyEntry; // Update the partyDamageSums
+                }
+            }
+            // Handle reflection damage
+            if (data.reflect) {
+                console.log(`Reflection event: Target = ${data.target}, Reflect Damage = ${data.reflect}`);
+                let playerId = data.id;
+
+                // Initialize playerDamageReflects entry for the player if it doesn't exist
+                if (!playerDamageReflects[playerId]) {
+                    playerDamageReflects[playerId] = {
+                        startTime: performance.now(),
+                        sumReflection: 0,
+                    };
+                }
+
+                // Update reflection damage in playerDamageReflects
+                let playerEntry = playerDamageReflects[playerId];
+                playerEntry.sumReflection += data.reflect ?? 0;
+
+                // Update partyDamageSums for reflection damage
+                if (parent.party_list && parent.party_list.includes(playerId)) {
+                    let partyEntry = partyDamageSums[playerId] ?? {
+                        startTime: performance.now(),
+                        sumDamage: 0,
+                        sumHeal: 0,
+                        sumBurnDamage: 0,
+                        sumBlastDamage: 0,
+                        sumBaseDamage: 0,
+                        sumLifesteal: 0,
+                        sumManaSteal: 0,
+                        sumDamageReturn: 0,
+                        sumReflection: 0,
+                    };
+
+                    partyEntry.sumReflection += data.reflect ?? 0; // Add reflect to party damage sums
                     partyDamageSums[playerId] = partyEntry; // Update the partyDamageSums
                 }
             }
@@ -192,6 +233,7 @@ function updateDPSMeterUI() {
         let hps = Math.floor((baseHeal * 1000) / elapsed);
         let mps = Math.floor((manasteal * 1000) / elapsed);
         let dr = Math.floor((dreturn * 1000) / elapsed);
+        let RF = Math.floor((reflect * 1000) / elapsed);
 
         let $ = parent.$;
         let dpsDisplay = $('#dpsmetercontent');
@@ -284,23 +326,24 @@ function getTypeValue(type, entry) {
             case "DPS":
                 return calculateDPSForPartyMember(entry);
             case "Burn":
-                return Math.floor((entry.sumBurnDamage * 1000) / elapsedTime) || 0; // Default to 0
+                return Math.floor((entry.sumBurnDamage * 1000) / elapsedTime) || 0;
             case "Blast":
-                return Math.floor((entry.sumBlastDamage * 1000) / elapsedTime) || 0; // Default to 0
+                return Math.floor((entry.sumBlastDamage * 1000) / elapsedTime) || 0;
             case "Base":
-                return Math.floor((entry.sumBaseDamage * 1000) / elapsedTime) || 0; // Default to 0
+                return Math.floor((entry.sumBaseDamage * 1000) / elapsedTime) || 0;
             case "HPS":
-                return Math.floor((entry.sumHeal * 1000) / elapsedTime) || 0; // Default to 0
+                return Math.floor((entry.sumHeal * 1000) / elapsedTime) || 0;
             case "MPS":
-                return Math.floor((entry.sumManaSteal * 1000) / elapsedTime) || 0; // Default to 0
+                return Math.floor((entry.sumManaSteal * 1000) / elapsedTime) || 0;
             case "DR":
-                return Math.floor((entry.sumDamageReturn * 1000) / elapsedTime) || 0; // Default to 0
+                return Math.floor((entry.sumDamageReturn * 1000) / elapsedTime) || 0;
+            case "RF":
+                return Math.floor((entry.sumReflection * 1000) / elapsedTime) || 0;
             default:
                 return 0;
         }
     } else {
-        // If elapsedTime is 0 or less, return 0 for safety
-        return 0;
+        return 0; // If elapsedTime is 0 or less, return 0 for safety
     }
 }
 
@@ -309,8 +352,9 @@ function calculateDPSForPartyMember(entry) {
     try {
         const elapsedTime = performance.now() - (entry.startTime || performance.now());
         const totalDamage = entry.sumDamage || 0;
-        const totalDamageReturn = entry.sumDamageReturn || 0; // Include damage return
-        const totalCombinedDamage = totalDamage + totalDamageReturn; // Combine for DPS calculation
+        const totalDamageReturn = entry.sumDamageReturn || 0;
+        const totalReflection = entry.sumReflection || 0; // Include reflection damage
+        const totalCombinedDamage = totalDamage + totalDamageReturn + totalReflection; // Combine for DPS calculation
 
         // Prevent division by zero
         if (elapsedTime > 0) {

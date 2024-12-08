@@ -1,12 +1,12 @@
 if (parent.party_style_prepared) {
 	parent.$('#style-party-frames').remove();
 }
-// Adjust: left: -25%; for desired placement
+
 let css = `
         .party-container {
             position: absolute;
             top: 55px;
-            left: -25%; 
+            left: -15%;
             width: 1000px; 
             height: 300px;
             transform: translate(0%, 0);
@@ -17,7 +17,7 @@ let css = `
 parent.$('head').append(`<style id="style-party-frames">${css}</style>`);
 parent.party_style_prepared = true;
 
-const includeThese = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'name', 'xp', 'level', 'share'];
+const includeThese = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'name', 'xp', 'level', 'share', 'cc'];
 const partyFrameWidth = 80; // Set the desired width for the party frames
 
 function updatePartyData() {
@@ -42,7 +42,7 @@ let show_party_frame_property = {
 	hp: true,
 	mp: true,
 	xp: true,
-	//cc: true,
+	cc: true,
 	ping: true,
 	share: true
 };
@@ -95,7 +95,7 @@ function addPartyFramePropertiesToggles() {
 		return toggle;
 	}
 
-	for (let key of ['img', 'hp', 'mp', 'xp', 'share']) {
+	for (let key of ['img', 'hp', 'mp', 'xp', 'cc']) {
 		toggles.appendChild(create_toggle(key));
 	}
 
@@ -160,14 +160,14 @@ function updatePartyFrames() {
 				//const billion = 1_000_000_000;
 				//xp = (info.xp / billion).toFixed(1) + 'b/' + (max_xp / billion).toFixed(0) + 'b';
 			}
-			/*
-						let ccWidth = 0;
-						let cc = '??';
-						if (info.cc !== undefined) {
-							ccWidth = info.cc / info.max_cc * 100;
-							cc = info.cc.toFixed(2);
-						}
-			*/
+
+			let ccWidth = 0;
+			let cc = '??';
+			if (info.cc !== undefined) {
+				ccWidth = info.cc / info.max_cc * 100;
+				cc = info.cc.toFixed(2);
+			}
+
 			let pingWidth = 0;
 			let ping = '??';
 			if (character.ping !== undefined) {
@@ -192,9 +192,9 @@ function updatePartyFrames() {
 				xp: xp,
 				xpWidth: xpWidth,
 				xpColor: 'green',
-				//cc: cc,
-				//ccWidth: ccWidth,
-				//ccColor: 'grey',
+				cc: cc,
+				ccWidth: ccWidth,
+				ccColor: 'grey',
 				ping: ping,
 				pingWidth: pingWidth,
 				pingColor: 'black',

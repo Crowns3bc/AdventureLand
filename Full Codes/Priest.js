@@ -292,11 +292,11 @@ const equipmentSets = {
         //{ itemName: "ringofluck", slot: "ring2", level: 2, l: "l" },
         { itemName: "rabbitsfoot", slot: "orb", level: 3, l: "l" },
         //{ itemName: "spookyamulet", slot: "amulet", l: "l" },
-        { itemName: "mpxamulet", slot: "amulet", level: 1, l: "l"  },
+        { itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
         { itemName: "ecape", slot: "cape", level: 8, l: "l" },
-		{ itemName: "mearring", slot: "earring1", level: 0, l: "l" },
+        { itemName: "mearring", slot: "earring1", level: 0, l: "l" },
         { itemName: "mearring", slot: "earring2", level: 0, l: "u" }
-		
+
     ],
     luck: [
         { itemName: "eears", slot: "helmet", level: 8, l: "l" },
@@ -338,7 +338,7 @@ const equipmentSets = {
         { itemName: "lmace", slot: "mainhand", level: 9, l: "l" },
         //{ itemName: "firestaff", slot: "mainhand", level: 9, l: "s" },
         //{ itemName: "wbook0", slot: "offhand", level: 6, l: "l" },
-		{ itemName: "mshield", slot: "offhand", level: 9, l: "l" },
+        { itemName: "mshield", slot: "offhand", level: 9, l: "l" },
         //{ itemName: "zapper", slot: "ring1", level: 2, l: "l" },
         //{ itemName: "zapper", slot: "ring2", level: 2, l: "u" },
         { itemName: "jacko", slot: "orb", level: 5, l: "l" },
@@ -347,7 +347,7 @@ const equipmentSets = {
         //{ itemName: "amuletofspooks", slot: "amulet", l: "l"  },
         { itemName: "gcape", slot: "cape", level: 9, l: "l" },
         //{ itemName: "bcape", slot: "cape", level: 7, l: "l" },
-		{ itemName: "cearring", slot: "earring1", level: 4, l: "l" },
+        { itemName: "cearring", slot: "earring1", level: 4, l: "l" },
         { itemName: "cearring", slot: "earring2", level: 4, l: "u" },
     ],
     rHome: [
@@ -448,7 +448,7 @@ async function attackLoop() {
                 let target = null;
                 let bossMonster = null;
 
-				//Prioritize Bosses
+                //Prioritize Bosses
                 if (!target) {
                     for (let i = 0; i < bosses.length; i++) {
                         bossMonster = get_nearest_monster_v2({
@@ -458,8 +458,8 @@ async function attackLoop() {
                         if (bossMonster) break;
                     }
                 }
-				
-				// If no Bosses, find regular mobs
+
+                // If no Bosses, find regular mobs
                 for (let i = 0; i < targetNames.length; i++) {
                     target = get_nearest_monster_v2({
                         target: targetNames[i],
@@ -612,12 +612,12 @@ async function handleDarkBlessing(dead) {
 }
 
 async function handleZapSpam(dead) {
-	let isHome = get_nearest_monster({ type: home });
+    let isHome = get_nearest_monster({ type: home });
     if (!dead && isHome) {
         if (!is_on_cooldown("zapperzap") && isHome.hp > 15000) {
-			if (character.mp > 3000) {
-            	await use_skill("zapperzap", isHome);
-			}
+            if (character.mp > 3000) {
+                await use_skill("zapperzap", isHome);
+            }
         }
     }
 }
@@ -1158,66 +1158,61 @@ function equipSet(setName) {
     }
 }
 
-// Function to manage looting
-async function handleLooting() {
-	if (currentState !== "looting") return;
+// Function to manage boss fighting
+function handleBosses() {
+    if (currentState !== "idle" && currentState !== "boss") return;
 
-	// Step 1: Equip gold set and swap boosters
-	lastLoot = Date.now();
-	equipSet("gold"); // Equip gold set
-	let slot = locate_item("luckbooster"); // Find luck booster
-	if (slot !== -1) {
-		await shift(slot, "goldbooster"); // Swap to gold booster
-	}
+    const now = Date.now();
+    let bossMonster = null;
+    for (let bossType of settings.bosses) {
+        bossMonster = get_nearest_monster_v2({ type: bossType });
+        if (bossMonster) break;
+    }
 
-	// Step 2: Loot chests
-	let looted = 0;
-	for (let id in get_chests()) {
-		if (looted >= chestThreshold) break;
-		parent.open_chest(id);
-		console.log("Looting chests with " + character.goldm + " goldm");
-		looted++;
-	}
+    if (bossMonster) {
+        currentState = "boss";
+        targetSet = bossMonster.hp < settings.bossHpThreshold ? "maxLuck" : "dps";
+    } else {
+        currentState = "idle";
+        targetSet = "maxLuck";
+    }
 
-	// Step 3: Return to the appropriate target set
-	currentState = "idle";
-	equipSet(targetSet); // Return to the original set
-	let luckSlot = locate_item("goldbooster"); // Find gold booster
-	if (luckSlot !== -1) {
-		await shift(luckSlot, "luckbooster"); // Swap back to luck booster
-	}
+    if (now - setSwapTime > swapCooldown) {
+        equipSet(targetSet);
+        setSwapTime = now;
+    }
 }
 
 // Function to manage boss fighting
 function handleLooting() {
-	if (currentState !== "looting") return;
+    if (currentState !== "looting") return;
 
-	// Step 1: Equip gold set and swap boosters
-	lastLoot = Date.now();
-	equipSet("gold"); // Equip gold set
-	let slot = locate_item("luckbooster"); // Find luck booster
-	if (slot !== -1) {
-		shift(slot, "goldbooster"); // Swap to gold booster
-	}
+    // Step 1: Equip gold set and swap boosters
+    lastLoot = Date.now();
+    equipSet("gold"); // Equip gold set
+    let slot = locate_item("luckbooster"); // Find luck booster
+    if (slot !== -1) {
+        shift(slot, "goldbooster"); // Swap to gold booster
+    }
 
-	// Step 2: Loot chests after delay
-	setTimeout(() => {
-		let looted = 0;
-		for (let id in get_chests()) {
-			if (looted >= chestThreshold) break;
-			parent.open_chest(id);
-			console.log("Looting chests with " + character.goldm + " goldm");
-			looted++;
-		}
+    // Step 2: Loot chests after delay
+    setTimeout(() => {
+        let looted = 0;
+        for (let id in get_chests()) {
+            if (looted >= chestThreshold) break;
+            parent.open_chest(id);
+            console.log("Looting chests with " + character.goldm + " goldm");
+            looted++;
+        }
 
-		// Step 3: Return to the appropriate target set
-		currentState = "idle";
-		equipSet(targetSet); // Return to the original set
-		let luckSlot = locate_item("goldbooster"); // Find gold booster
-		if (luckSlot !== -1) {
-			shift(luckSlot, "luckbooster"); // Swap back to luck booster
-		}
-	}, 500); // Increased delay to ensure equipment changes are applied
+        // Step 3: Return to the appropriate target set
+        currentState = "idle";
+        equipSet(targetSet); // Return to the original set
+        let luckSlot = locate_item("goldbooster"); // Find gold booster
+        if (luckSlot !== -1) {
+            shift(luckSlot, "luckbooster"); // Swap back to luck booster
+        }
+    }, 500); // Increased delay to ensure equipment changes are applied
 }
 
 // Main loop to coordinate activities

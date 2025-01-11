@@ -2,7 +2,7 @@ pause();
 // Define constants for character names
 const chars = {
     //MAGE: "CrownMage",
-    //MERCHANT: "CrownMerch",
+    MERCHANT: "CrownMerch",
     //PALADIN: "CrownPal",
     PRIEST: "CrownPriest",
     //ROGUE: "CrownZone",
@@ -13,7 +13,7 @@ const chars = {
 // Define starting levels
 const codeSlots = {
     //MAGE: 28,
-    //MERCHANT: 95,
+    MERCHANT: 95,
     //PALADIN: 18,
     PRIEST: 3,
     //ROGUE: 18,
@@ -106,7 +106,7 @@ async function eventer() {
     const delay = 100;
     try {
         if (events) {
-            //handleEvents();
+            handleEvents();
             //game_log("Event Time");
         } else if (jrActive) {
             //handleBosses();
@@ -278,12 +278,12 @@ function drawCirclesAndLines(center, radius) {
     //draw_line(bottomRightX, bottomRightY, topLeftX, bottomRightY, 2, 0xFF0000);
     //draw_line(topLeftX, bottomRightY, topLeftX, topLeftY, 2, 0xFF0000);
     draw_circle(centerX, centerY, 1, 2, 0x00FF00);
-    draw_circle(character.x, character.y, G.skills.zapperzap.range, 2, 0x00C7FF);
+    //draw_circle(character.x, character.y, G.skills.zapperzap.range, 2, 0x00C7FF);
 
-    draw_circle(character.x, character.y, character.range, 2, 0xE8FF00)
+    //draw_circle(character.x, character.y, character.range, 2, 0xE8FF00)
     //draw_all_boxes_on_map();
     //draw_circle(264,-804,2,2,0x00FF00)
-    draw_circle(character.x, character.y, 600, 2, 0x000000)
+    //draw_circle(character.x, character.y, 600, 2, 0x000000)
 }
 
 function handleHarpyEvent() {
@@ -400,49 +400,37 @@ let harpyDeath = parseInt(localStorage.getItem('harpyDeath')) || 0;
 let skeletorDeath = parseInt(localStorage.getItem('skeletorDeath')) || 0;
 let stompyDeath = parseInt(localStorage.getItem('stompyDeath')) || 0;
 let jrDeath = parseInt(localStorage.getItem('jrDeath')) || 0;
-
-game.on('death', data => {
-    if (parent.entities[data.id]) {
+/*
+game.on('death', function (data) {
+    if (parent.entities[data.id]) { // Check if the entity exists
         const mob = parent.entities[data.id];
-        const mobType = mob.mtype;
-        if (mobType === 'rharpy') {
-            harpyDeath = Date.now();
-            localStorage.setItem('harpyDeath', harpyDeath);
-            harpyActive = false; // Reset the active flag on death
-            console.log(`The mob "${mobType}" has died.`);
-        }
-        if (mobType === 'skeletor') {
-            skeletorDeath = Date.now();
-            localStorage.setItem('skeletorDeath', skeletorDeath);
-            skeletorActive = false; // Reset the active flag on death
-            console.log(`The mob "${mobType}" has died.`);
-        }
-        if (mobType === 'stompy') {
-            stompyDeath = Date.now();
-            localStorage.setItem('stompyDeath', stompyDeath);
-            stompyActive = false; // Reset the active flag on death
-            console.log(`The mob "${mobType}" has died.`);
-        }
-        if (mobType === 'jr') {
-            jrDeath = Date.now();
-            localStorage.setItem('jrDeath', jrDeath);
-            jrActive = false; // Reset the active flag on death
-            console.log(`The mob "${mobType}" has died.`);
+        const mobName = mob.mtype; // Get the mob type
+        const mobTarget = mob.target; // Get the mob's target
+
+        // Get your party members
+        const party = get_party();
+        const partyMembers = party ? Object.keys(party) : [];
+
+        // Check if the mob's target was the player or someone in the party
+        if (mobTarget === character.name || partyMembers.includes(mobTarget)) {
+            game_log(`${mobName} died with ${data.luckm} luck`, "#96a4ff");
         }
     }
 });
-
+*/
 const equipmentSets = {
+
     dps: [
+        { itemName: "dexearring", slot: "earring2", level: 5, l: "l" },
         { itemName: "orbofdex", slot: "orb", level: 5, l: "l" },
-        { itemName: "pants", slot: "pants", level: 13, l: "l" },
-        { itemName: "suckerpunch", slot: "ring1", level: 1, l: "l" },
-        { itemName: "suckerpunch", slot: "ring2", level: 1, l: "s" },
+        { itemName: "suckerpunch", slot: "ring1", level: 2, l: "l" },
+        { itemName: "suckerpunch", slot: "ring2", level: 2, l: "u" },
     ],
     luck: [
-        //{ itemName: "rabbitsfoot", slot: "orb", level: 2, l: "l" },
-        { itemName: "ringofluck", slot: "ring2", level: 0, l: "l" },
-        { itemName: "ringofluck", slot: "ring1", level: 0, l: "s" }
+        { itemName: "mearring", slot: "earring2", level: 0, l: "u" },
+        { itemName: "rabbitsfoot", slot: "orb", level: 2, l: "l" },
+        { itemName: "ringhs", slot: "ring2", level: 0, l: "l" },
+        { itemName: "ringofluck", slot: "ring1", level: 0, l: "l" }
     ],
     single: [
         { itemName: "bowofthedead", slot: "mainhand", level: 11, l: "l" },
@@ -453,7 +441,7 @@ const equipmentSets = {
         //{ itemName: "tshirt9", slot: "chest", level: 7, l: "l" }
     ],
     boom: [
-        { itemName: "pouchbow", slot: "mainhand", level: 11, l: "l" },
+        { itemName: "pouchbow", slot: "mainhand", level: 13, l: "l" },
         //{ itemName: "tshirt9", slot: "chest", level: 7, l: "l" }
     ],
     heal: [
@@ -485,142 +473,79 @@ let lastSwitchTime = 0; // Timestamp of the last switch
 const switchCooldown = 750; // Cooldown period in milliseconds (0.75 seconds)
 let state = "attacking"; // Default state
 
+// Utility function to handle cooldown check and equipment switch
+const weaponSet = (set) => {
+    if (CD()) {
+        equipSet(set);
+        lastSwitchTime = performance.now();
+    }
+};
+
 async function attackLoop() {
     let delay = null; // Initial delay
-    const X = locations[home][0].x; // X coordinate of home location
-    const Y = locations[home][0].y; // Y coordinate of home location
-    const rangeThreshold = 45; // Range threshold for counting monsters
-    //const targetNames = ["CrownPriest", "CrownTown"];
-    const targetNames = ["CrownTown", "CrownPriest"];
+    const { x: X, y: Y } = locations[home][0]; // Destructuring X, Y coordinates
+    const rangeThreshold = 50; // Range threshold for counting monsters
+    const targetNames = ["CrownTown", "CrownPriest"]; // Priority order for player targets
 
-    // Set heal threshold based on healer presence
-    let healThreshold = 0.4;
-    const healer = get_entity("CrownPriest"); // Check if healer is present
-
-    let isHome = get_nearest_monster({ type: home });
-
-    if (!healer || healer.rip) {
-        healThreshold = .9; // Increase threshold if healer is not around
-    }
+    const healer = get_entity("CrownPriest");
+    const healThreshold = healer && !healer.rip ? 0.4 : 0.9; // Ternary for healer threshold
 
     try {
-        // Count monsters within range and out of range
-        let monsters = Object.values(parent.entities)
-            .filter(e => e.type === "monster" && e.target && targetNames.includes(e.target))
-        // Count monsters within range and out of range sorted by hp
-        let sortedByHP = Object.values(parent.entities)
-            .filter(e => e.type === "monster" && e.target && targetNames.includes(e.target))
-            .sort((a, b) => b.hp - a.hp);
+        // Get prioritized targets
+        const { targets, inRange: monstersInRangeList } = getPrioritizedTargets(targetNames, X, Y, rangeThreshold);
+        const healTarget = lowest_health_partymember();
 
-        let monstersInRangeList = sortedByHP.filter(e => Math.hypot(e.x - X, e.y - Y) <= rangeThreshold);
-        let monstersOutOfRangeList = sortedByHP.filter(e => Math.hypot(e.x - X, e.y - Y) > rangeThreshold);
+        // Determine state based on healing needs
+        state = (healTarget && healTarget.hp < healTarget.max_hp * healThreshold) ? "healing" : "attacking";
 
-        // Determine the state based on healing needs
-        let heal_target = lowest_health_partymember();
+        if (state === "healing" && CD()) {
+            weaponSet("heal");
+            await attack(healTarget);
+            delay = ms_to_next_skill("attack");
+        } else if (state === "attacking" && targets.length > 0) {
+            const primaryTarget = get_nearest_monster_v2({
+                target: targetNames[0],
+                check_min_hp: true,
+                max_distance: 150,
+                statusEffects: ["cursed"],
+            });
 
-        if (heal_target && heal_target.hp < heal_target.max_hp * healThreshold) {
-            state = "healing";  // Set to healing if someone is below the heal threshold
-        } else if (isHome) {
-            state = "attacking";  // Otherwise, focus on attacking
-        }
+            // Use skills on primary target with "cursed" status
+            if (primaryTarget) {
+                change_target(primaryTarget);
+                if (!is_on_cooldown("huntersmark")) await use_skill("huntersmark", primaryTarget.id);
+                if (!is_on_cooldown("supershot")) await use_skill("supershot", primaryTarget.id);
+            }
 
-        // Switch behavior based on the current state
-        switch (state) {
-            case "healing":
-                if (performance.now() - lastSwitchTime > switchCooldown) {
-                    equipSet('heal');  // Switch to healing set
-                    lastSwitchTime = performance.now();
-                }
-                //game_log("Attempting to heal: " + heal_target.name, "#ac1414");
-                await attack(heal_target); // Heal the target
-                delay = ms_to_next_skill('attack');
-                break;
-
-            case "attacking":
-
-                if (sortedByHP.length) {
-                    let highestHPMonster = sortedByHP[0];
-                    //let highestHPMonster = null;
-
-                    // Find the nearest monster based on the targetNames
-                    for (let i = 0; i < targetNames.length; i++) {
-                        highestHPMonster = get_nearest_monster_v2({
-                            target: targetNames[i],
-                            check_min_hp: true,  // Checking for monster with minimum HP
-                            max_distance: 150,  // Consider monsters within 50 units
-                            statusEffects: ["cursed"], // Check for these debuffs
-                        });
-                        if (highestHPMonster) break;
-                    }
-                    if (highestHPMonster) {
-                        change_target(highestHPMonster);
-                        if (!is_on_cooldown("huntersmark")) {
-                            await use_skill("huntersmark", highestHPMonster.id);
-                        }
-                        if (!is_on_cooldown("supershot")) {
-                            await use_skill("supershot", highestHPMonster.id);
-                        }
-                    }
-
-                    if (monstersInRangeList.length >= 4) {
-                        if (performance.now() - lastSwitchTime > switchCooldown) {
-                            equipSet('boom');
-                            //equipSet('dead');
-                            lastSwitchTime = performance.now();
-                        }
-                        await use_skill("5shot", monstersInRangeList.slice(0, 5)); // Use the 5-shot skill
-                        delay = ms_to_next_skill("attack");
-                    } else if (monstersOutOfRangeList.length >= 4) {
-                        if (performance.now() - lastSwitchTime > switchCooldown) {
-                            equipSet('dead');
-                            lastSwitchTime = performance.now();
-                        }
-                        await use_skill("5shot", monstersOutOfRangeList.slice(0, 5)); // Use the 5-shot skill
-                        delay = ms_to_next_skill("attack");
-                    } else if (monstersInRangeList.length >= 2 || monstersOutOfRangeList.length >= 2) {
-                        let targets = sortedByHP.slice(0, 3); // Top 3 monsters overall
-                        if (performance.now() - lastSwitchTime > switchCooldown) {
-                            equipSet('dead');
-                            lastSwitchTime = performance.now();
-                        }
-                        await use_skill("3shot", targets); // Use the 3-shot skill
-                        delay = ms_to_next_skill("attack");
-                    } else if (monstersInRangeList.length === 1 || monstersOutOfRangeList.length === 1) {
-                        let target = sortedByHP[0]; // Single monster overall
-                        //console.log(sortedByHP[0])
-                        if (performance.now() - lastSwitchTime > switchCooldown) {
-                            equipSet('single');
-                            lastSwitchTime = performance.now();
-                        }
-                        await attack(target); // Use the attack skill
-                        delay = ms_to_next_skill("attack");
-                    }
-                }
-                break;
-            default:
-                console.error("Unknown state: " + state);
-                break;
+            // Determine number of targets and equip appropriate set
+            if (monstersInRangeList.length >= 5) {
+                weaponSet("boom");
+                await use_skill("5shot", monstersInRangeList.slice(0, 5));
+                delay = ms_to_next_skill("attack");
+            } else if (targets.length >= 5) {
+                weaponSet("dead");
+                await use_skill("5shot", targets.slice(0, 5));
+                delay = ms_to_next_skill("attack");
+            } else if (targets.length >= 3) {
+                weaponSet("dead");
+                await use_skill("3shot", targets.slice(0, 3));
+                delay = ms_to_next_skill("attack");
+            } else if (targets.length === 1) {
+                weaponSet("single");
+                await attack(targets[0]);
+                delay = ms_to_next_skill("attack");
+            }
         }
     } catch (e) {
-        //console.error(e);
+        console.error(e);
     }
-    setTimeout(attackLoop, delay); // Recursive call with the updated delay
+
+    // Recursive call with the updated delay
+    setTimeout(attackLoop, delay || 250); // Default delay if undefined
 }
 
 // Start the attack loop
 attackLoop();
-/*
-function use5ShotOnPartyMembers() {
-    const membersToHeal = ["Miau", "CrownTown", "CrownPal", "Atlus", "Mommy"];
-
-    // Use the "5shot" skill on the specified members
-    console.log(`Using 5shot on: ${membersToHeal.join(", ")}`);
-    use_skill("5shot", membersToHeal); // Directly use the skill on the array of names
-}
-
-// Adjust the interval based on your needs
-setInterval(use5ShotOnPartyMembers, character.frequency);
-*/
 ////////////////////////////////////////////////////////////////////////////////
 async function moveLoop() {
     let delay = 50;
@@ -918,15 +843,15 @@ function topButtons() {
     add_top_button("Stop", "🔄", () => {
         stop_character("CrownMerch");
         startChar = false;
-    });
-    add_top_button("MLuck", "ML", () => {
-        send_cm("CrownMerch", {
-            message: "location",
-            x: character.x,
-            y: character.y,
-            map: character.map
-        });
-    });
+    });/*
+	add_top_button("MLuck", "ML", () => {
+		send_cm("CrownMerch", {
+			message: "location",
+			x: character.x,
+			y: character.y,
+			map: character.map
+		});
+	});*/
     add_top_button("Return", "R&M", () => {
         send_cm(["CrownPriest", "CrownMage", "CrownTown"], {
             message: "location",
@@ -942,7 +867,7 @@ function topButtons() {
         pause();
         startChar = true;
     });*/
-    add_top_button("showLoot", "I", displayLoot);
+    add_top_button("showLoot", "💼", displayLoot);
     add_top_button("Pause2", "⏸️", () => {
         pause();
         startChar = true;
@@ -995,7 +920,7 @@ function sendItems(lootMule) {
 function manageLoot() {
     const lootMule = get_entity("CrownMerch");
     if (!lootMule) {
-        console.log("No loot mule found.");
+        //console.log("No loot mule found.");
         return;
     }
 
@@ -1088,78 +1013,150 @@ function scare() {
 }
 setInterval(scare, 100);
 
-let xpSwapTime = 0;
-let capeSwapTime = 0;
-let coatSwapTime = 0;
-const swapCooldown = 500; // 500ms cooldown between swaps
+let orbSwapTime = 0; // Tracks last orb swap time
+let capeSwapTime = 0; // Tracks last cape swap time
+let coatSwapTime = 0; // Tracks last coat swap time
+let boosterSwapTime = 0;
+const swapCooldown = 500; // Cooldown between swaps in ms
 
-const xpSwap = false;
-const capeSwap = true;
-const coatSwap = true;
+const settings = {
+    delay: 25, // Delay in ms for the loop
+    hpThreshold: 15000, // HP threshold for swaps
+    bossHpThreshold: 50000, // HP threshold for boss swaps
+    xpMonsters: ["ent", "plantoid"], // Monsters to monitor for XP swaps
+    mpThresholds: { upper: 1200, lower: 1600 }, // MP thresholds for coat swap
+    chestThreshold: 12, // Chest count for cape swap
+};
 
 async function itemSwap() {
-    const delay = 25;
-    const hpThreshold = 15000;
     const now = Date.now();
 
     try {
-        if (xpSwap) {
-            // Check if any monster is below hpThreshold
-            const monstersBelowThreshold = Object.values(parent.entities).some(entity => entity.mtype === home && entity.hp < hpThreshold);
+        let targetOrbSet = null; // Determine which orb set to equip
+        let targetCapeSet = null; // Determine which cape set to equip
+        let targetCoatSet = null; // Determine which coat set to equip
 
-            // Only allow swap if enough time has passed since the last swap
-            if (now - lastSwapTime > swapCooldown) {
-                // Equip xpSet if any monster is below hpThreshold
-                if (monstersBelowThreshold && character.slots?.orb?.name !== "talkingskull") {
-                    equipSet('xp');
-                    lastSwapTime = now; // Update last swap time
+        // BOOSTER SWAP LOGIC
+        if (now - boosterSwapTime > swapCooldown) {
+            const grinch = parent.S.grinch;
+            let desiredBooster = null;
+
+            if (grinch && grinch.hp < settings.bossHpThreshold) {
+                desiredBooster = "luckbooster";
+            } else {
+                const monstersBelowThreshold = Object.values(parent.entities).some(entity =>
+                    settings.xpMonsters.includes(entity.mtype) && entity.hp < settings.hpThreshold
+                );
+
+                if (monstersBelowThreshold) {
+                    desiredBooster = "xpbooster";
+                } else {
+                    desiredBooster = "xpbooster"; // Default booster
                 }
-                // Equip orbSet if no monster is below hpThreshold
-                else if (!monstersBelowThreshold && character.slots?.orb?.name !== "orbofdex") {
-                    equipSet('orb');
-                    lastSwapTime = now; // Update last swap time
+            }
+
+            const currentBoosterSlot = locate_item(desiredBooster);
+
+            if (currentBoosterSlot === -1) {
+                // If the desired booster isn't already in inventory, find the highest level booster
+                const otherBoosterSlot = findBoosterSlot();
+
+                if (otherBoosterSlot !== null) {
+                    shift(otherBoosterSlot, desiredBooster);
+                    boosterSwapTime = now; // Update the last shift time
                 }
             }
         }
-        if (capeSwap) {
-            // Cape Swap
-            if (now - capeSwapTime > swapCooldown) {
-                // Equip stealthSet if enough chests are present
-                if (getNumChests() >= 12 && character.slots?.cape?.name !== "stealthcape") {
-                    equipSet('stealth');
-                    capeSwapTime = now; // Update last swap time
-                }
-                // Equip capeSet if not already equipped
-                else if (getNumChests() <= 11 && character.slots?.cape?.name !== "gcape") {
-                    equipSet('cape');
-                    capeSwapTime = now; // Update last swap time
-                }
+
+        // ORB SWAP LOGIC
+        const grinch = parent.S.grinch;
+        if (grinch && grinch.hp < settings.bossHpThreshold) {
+            targetOrbSet = "luck";
+        } else {
+            const monstersBelowThreshold = Object.values(parent.entities).some(entity =>
+                settings.xpMonsters.includes(entity.mtype) && entity.hp < settings.hpThreshold
+            );
+
+            if (monstersBelowThreshold) {
+                targetOrbSet = "xp";
             }
         }
-        // Coat Swap
-        if (coatSwap) {
-            // Only allow swap if enough time has passed since the last swap
-            if (now - coatSwapTime > swapCooldown) {
-                // Equip coatSet if MP is above upper threshold
-                if (character.mp > 1700) {
-                    equipSet('stat');
-                    coatSwapTime = now; // Update last swap time
-                }
-                // Equip manaSet if MP is below lower threshold
-                else if (character.mp < 1600) {
-                    equipSet('mana');
-                    coatSwapTime = now; // Update last swap time
-                }
-            }
+        if (!targetOrbSet) {
+            targetOrbSet = "dps";
+        }
+
+        // CAPE SWAP LOGIC
+        const chestCount = getNumChests();
+        const numTargets = getNumTargets("CrownPriest"); // Check number of monsters targeting CrownPriest
+        if (chestCount >= settings.chestThreshold && numTargets < 7) {
+            targetCapeSet = "stealth";
+        } else {
+            targetCapeSet = "cape";
+        }
+
+        // COAT SWAP LOGIC
+        if (character.mp > settings.mpThresholds.upper) {
+            targetCoatSet = "stat";
+        } else if (character.mp < settings.mpThresholds.lower) {
+            targetCoatSet = "mana";
+        }
+
+        // EQUIP ITEMS BASED ON TARGET SETS AND COOLDOWN
+        // Equip Orb Set
+        if (now - orbSwapTime > swapCooldown && targetOrbSet && !isSetEquipped(targetOrbSet)) {
+            equipSet(targetOrbSet);
+            //game_log(`Equipping ${targetOrbSet} set`);
+            orbSwapTime = now; // Update the last swap time for orb
+        }
+
+        // Equip Cape Set
+        if (now - capeSwapTime > swapCooldown && targetCapeSet && !isSetEquipped(targetCapeSet)) {
+            equipSet(targetCapeSet);
+            //game_log(`Equipping ${targetCapeSet} cape`);
+            capeSwapTime = now; // Update the last swap time for cape
+        }
+
+        // Equip Coat Set
+        if (now - coatSwapTime > swapCooldown && targetCoatSet && !isSetEquipped(targetCoatSet)) {
+            equipSet(targetCoatSet);
+            //game_log(`Equipping ${targetCoatSet} coat`);
+            coatSwapTime = now; // Update the last swap time for coat
         }
     } catch (e) {
         console.error(e);
     }
 
-    setTimeout(itemSwap, delay);
+    setTimeout(itemSwap, settings.delay);
 }
 
+// Utility Function to Check if a Set Is Equipped
+function isSetEquipped(setName) {
+    const set = equipmentSets[setName];
+    if (!set) return false;
+
+    return set.every(item =>
+        character.slots[item.slot]?.name === item.itemName &&
+        character.slots[item.slot]?.level === item.level
+    );
+}
+
+function getNumTargets(playerName) {
+    if (!playerName) return 0; // Return 0 if no player name is provided
+    let targetCount = 0;
+
+    for (const id in parent.entities) {
+        const entity = parent.entities[id];
+        if (entity.type === "monster" && entity.target === playerName) {
+            targetCount++;
+        }
+    }
+
+    return targetCount;
+}
+
+// Start the item swapping loop
 itemSwap();
+
 
 let moveStuff = {
     armorbox: 38,
@@ -1256,15 +1253,15 @@ setInterval(function () {
 }, 100);
 function prepForGold() {
     localStorage.setItem("LootState", "gold");
-    let slot = findHighestBoosterSlot();
-    shift(slot, "xpbooster");
+    let slot = findBoosterSlot();
+    //shift(slot, "xpbooster");
 }
 function prepForLoot() {
     localStorage.setItem("LootState", "loot");
-    let slot = findHighestBoosterSlot();
-    shift(slot, "xpbooster");
+    let slot = findBoosterSlot();
+    //shift(slot, "xpbooster");
 }
-function findHighestBoosterSlot() {
+function findBoosterSlot() {
     let slot = null;
     let maxLevel = null;
     for (let i = 0; i <= 41; i++) {
@@ -1325,17 +1322,6 @@ function timoutRevertLootState() {
 
 function getNumChests() {
     return Object.keys(get_chests()).length;
-}
-
-function findBoosterSlot() {
-    var booster = scanInventoryForItemIndex("xpbooster");
-    if (booster == null) {
-        booster = scanInventoryForItemIndex("luckbooster");
-    }
-    if (booster == null) {
-        booster = scanInventoryForItemIndex("goldbooster");
-    }
-    return booster;
 }
 
 sell_whitelist = [
@@ -1475,7 +1461,8 @@ function suicide() {
 setInterval(suicide, 100);
 
 const skinConfigs = {
-    ranger: { skin: "tm_yellow", skinRing: { name: "tristone", level: 2, locked: "l" }, normalRing: { name: "suckerpunch", level: 1, locked: "l" } },
+    // tm_yellow
+    ranger: { skin: "tm_green", skinRing: { name: "tristone", level: 2, locked: "l" }, normalRing: { name: "suckerpunch", level: 2, locked: "l" } },
     priest: { skin: "tm_white", skinRing: { name: "tristone", level: 1, locked: "l" }, normalRing: { name: "zapper", level: 1, locked: "l" } },
     paladin: { skin: "tf_pink", skinRing: { name: "tristone", level: 1, locked: "l" }, normalRing: { name: "suckerpunch", level: 1, locked: "l" } },
     warrior: { skin: "tf_pink", skinRing: { name: "tristone", level: 1, locked: "l" }, normalRing: { name: "suckerpunch", level: 1, locked: "l" } },
@@ -1560,6 +1547,54 @@ function lowest_health_partymember() {
     }
 }
 
+function getPrioritizedTargets(targetNames, homeX, homeY, rangeThreshold) {
+    // Step 1: Filter and sort all valid monster targets
+    const targets = Object.values(parent.entities)
+        .filter(monster =>
+            monster.type === "monster" && // Ensure the entity is a monster
+            monster.target &&             // The monster has a target
+            targetNames.includes(monster.target) // The target is in the prioritized target list
+        )
+        .sort((a, b) => {
+            // Step 2: Sort monsters by priority, distance, and HP
+            const priorityA = targetNames.indexOf(a.target);
+            const priorityB = targetNames.indexOf(b.target);
+
+            if (priorityA !== priorityB) return priorityA - priorityB;
+
+            const distA = Math.hypot(a.x - homeX, a.y - homeY);
+            const distB = Math.hypot(b.x - homeX, b.y - homeY);
+
+            if (distA !== distB) return distA - distB;
+
+            return b.hp - a.hp; // Highest HP last
+        });
+
+    // Step 3: Separate monsters into in-range and out-of-range categories
+    const inRange = [];
+    const outOfRange = [];
+
+    for (const monster of targets) {
+        const distance = Math.hypot(monster.x - homeX, monster.y - homeY);
+        if (distance <= rangeThreshold) {
+            inRange.push(monster);
+        } else {
+            outOfRange.push(monster);
+        }
+    }
+
+    // Step 4: Return the combined targets and categorized lists
+    return {
+        targets: [...inRange, ...outOfRange],  // Combined list with inRange prioritized
+        inRange,
+        outOfRange
+    };
+}
+
+// Function to check if the cooldown period has passed
+function CD() {
+    return performance.now() - lastSwitchTime > switchCooldown;
+}
 
 function ms_to_next_skill(skill) {
     const next_skill = parent.next_skill[skill];
@@ -1567,7 +1602,7 @@ function ms_to_next_skill(skill) {
     let now = Date.now()
     let ping = character.ping
     if (next_skill == undefined) return 0;
-    const ms = parent.next_skill[skill].getTime() - now - time - ping;
+    const ms = parent.next_skill[skill].getTime() - now - time;
     return ms < 0 ? 0 : ms;
 }
 
@@ -1693,7 +1728,7 @@ function elixirUsage() {
 setInterval(elixirUsage, 5000);
 
 function displayLoot() {
-    let savedLoot = JSON.parse(localStorage.getItem("lootItems") || "{}");
+    let savedLoot = JSON.parse(localStorage.getItem("lootItemsDec") || "{}");
 
     // Sort the loot by item name
     let sortedLoot = {};
@@ -1959,7 +1994,7 @@ function sendRareLootToDiscord(itemID, quantity, itemData, mentionUserID) {
     };
 
     // Send message to Discord
-    fetch("https://discord.com/api/webhooks/1292708439524507728/XAAN5RxM-Sp-sEnjwMCh4afEiWuIakFDkHO9ceSIhsGGl49r1Wo_QMM4CIBU8X4vQ9wp", {
+    fetch("https://discordapp.com/api/webhooks/1325995086458261505/vK77q1jTEPRev7YwAv5dMX_Is36LIKZHVHacAHVouPjSykhd78j4189SSuUKghfWgHzb", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(discordMessage)
@@ -2125,7 +2160,104 @@ let ui_gamelog = function () {
         }
     }
 }();
-//////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////
+// Universal function to toggle any meter's visibility
+function toggleMeter(meterId) {
+    let $ = parent.$;
+    let meter = $(`#${meterId}`);
+
+    if (meter.length) {
+        meter.toggle();  // Toggles the visibility
+    }
+}
+
+// Function to create the toggle popup window
+function createTogglePopup() {
+    let $ = parent.$;
+
+    // Remove any existing popup window to avoid duplicates
+    $('#togglePopupWindow').remove();
+
+    // Create a popup window container
+    let togglePopup = $('<div id="togglePopupWindow"></div>').css({
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        color: 'white',
+        padding: '10px',
+        border: '2px solid gray',
+        borderRadius: '10px',
+        zIndex: 9999,
+        width: '300px',
+        textAlign: 'center'
+    });
+
+    // Add a title to the popup
+    togglePopup.append('<h3>UI Addon Toggles</h3>');
+
+    // Add toggle buttons for each UI element
+    let pdpsToggleBtn = $('<button>Toggle PDPS Meter</button>').css({
+        margin: '5px',
+        padding: '10px'
+    }).click(function () {
+        toggleMeter('pdpsmeter');  // Toggle PDPS meter visibility
+    });
+
+    let dpsToggleBtn = $('<button>Toggle DPS Meter</button>').css({
+        margin: '5px',
+        padding: '10px'
+    }).click(function () {
+        toggleMeter('dpsmeter');  // Toggle DPS meter visibility
+    });
+
+    let xpToggleBtn = $('<button>Toggle XP Meter</button>').css({
+        margin: '5px',
+        padding: '10px'
+    }).click(function () {
+        toggleMeter('xptimer');  // Toggle DPS meter visibility
+    });
+
+    let goldToggleBtn = $('<button>Toggle Gold Meter</button>').css({
+        margin: '5px',
+        padding: '10px'
+    }).click(function () {
+        toggleMeter('goldtimer');  // Toggle DPS meter visibility
+    });
+    let partyToggleBtn = $('<button>Toggle Party</button>').css({
+        margin: '5px',
+        padding: '10px'
+    }).click(function () {
+        toggleMeter('newparty');  // Toggle DPS meter visibility
+    });
+
+    // Add buttons to the popup window
+    togglePopup.append(pdpsToggleBtn);
+    togglePopup.append(dpsToggleBtn);
+    togglePopup.append(xpToggleBtn);
+    togglePopup.append(goldToggleBtn);
+    togglePopup.append(partyToggleBtn);
+
+    // Add a close button to hide the popup
+    let closeButton = $('<button>Close</button>').css({
+        margin: '5px',
+        padding: '10px',
+        backgroundColor: '#FF0000',
+        color: 'white'
+    }).click(function () {
+        $('#togglePopupWindow').remove();  // Close the popup
+    });
+
+    togglePopup.append(closeButton);
+
+    // Append the popup window to the game screen
+    $('body').append(togglePopup);
+}
+
+// Add a button to the top to open the toggle popup
+add_top_button("toggle_ui_popup", "Toggle UI Addons", createTogglePopup);
+///////////////////////////////////////////////
 function initXP() {
     let $ = parent.$;
     $('#xpui').css({
@@ -2223,7 +2355,7 @@ character.on("loot", (data) => {
     if (data.items && Array.isArray(data.items)) {
         data.items.forEach((item) => {
             let quantity = item.q !== undefined ? item.q : 1;
-            let savedLoot = JSON.parse(localStorage.getItem("lootItems") || "{}");
+            let savedLoot = JSON.parse(localStorage.getItem("lootItemsDec") || "{}");
 
             // Track loot in localStorage
             if (savedLoot[item.name]) {
@@ -2231,7 +2363,7 @@ character.on("loot", (data) => {
             } else {
                 savedLoot[item.name] = quantity;
             }
-            localStorage.setItem("lootItems", JSON.stringify(savedLoot));
+            localStorage.setItem("lootItemsDec", JSON.stringify(savedLoot));
 
             console.log(`Looted: ${item.name}, Quantity: ${quantity}`);
 
@@ -2247,7 +2379,7 @@ character.on("loot", (data) => {
 
 // Function to visualize the loot stored in localStorage (optional)
 function logLoot() {
-    let savedLoot = JSON.parse(localStorage.getItem("lootItems") || "{}");
+    let savedLoot = JSON.parse(localStorage.getItem("lootItemsNov") || "{}");
     console.log(savedLoot);
 }
 
@@ -2391,12 +2523,12 @@ const setXPInterval = (newInterval) => {
 initXpTimer();
 setInterval(updateXpTimer, 500);
 /////////////////////////////////////////////////////////////////////////////////
-// All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "DPS"
+// All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF" "DPS"
 // The order of the array will be the order of the display
 const damageTypes = ["Base", "Blast", "HPS", "DPS"];
 let displayClassTypeColors = true; // Set to false to disable class type colors
 let displayDamageTypeColors = true; // Set to false to disable damage type colors
-let showOverheal = false; // Set to true to show overhealing
+let showOverheal = true; // Set to true to show overhealing
 let showOverManasteal = true; // Set to true to show overMana'ing?
 
 const damageTypeColors = {
@@ -2405,7 +2537,8 @@ const damageTypeColors = {
     Blast: '#782D33',
     Burn: '#FF7F27',
     MPS: '#353C9C',
-    DR: '#E94959'
+    DR: '#E94959',
+    RF: '#D880F0',
 };
 
 // Initialize the DPS meter
@@ -2426,7 +2559,7 @@ function initDPSMeter() {
         overflow: 'hidden',
         marginBottom: '-3px',
         width: "100%",
-        //backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        //backgroundColor: 'rgba(0, 0, 0, 0.6)',
         backgroundColor: 'rgba(0, 0, 0, 1)',
     });
 
@@ -2434,7 +2567,7 @@ function initDPSMeter() {
     let dpsmeter_content = $('<div id="dpsmetercontent"></div>').css({
         display: 'table-cell',
         verticalAlign: 'middle',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backgroundColor: 'rgba(0, 0, 0, 0)',
         padding: '2px',
         border: '4px solid grey',
     }).appendTo(dpsmeter_container);
@@ -2451,12 +2584,14 @@ let baseDamage = 0;
 let baseHeal = 0;
 let lifesteal = 0;
 let manasteal = 0;
-let dreturn = 0; // Initialize dreturn
+let dreturn = 0;
+let reflect = 0;
 let METER_START = performance.now();
 
 // Damage tracking object for party members
 let partyDamageSums = {};
 let playerDamageReturns = {}; // Initialize playerDamageReturns
+let playerDamageReflects = {}; // Initialize playerDamageReflects
 
 // Format DPS with commas for readability
 function getFormattedDPS(dps) {
@@ -2484,7 +2619,7 @@ parent.socket.on("hit", function (data) {
             let currentMana = player.mp;
 
             if (parent.party_list && parent.party_list.includes(targetId)) {
-                let entry = partyDamageSums[targetId] || {
+                let entry = partyDamageSums[targetId] ?? {
                     startTime: performance.now(),
                     sumDamage: 0,
                     sumHeal: 0,
@@ -2494,10 +2629,11 @@ parent.socket.on("hit", function (data) {
                     sumLifesteal: 0,
                     sumManaSteal: 0,
                     sumDamageReturn: 0,
+                    sumReflection: 0,
                 };
 
                 // Calculate actual heal and lifesteal
-                let actualHeal = (data.heal || 0) + (data.lifesteal || 0);
+                let actualHeal = (data.heal ?? 0) + (data.lifesteal ?? 0);
 
                 // Add healing and lifesteal based on the toggle for showing overheal
                 if (showOverheal) {
@@ -2508,20 +2644,20 @@ parent.socket.on("hit", function (data) {
 
                 // Handle mana steal based on the toggle for showing overmana steal
                 if (showOverManasteal) {
-                    entry.sumManaSteal += data.manasteal || 0; // Include all manasteal
+                    entry.sumManaSteal += data.manasteal ?? 0; // Include all manasteal
                 } else {
-                    entry.sumManaSteal += Math.min(data.manasteal || 0, maxMana - currentMana); // Only actual manasteal
+                    entry.sumManaSteal += Math.min(data.manasteal ?? 0, maxMana - currentMana); // Only actual manasteal
                 }
 
                 // Accumulate damage values
-                entry.sumDamage += data.damage || 0;
+                entry.sumDamage += data.damage ?? 0;
 
                 if (data.source === "burn") {
                     entry.sumBurnDamage += data.damage;
                 } else if (data.splash) {
                     entry.sumBlastDamage += data.damage;
                 } else {
-                    entry.sumBaseDamage += data.damage || 0;
+                    entry.sumBaseDamage += data.damage ?? 0;
                 }
 
                 // Update partyDamageSums with the entry
@@ -2540,11 +2676,11 @@ parent.socket.on("hit", function (data) {
                 }
 
                 let playerEntry = playerDamageReturns[playerId];
-                playerEntry.sumDamageReturn += data.dreturn || 0;
+                playerEntry.sumDamageReturn += data.dreturn ?? 0;
 
                 // Update the partyDamageSums for damage return
                 if (parent.party_list && parent.party_list.includes(playerId)) {
-                    let partyEntry = partyDamageSums[playerId] || {
+                    let partyEntry = partyDamageSums[playerId] ?? {
                         startTime: performance.now(),
                         sumDamage: 0,
                         sumHeal: 0,
@@ -2554,8 +2690,45 @@ parent.socket.on("hit", function (data) {
                         sumLifesteal: 0,
                         sumManaSteal: 0,
                         sumDamageReturn: 0,
+                        sumReflection: 0,
                     };
-                    partyEntry.sumDamageReturn += data.dreturn || 0; // Add dreturn to party damage sums
+                    partyEntry.sumDamageReturn += data.dreturn ?? 0; // Add dreturn to party damage sums
+                    partyDamageSums[playerId] = partyEntry; // Update the partyDamageSums
+                }
+            }
+            // Handle reflection damage
+            if (data.reflect) {
+                console.log(`Reflection event: Target = ${data.target}, Reflect Damage = ${data.reflect}`);
+                let playerId = data.id;
+
+                // Initialize playerDamageReflects entry for the player if it doesn't exist
+                if (!playerDamageReflects[playerId]) {
+                    playerDamageReflects[playerId] = {
+                        startTime: performance.now(),
+                        sumReflection: 0,
+                    };
+                }
+
+                // Update reflection damage in playerDamageReflects
+                let playerEntry = playerDamageReflects[playerId];
+                playerEntry.sumReflection += data.reflect ?? 0;
+
+                // Update partyDamageSums for reflection damage
+                if (parent.party_list && parent.party_list.includes(playerId)) {
+                    let partyEntry = partyDamageSums[playerId] ?? {
+                        startTime: performance.now(),
+                        sumDamage: 0,
+                        sumHeal: 0,
+                        sumBurnDamage: 0,
+                        sumBlastDamage: 0,
+                        sumBaseDamage: 0,
+                        sumLifesteal: 0,
+                        sumManaSteal: 0,
+                        sumDamageReturn: 0,
+                        sumReflection: 0,
+                    };
+
+                    partyEntry.sumReflection += data.reflect ?? 0; // Add reflect to party damage sums
                     partyDamageSums[playerId] = partyEntry; // Update the partyDamageSums
                 }
             }
@@ -2586,6 +2759,7 @@ function updateDPSMeterUI() {
         let hps = Math.floor((baseHeal * 1000) / elapsed);
         let mps = Math.floor((manasteal * 1000) / elapsed);
         let dr = Math.floor((dreturn * 1000) / elapsed);
+        let RF = Math.floor((reflect * 1000) / elapsed);
 
         let $ = parent.$;
         let dpsDisplay = $('#dpsmetercontent');
@@ -2671,23 +2845,31 @@ function updateDPSMeterUI() {
 // Get value for a specific damage type
 function getTypeValue(type, entry) {
     const elapsedTime = performance.now() - (entry.startTime || performance.now());
-    switch (type) {
-        case "DPS":
-            return calculateDPSForPartyMember(entry);
-        case "Burn":
-            return Math.floor((entry.sumBurnDamage * 1000) / elapsedTime) || 0; // Default to 0
-        case "Blast":
-            return Math.floor((entry.sumBlastDamage * 1000) / elapsedTime) || 0; // Default to 0
-        case "Base":
-            return Math.floor((entry.sumBaseDamage * 1000) / elapsedTime) || 0; // Default to 0
-        case "HPS":
-            return Math.floor((entry.sumHeal * 1000) / elapsedTime) || 0; // Default to 0
-        case "MPS":
-            return Math.floor((entry.sumManaSteal * 1000) / elapsedTime) || 0; // Default to 0
-        case "DR":
-            return Math.floor((entry.sumDamageReturn * 1000) / elapsedTime) || 0; // Default to 0
-        default:
-            return 0;
+
+    // Ensure elapsedTime is greater than 0 to prevent division by zero
+    if (elapsedTime > 0) {
+        switch (type) {
+            case "DPS":
+                return calculateDPSForPartyMember(entry);
+            case "Burn":
+                return Math.floor((entry.sumBurnDamage * 1000) / elapsedTime) || 0;
+            case "Blast":
+                return Math.floor((entry.sumBlastDamage * 1000) / elapsedTime) || 0;
+            case "Base":
+                return Math.floor((entry.sumBaseDamage * 1000) / elapsedTime) || 0;
+            case "HPS":
+                return Math.floor((entry.sumHeal * 1000) / elapsedTime) || 0;
+            case "MPS":
+                return Math.floor((entry.sumManaSteal * 1000) / elapsedTime) || 0;
+            case "DR":
+                return Math.floor((entry.sumDamageReturn * 1000) / elapsedTime) || 0;
+            case "RF":
+                return Math.floor((entry.sumReflection * 1000) / elapsedTime) || 0;
+            default:
+                return 0;
+        }
+    } else {
+        return 0; // If elapsedTime is 0 or less, return 0 for safety
     }
 }
 
@@ -2696,12 +2878,13 @@ function calculateDPSForPartyMember(entry) {
     try {
         const elapsedTime = performance.now() - (entry.startTime || performance.now());
         const totalDamage = entry.sumDamage || 0;
-        const totalDamageReturn = entry.sumDamageReturn || 0; // Include damage return
-        const totalCombinedDamage = totalDamage + totalDamageReturn; // Combine for DPS calculation
+        const totalDamageReturn = entry.sumDamageReturn || 0;
+        const totalReflection = entry.sumReflection || 0; // Include reflection damage
+        const totalCombinedDamage = totalDamage + totalDamageReturn + totalReflection; // Combine for DPS calculation
 
         // Prevent division by zero
         if (elapsedTime > 0) {
-            return Math.floor((totalCombinedDamage * 1000) / elapsedTime) || 0; // Default to 0
+            return Math.floor((totalCombinedDamage * 1000) / elapsedTime);
         } else {
             return 0;
         }
@@ -2714,7 +2897,146 @@ function calculateDPSForPartyMember(entry) {
 // Initialize the DPS meter and set up the update interval
 initDPSMeter();
 setInterval(updateDPSMeterUI, 250);
-////////////////////////////////////////////////////////////////////////////
+////////////////////////////////
+// Initialize the class color mapping
+const classColors = {
+    mage: '#3FC7EB',
+    paladin: '#F48CBA',
+    priest: '#FFFFFF', // White
+    ranger: '#AAD372',
+    rogue: '#FFF468',
+    warrior: '#C69B6D'
+};
+
+// Initialize the PDPS meter
+function initPDPSMeter() {
+    let $ = parent.$;
+    let brc = $('#bottomrightcorner');
+
+    // Remove any existing PDPS meter
+    brc.find('#pdpsmeter').remove();
+
+    // Create a container for the PDPS meter
+    let pdpsmeter_container = $('<div id="pdpsmeter"></div>').css({
+        fontSize: '20px',
+        color: 'white',
+        textAlign: 'center',
+        display: 'table',
+        overflow: 'hidden',
+        marginBottom: '-3px',
+        width: "100%",
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    });
+
+    // Create a div for the PDPS meter content
+    let pdpsmeter_content = $('<div id="pdpsmetercontent"></div>').css({
+        display: 'table-cell',
+        verticalAlign: 'middle',
+        backgroundColor: 'rgba(0, 0, 0, 0)',
+        padding: '2px',
+        border: '4px solid grey',
+    }).appendTo(pdpsmeter_container);
+
+    // Insert the PDPS meter container
+    brc.children().first().after(pdpsmeter_container);
+}
+
+// Function to get nearby players/entities and sort by PDPS
+function updatePDPSMeterUI() {
+    try {
+        let $ = parent.$;
+        let pdpsDisplay = $('#pdpsmetercontent');
+
+        if (pdpsDisplay.length === 0) return;
+
+        let entitiesWithPDPS = [];
+
+        // Add your character's .s.coop.p
+        entitiesWithPDPS.push({
+            name: character.name, // Your character's name
+            pdps: character.s.coop.p, // Accessing the new PDPS value
+            classType: character.ctype // Get the class type of your character
+        });
+
+        // Add nearby players/entities with .s.coop.p
+        for (let id in parent.entities) {
+            let entity = parent.entities[id];
+            if (entity.s && entity.s.coop && entity.s.coop.p !== undefined) {  // Include only those with .s.coop.p
+                entitiesWithPDPS.push({
+                    name: entity.name || entity.mtype, // Use player name or monster type
+                    pdps: entity.s.coop.p, // Accessing the new PDPS value
+                    classType: entity.ctype // Get the class type of the entity
+                });
+            }
+        }
+
+        // Sort by PDPS in descending order
+        entitiesWithPDPS.sort((a, b) => b.pdps - a.pdps);
+
+        // Get the highest .s.coop.p to calculate percentages
+        let highestPDPS = entitiesWithPDPS[0]?.pdps || 1; // Prevent division by zero
+
+        // Prepare the display string
+        let listString = '<div>👑 Boss Contribution 👑</div>';
+        listString += '<table border="1" style="width:100%;">';
+
+        // Track the max rows per column
+        let maxRows = 6;
+        let totalPlayers = entitiesWithPDPS.length;
+        let numColumns = Math.ceil(totalPlayers / maxRows);
+
+        // Calculate column width based on number of columns
+        let columnWidth = (100 / numColumns).toFixed(2) + '%'; // e.g., '50.00%', '33.33%', etc.
+
+        // Iterate over each row (up to maxRows)
+        for (let row = 0; row < maxRows; row++) {
+            listString += '<tr>'; // Start a new row
+            for (let col = 0; col < numColumns; col++) {
+                let index = row + col * maxRows;
+                if (index >= totalPlayers) break; // Stop if no more players
+
+                let entity = entitiesWithPDPS[index];
+                const playerClass = entity.classType.toLowerCase(); // Ensure class type is in lowercase
+                const nameColor = classColors[playerClass] || '#FFFFFF'; // Default to white if class not found
+
+                // Calculate the percentage for the progress bar using .s.coop.p
+                let percentBarWidth = (entity.pdps / highestPDPS) * 100;
+
+                // Create the progress bar with styling and the PDPS value inside the bar
+                let progressBar = `<div style="width: 100%; background-color: gray; border-radius: 5px; overflow: hidden; position: relative;">
+                    <div style="width: ${percentBarWidth}%; background-color: ${nameColor}; height: 10px;"></div>
+                    <span style="position: absolute; top: -2px; left: 50%; transform: translateX(-50%); color: black; font-size: 16px; font-weight: bold;">${getFormattedPDPS(entity.pdps)}</span>
+                </div>`;
+
+                // Apply color to the player's name and display the progress bar with PDPS inside
+                listString += `<td style="color: ${nameColor}; width: ${columnWidth};">${entity.name} ${progressBar}</td>`;
+            }
+            listString += '</tr>'; // End the row
+        }
+
+        listString += '</table>';
+        pdpsDisplay.html(listString);
+
+    } catch (error) {
+        //console.error('Error updating PDPS meter UI:', error);
+    }
+}
+
+// Helper function to format PDPS with commas for readability and round to nearest whole number
+function getFormattedPDPS(pdps) {
+    try {
+        let roundedPDPS = Math.round(pdps); // Round to the nearest whole number
+        return roundedPDPS.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    } catch (error) {
+        console.error('Formatting PDPS error:', error);
+        return 'N/A';
+    }
+}
+
+// Initialize the PDPS meter and update it every 250ms
+initPDPSMeter();
+setInterval(updatePDPSMeterUI, 250);
+////////////////////////////////////////////
 function modifyGamelogAppearance() {
     let $ = parent.$;
     let gamelog = $('#gamelog');
@@ -2727,7 +3049,8 @@ function modifyGamelogAppearance() {
         // Modify the appearance of the gamelog window
         gamelog.css({
             position: 'relative',
-            background: 'rgba(0,0,0,0.7)',
+            //background: 'rgba(0,0,0,0.7)',
+            background: 'rgba(0,0,0,1)',
             border: '4px solid gray',
             width: referenceWidth + 'px', // Set width to match the reference element
             height: '150px', // Set a fixed height, or adjust as needed
@@ -2978,7 +3301,7 @@ let css = `
 parent.$('head').append(`<style id="style-party-frames">${css}</style>`);
 parent.party_style_prepared = true;
 
-const includeThese = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'name', 'xp', 'level', 'share'];
+const includeThese = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'name', 'xp', 'level', 'share', 'cc'];
 const partyFrameWidth = 80; // Set the desired width for the party frames
 
 function updatePartyData() {
@@ -3003,7 +3326,7 @@ let show_party_frame_property = {
     hp: true,
     mp: true,
     xp: true,
-    //cc: true,
+    cc: true,
     ping: true,
     share: true
 };
@@ -3056,7 +3379,7 @@ function addPartyFramePropertiesToggles() {
         return toggle;
     }
 
-    for (let key of ['img', 'hp', 'mp', 'xp', 'share']) {
+    for (let key of ['img', 'hp', 'mp', 'xp', 'cc']) {
         toggles.appendChild(create_toggle(key));
     }
 
@@ -3121,14 +3444,14 @@ function updatePartyFrames() {
                 //const billion = 1_000_000_000;
                 //xp = (info.xp / billion).toFixed(1) + 'b/' + (max_xp / billion).toFixed(0) + 'b';
             }
-            /*
-                        let ccWidth = 0;
-                        let cc = '??';
-                        if (info.cc !== undefined) {
-                            ccWidth = info.cc / info.max_cc * 100;
-                            cc = info.cc.toFixed(2);
-                        }
-            */
+
+            let ccWidth = 0;
+            let cc = '??';
+            if (info.cc !== undefined) {
+                ccWidth = info.cc / info.max_cc * 100;
+                cc = info.cc.toFixed(2);
+            }
+
             let pingWidth = 0;
             let ping = '??';
             if (character.ping !== undefined) {
@@ -3153,9 +3476,9 @@ function updatePartyFrames() {
                 xp: xp,
                 xpWidth: xpWidth,
                 xpColor: 'green',
-                //cc: cc,
-                //ccWidth: ccWidth,
-                //ccColor: 'grey',
+                cc: cc,
+                ccWidth: ccWidth,
+                ccColor: 'grey',
                 ping: ping,
                 pingWidth: pingWidth,
                 pingColor: 'black',
@@ -3188,7 +3511,7 @@ parent.$('#party-props-toggles').remove();
 
 setInterval(updatePartyFrames, 250);
 ///////////////////////////////////////////////////////////////////////////////////////
-const ALDATA_KEY = "**********";
+const ALDATA_KEY = "****";
 
 function updateTrackerData() {
     parent.socket.once("tracker", (data) => {
@@ -3203,6 +3526,10 @@ function updateTrackerData() {
     });
 }
 parent.socket.emit("tracker");
+function hideTracker() {
+    parent.hide_modal()
+}
+setTimeout(hideTracker, 1000);
 // Run the updateTrackerData function every minute (60000 milliseconds)
 setInterval(updateTrackerData, 1000 * 60 * 10);
 

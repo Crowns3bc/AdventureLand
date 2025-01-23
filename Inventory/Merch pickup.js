@@ -1,17 +1,31 @@
-// Define the player name constant
-const TARGET_PLAYER_NAME = "CrownMerch";
+// Define the target player name constant
+const targetPlayerName = "CrownMerch";
 
 // Function to send location updates
-const sendLocationUpdate = () => {
-    if (!character.s.mluck || character.s.mluck.f !== TARGET_PLAYER_NAME) {
-        send_cm(TARGET_PLAYER_NAME, {
-            message: "location",
-            x: character.x,
-            y: character.y,
-            map: character.map
-        });
-    }
-};
+async function sendLocationUpdate() {
+	try {
+		// Check if character has mluck and if it's not from targetPlayerName
+		const needsUpdate = !character.s.mluck || character.s.mluck.f !== targetPlayerName;
+
+		// Count the number of null slots in the inventory
+		const nullCount = character.items.filter(item => item === null).length;
+
+		// Send update if either condition is met
+		if (needsUpdate || nullCount <= 7) {
+			send_cm(targetPlayerName, {
+				message: "location",
+				x: character.x,
+				y: character.y,
+				map: character.map
+			});
+		}
+	} catch (error) {
+		console.error("Failed to send location update:", error);
+	}
+}
+
+// Run sendLocationUpdate every second
+setInterval(sendLocationUpdate, 1000);
 
 const validPlayerNames = [
     "CrownsAnal",
@@ -19,7 +33,8 @@ const validPlayerNames = [
     "CrownTown",
     "CrownMage",
     "CrownSpam",
-    "CrownPal"
+    "CrownPal",
+    "CrownMerch"
 ];
 
 // Function to handle cm messages

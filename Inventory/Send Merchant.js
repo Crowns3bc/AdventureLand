@@ -1,42 +1,55 @@
 // Define constants
-const LOOT_MULE_NAME = "CrownMerch";
-const GOLD_THRESHOLD = 11 * 1000000;
-const MIN_GOLD_TRANSFER = 10 * 1000000;
-const ITEMS_TO_EXCLUDE = [
-    "hpot1", "mpot1", "luckbooster", "goldbooster", "xpbooster", "pumpkinspice",
-    "xptome", "cscroll0", "cscroll1"
+const goldThreshold = 11 * 1000000;
+const minGoldTransfer = 10 * 1000000;
+const itemsToExclude = [
+	"hpot1", "mpot1", "luckbooster", "goldbooster", "xpbooster", "pumpkinspice",
+	"xptome", "orbofdex", "orbofstr", "strbelt", "intbelt", "dexbelt", "cscroll0",
+	"cscroll1",
 ];
 
 // Function to transfer gold
-const transferGold = (lootMule) => {
-    if (character.gold > GOLD_THRESHOLD) {
-        const goldToSend = Math.floor((character.gold - MIN_GOLD_TRANSFER) / 1000000) * 1000000;
-        send_gold(lootMule.id, goldToSend);
-    }
-};
+function transferGold(lootMule) {
+	if (character.gold > goldThreshold) {
+		const goldToSend = Math.floor(character.gold - minGoldTransfer);
+		if (distance(character, lootMule) <= 250) {
+			send_gold(lootMule, goldToSend);
+		} else {
+			//console.log("Loot mule out of range for gold transfer.");
+		}
+	}
+}
 
-// Function to send items to the loot mule
-const sendItemsToLootMule = (lootMule) => {
-    character.items.forEach((item, index) => {
-        if (item && !ITEMS_TO_EXCLUDE.includes(item.name) && !item.l && !item.s) {
-            send_item(lootMule.id, index, item.q ?? 1);
-        }
-    });
-};
+function sendItems(lootMule) {
+	if (!lootMule || distance(character, lootMule) > 250) {
+		//console.log("Loot mule out of range for item transfer.");
+		return;
+	}
+
+	character.items.forEach((item, index) => {
+		if (item && !itemsToExclude.includes(item.name) && !item.l && !item.s) {
+			send_item(lootMule, index, item.q ?? 1);
+		}
+	});
+
+	for (let i = 37; i < 41; i++) {
+		const item = character.items[i];
+		if (item /*&& item.q > 0*/) { //i dont remember why i commented this out
+			send_item(lootMule, i, item.q);
+		}
+	}
+}
 
 // Main function to manage loot
-const manageLoot = () => {
-    const lootMule = get_player(LOOT_MULE_NAME);
+function manageLoot() {
+	const lootMule = get_entity("CrownMerch");
+	if (!lootMule) {
+		//console.log("No loot mule found.");
+		return;
+	}
 
-    if (!lootMule) {
-        //game_log("Nobody to transfer to");
-        loot_transfer = false;
-        return;
-    }
-
-    transferGold(lootMule);
-    sendItemsToLootMule(lootMule);
-};
+	transferGold(lootMule);
+	sendItems(lootMule);
+}
 
 // Run manageLoot every second
 setInterval(manageLoot, 1000);

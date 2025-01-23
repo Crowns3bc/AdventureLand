@@ -1,33 +1,64 @@
 const items = [
-{ name: "orbofdex", level: 2, price: 60_000_000, slots: ["trade13", "trade14", "trade15", "trade16", "trade17"] },
-{ name: "orbofdex", level: 3, price: 360_000_000, slots:["trade7", "trade8", "trade9"] },
-{ name: "orbofdex", level: 4, price: 2_500_000_000, slots:["trade10", "trade11"] },
-{ name: "orbofstr", level: 2, price: 60_000_000, slots: ["trade19", "trade20", "trade21", "trade22", "trade23"] },
-{ name: "orbofstr", level: 3, price: 360_000_000, slots: ["trade25", "trade26", "trade27"] },
-{ name: "orbofstr", level: 4, price: 2_000_000_000, slots: ["trade28", "trade29"] },
-{ name: "essenceoffire", q: 9999, price: 108_490, slots: ["trade6", "trade12", "trade18", "trade24", "trade30"] },
-  // Add more items here if needed
+    { name: "intbelt", level: 4, price: 315_000_000, slots: ["trade7", "trade8", "trade9", "trade10"] },
+    { name: "dexbelt", level: 4, price: 315_000_000, slots: ["trade13", "trade14", "trade15", "trade16"] },
+
+    { name: "zapper", level: 0, price: 4_000_000_000, slots: [] },
+    { name: "trigger", level: 0, price: 52_000_000_000, slots: [] },
+    { name: "mpxamulet", level: 0, price: 6_000_000_000, slots: [] },
+    { name: "mpxgloves", level: 0, price: 15_000_000_000, slots: [] },
+    { name: "warpvest", level: 0, price: 25_000_000_000, slots: [] },
+    { name: "starkillers", level: 0, price: 1_000_000_000, slots: [] },
+    { name: "sbelt", level: 0, price: 1_000_000_000, slots: [] },
+
+    { name: "fury", level: 0, price: 100_000_000_000, slots: [] },
+    { name: "mshield", level: 7, price: 100_000_000_000, slots: [] },
+    { name: "supermittens", level: 5, price: 100_000_000_000, slots: [] },
+    //{ name: "mearring", level: 0, price: 100_000_000_000, slots: [] },
+    { name: "angelwings", level: 0, price: 8_144_000, slots: ["trade16", "trade17", "trade18", "trade22", "trade23", "trade24"] },
+    // Add more items here if needed
 ];
 
 setInterval(() => {
-  if (!character.stand) return; // Merchant stand not open
+    if (!character.stand) return; // Merchant stand not open
 
-  for (const { slots, ...item } of items) {
-    for (const slotName of slots) {
-      const slotData = character.slots[slotName];
+    for (const { slots, ...item } of items) {
+        let targetSlot = null;
 
-      if (!slotData || slotData.q === 0) {
-        const itemIndex = character.items.findIndex(
-          (i) =>
-            i && i.name === item.name && (item.level === undefined || i.level === item.level) && (item.q === undefined || i.q >= item.q)
-        );
-
-        if (itemIndex !== -1) {
-          const quantity = item.q !== undefined ? character.items[itemIndex].q : 1;
-          trade(itemIndex, slotName, item.price, quantity);
-          return; // We did our best to find and list an item.
+        // If slots are specified, find the first available trade slot among them
+        if (slots && slots.length > 0) {
+            for (const slotName of slots) {
+                if (slotName.startsWith("trade")) {
+                    const slotData = character.slots[slotName];
+                    if (!slotData || slotData.q === 0) {
+                        targetSlot = slotName;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // If no specific slots are specified, find the first available trade slot
+            for (const slotName in character.slots) {
+                if (slotName.startsWith("trade")) {
+                    const slotData = character.slots[slotName];
+                    if (!slotData || slotData.q === 0) {
+                        targetSlot = slotName;
+                        break;
+                    }
+                }
+            }
         }
-      }
+
+        if (targetSlot) {
+            const itemIndex = character.items.findIndex(
+                (i) =>
+                    i && i.name === item.name && (item.level === undefined || i.level === item.level) && (item.q === undefined || i.q >= item.q)
+            );
+
+            if (itemIndex !== -1) {
+                const quantity = item.q !== undefined ? character.items[itemIndex].q : 1;
+                trade(itemIndex, targetSlot, item.price, quantity);
+                return; // We did our best to find and list an item.
+            }
+        }
     }
-  }
 }, 500);

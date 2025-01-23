@@ -1,20 +1,15 @@
-sell_whitelist = [
-	'vitearring', 'iceskates', 'cclaw', 'hpbelt', 'ringsj', 'hpamulet', 'warmscarf',
-	'quiver', 'snowball', 'vitring', 'wcap', 'wattire', 'wbreeches', 'wshoes',
-	'wgloves', "strring", "dexring", "intring",
+sell_whitelist = [ // what you want to sell.
+    'vitearring', 'cclaw', 'stramulet', 'dexamulet'
 ];
+
 function sellItems() {
-	for (let i = 0; i < character.items.length; i++) {
-		let c = character.items[i];
-		if (c) {
-			if (c && sell_whitelist.includes(c.name)) {
-				if (c.p == undefined) {
-					if (c.l != "l") {
-						sell(i);
-					}
-				}
-			}
-		}
-	}
+    character.items.forEach((item, index) => {
+        if (item && sell_whitelist.includes(item.name) && !item.p && item.l !== "l") {
+            sell(index, item.q || 1); // Sell the entire stack if stackable
+        }
+    });
+
+    setTimeout(sellItems, 1000);
 }
-setInterval(sellItems, 5000);
+
+sellItems();

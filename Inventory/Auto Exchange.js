@@ -1,29 +1,38 @@
-let itemsToExchange = ["gem0", "candy1", "candy0", "leather"];
+let itemsToExchange = ["mistletoe"];
 
 let lastExchange = 0;
-setInterval(function(){
-	if(!character.q.exchange && new Date() - lastExchange > 1000){
-		for(let id in itemsToExchange){
-			let exchangeName = itemsToExchange[id];
-			let itemDef = parent.G.items[exchangeName];
-			let matches = findItemInInventory(exchangeName);
-			let exchangeable = matches.find(function(e){return e.q >= itemDef.e});
-			if(exchangeable){
-				exchange(exchangeable.slot);
-				lastExchange = new Date();
+setInterval(async () => {
+	if (!character.q.exchange && new Date() - lastExchange > 1000) {
+		if (!characterIsInsideBank()) {
+			for (let id in itemsToExchange) {
+				let exchangeName = itemsToExchange[id];
+
+				let itemDef = parent.G.items[exchangeName];
+
+				let matches = findItemInInventory(exchangeName);
+
+				let exchangeable = matches.find(function (e) { return e.q >= itemDef.e });
+				if (exchangeable && !characterIsInsideBank()) {
+					if (!hasLevel13()) {
+						exchange(exchangeable.slot);
+						lastExchange = new Date();
+					}
+				}
 			}
 		}
 	}
 }, 100);
 
 //returns all items in your inventory that match a particular item name.
-function findItemInInventory(itemName){
+function findItemInInventory(itemName) {
 	let items = [];
-	for(var i = 0; i <= 41; i++){
+
+	for (var i = 0; i <= 41; i++) {
 		let item = character.items[i];
-		if(item != null){
+
+		if (item != null) {
 			item.slot = i;
-			if(item.name == itemName){
+			if (item.name == itemName) {
 				items.push(item);
 			}
 		}

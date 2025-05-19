@@ -1,4 +1,4 @@
-/// All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF", "DPS", "Dmg Taken"
+// All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF", "DPS", "Dmg Taken"
 // Displaying too many "Types" will result in a really wide meter that will effect the game_log window. i reccomend only tracking 4/5 things at a time for general use
 const damageTypes = ["Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF", "DPS", "Dmg Taken"];
 
@@ -109,13 +109,27 @@ parent.socket.on('hit', data => {
         }
 
         // == Character actions ==
-        // Heal/lifesteal
+        // Heal / Lifesteal
         if (get_player(data.hid) && (data.heal || data.lifesteal)) {
-            const e = getPlayerEntry(data.hid);
-            const p = get_player(data.hid);
-            const actualHeal = (data.heal ?? 0) + (data.lifesteal ?? 0);
-            if (showOverheal) e.sumHeal += actualHeal;
-            else e.sumHeal += Math.min(actualHeal, p.max_hp - p.hp);
+            const e = getPlayerEntry(data.hid);  // healer’s entry
+            const healer = get_player(data.hid);      // for lifesteal clamping
+            const target = get_player(data.id);       // for heal clamping
+
+            if (showOverheal) {
+                // full heal + lifesteal
+                e.sumHeal += (data.heal ?? 0) + (data.lifesteal ?? 0);
+            } else {
+                // clamp each component separately, inline
+                e.sumHeal +=
+                    (data.heal
+                        ? Math.min(data.heal, (target?.max_hp ?? 0) - (target?.hp ?? 0))
+                        : 0
+                    )
+                    + (data.lifesteal
+                        ? Math.min(data.lifesteal, healer.max_hp - healer.hp)
+                        : 0
+                    );
+            }
         }
 
         // Mana steal

@@ -1,6 +1,6 @@
 // All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF", "DPS", "Dmg Taken"
 // Displaying too many "Types" will result in a really wide meter that will effect the game_log window. i reccomend only tracking 4/5 things at a time for general use
-const damageTypes = ["Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF", "DPS", "Dmg Taken"];
+const damageTypes = ["Base", "Blast", "HPS", "DPS"];
 
 // Toggle settings
 let displayClassTypeColors = true;
@@ -98,37 +98,62 @@ parent.socket.on('hit', data => {
             lifesteal += data.lifesteal ?? 0;
         }
         if (data.manasteal) manasteal += data.manasteal;
-        if (data.dreturn) dreturn += data.dreturn;
-        if (data.reflect) reflect += data.reflect;
+
+        // == Damage Return attribution (only mob→player) ==
+        if (data.dreturn && get_player(data.id) && !get_player(data.hid)) {
+            dreturn += data.dreturn;
+            const e = getPlayerEntry(data.id);
+            e.sumDamageReturn ??= 0;
+            e.sumDamageReturn += data.dreturn;
+        }
+
+        // == Reflection attribution (only mob→player) ==
+        if (data.reflect && get_player(data.id) && !get_player(data.hid)) {
+            reflect += data.reflect;
+            const e = getPlayerEntry(data.id);
+            e.sumReflection ??= 0;
+            e.sumReflection += data.reflect;
+        }
 
         // == Damage taken by character ==
+        // — normal hits from mobs
         if (data.damage && get_player(data.id)) {
             const e = getPlayerEntry(data.id);
             if (data.damage_type === 'physical') e.sumDamageTakenPhys += data.damage;
-            else if (data.damage_type === 'magical') e.sumDamageTakenMag += data.damage;
+            else e.sumDamageTakenMag += data.damage;
+        }
+        // — self-damage from hitting a dreturn mob (physical)
+        if (data.dreturn && get_player(data.hid)) {
+            //console.log('Dreturn self-hit by', data.hid, 'for', data.dreturn);
+            const e = getPlayerEntry(data.hid);
+            e.sumDamageTakenPhys += data.dreturn;
+        }
+        // — self-damage from hitting a reflect mob (magical)
+        if (data.reflect && get_player(data.hid)) {
+            //console.log('Reflect self-hit by', data.hid, 'for', data.reflect);
+            const e = getPlayerEntry(data.hid);
+            e.sumDamageTakenMag += data.reflect;
         }
 
         // == Character actions ==
         // Heal / Lifesteal
         if (get_player(data.hid) && (data.heal || data.lifesteal)) {
-            const e = getPlayerEntry(data.hid);  // healer’s entry
-            const healer = get_player(data.hid);      // for lifesteal clamping
-            const target = get_player(data.id);       // for heal clamping
+            const e = getPlayerEntry(data.hid);
+            const healer = get_player(data.hid);
+            const target = get_player(data.id);
 
+            const totalHeal = (data.heal ?? 0) + (data.lifesteal ?? 0);
             if (showOverheal) {
-                // full heal + lifesteal
-                e.sumHeal += (data.heal ?? 0) + (data.lifesteal ?? 0);
+                e.sumHeal += totalHeal;
             } else {
-                // clamp each component separately, inline
-                e.sumHeal +=
-                    (data.heal
-                        ? Math.min(data.heal, (target?.max_hp ?? 0) - (target?.hp ?? 0))
-                        : 0
-                    )
-                    + (data.lifesteal
-                        ? Math.min(data.lifesteal, healer.max_hp - healer.hp)
-                        : 0
+                const actualHeal = (data.heal
+                    ? Math.min(data.heal, (target?.max_hp ?? 0) - (target?.hp ?? 0))
+                    : 0
+                ) + (data.lifesteal
+                    ? Math.min(data.lifesteal, healer.max_hp - healer.hp)
+                    : 0
                     );
+                e.sumHeal += actualHeal;
             }
         }
 
@@ -140,16 +165,15 @@ parent.socket.on('hit', data => {
             else e.sumManaSteal += Math.min(data.manasteal, p.max_mp - p.mp);
         }
 
-        // Other damage done
+        // Other damage done (per-player breakdown)
         if (data.damage && get_player(data.hid)) {
             const e = getPlayerEntry(data.hid);
             e.sumDamage += data.damage;
             if (data.source === 'burn') e.sumBurnDamage += data.damage;
             else if (data.splash) e.sumBlastDamage += data.damage;
             else e.sumBaseDamage += data.damage;
-            if (data.dreturn) e.sumDamageReturn += data.dreturn;
-            if (data.reflect) e.sumReflection += data.reflect;
         }
+
     } catch (err) {
         console.error('hit handler error', err);
     }

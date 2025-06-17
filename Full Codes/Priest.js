@@ -1,10 +1,12 @@
 const locations = {
     bat: [{ x: 1200, y: -782 }],
-    bigbird: [{ x: 1343, y: 248 }],
+    bigbird: [{ x: 1304, y: -69 }],
+    bluefairy: [{ x: -357, y: -675 }],
     bscorpion: [{ x: -408, y: -1241 }],
     boar: [{ x: 19, y: -1109 }],
     cgoo: [{ x: -221, y: -274 }],
     crab: [{ x: -11840, y: -37 }],
+    dryad: [{ x: 403, y: -347 }],
     ent: [{ x: -420, y: -1960 }],
     fireroamer: [{ x: 222, y: -827 }],
     ghost: [{ x: -405, y: -1642 }],
@@ -13,6 +15,7 @@ const locations = {
     mechagnome: [{ x: 0, y: 0 }],
     mole: [{ x: 14, y: -1072 }],
     mummy: [{ x: 256, y: -1417 }],
+    odino: [{ x: -52, y: 756 }],
     oneeye: [{ x: -255, y: 176 }],
     pinkgoblin: [{ x: 366, y: 377 }],
     poisio: [{ x: -121, y: 1360 }],
@@ -24,13 +27,15 @@ const locations = {
     stoneworm: [{ x: 830, y: 7 }],
     spider: [{ x: 1247, y: -91 }],
     squig: [{ x: -1175, y: 422 }],
+    targetron: [{ x: -544, y: -275 }],
     wolf: [{ x: 433, y: -2745 }],
     wolfie: [{ x: 113, y: -2014 }],
     xscorpion: [{ x: -495, y: 685 }]
 };
+const home = 'targetron';
+const mobMap = 'uhills';
+const home2 = 'sparkbot';
 
-const home = 'plantoid';
-const mobMap = 'desertland';
 const destination = {
     map: mobMap,
     x: locations[home][0].x,
@@ -38,7 +43,7 @@ const destination = {
 };
 
 let angle = 0;
-const speed = 1.8;
+const speed = 1.8; // 1.8
 let events = false;
 
 const harpyRespawnTime = 410000; //400 seconds
@@ -115,7 +120,7 @@ function handleEvents() {
         //handleSpecificEventWithJoin('icegolem', 'winterland', 820, 420, 50000);
     }*/
 }
-
+/*
 function handleBosses() {
     if (harpyActive) {
         handleHarpyEvent();
@@ -124,7 +129,7 @@ function handleBosses() {
         handleSkeletorEvent();
     }
 }
-
+*/
 function handleSpecificEvent(eventType, mapName, x, y, hpThreshold, skillMs = 0) {
     if (parent?.S?.[eventType]?.live) {
         if (character.map !== mapName && !smart.moving) {
@@ -280,22 +285,27 @@ const equipmentSets = {
         { itemName: "ringofluck", slot: "ring2", level: 2, l: "l" },
     ],
     maxLuck: [
+        //{ itemName: "xhelmet", slot: "helmet", level: 9, l: "l" },
         { itemName: "eears", slot: "helmet", level: 8, l: "l" },
+        //{ itemName: "vattire", slot: "chest", level: 8, l: "l" },
         { itemName: "tshirt88", slot: "chest", level: 4, l: "l" },
         { itemName: "xmaspants", slot: "pants", level: 9, l: "l" },
+        //{ itemName: "starkillers", slot: "pants", level: 8, l: "l" },
         { itemName: "wingedboots", slot: "shoes", level: 9, l: "l" },
         { itemName: "mpxgloves", slot: "gloves", level: 7, l: "l" },
         { itemName: "santasbelt", slot: "belt", level: 3, l: "l" },
+        //{ itemName: "intbelt", slot: "belt", level: 6, l: "l" },
         { itemName: "lmace", slot: "mainhand", level: 9, l: "l" },
-        { itemName: "mshield", slot: "offhand", level: 9, l: "l" },
+        { itemName: "mshield", slot: "offhand", level: 10, l: "l" },
         //{ itemName: "ringofluck", slot: "ring1", level: 2, l: "u" },
         //{ itemName: "ringofluck", slot: "ring2", level: 2, l: "l" },
         { itemName: "rabbitsfoot", slot: "orb", level: 3, l: "l" },
         //{ itemName: "spookyamulet", slot: "amulet", l: "l" },
         { itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
         { itemName: "ecape", slot: "cape", level: 8, l: "l" },
-        { itemName: "mearring", slot: "earring1", level: 0, l: "l" },
-        { itemName: "mearring", slot: "earring2", level: 0, l: "u" }
+        //{ itemName: "bcape", slot: "cape", level: 7, l: "l" },
+        { itemName: "mearring", slot: "earring1", level: 1, l: "l" },
+        { itemName: "mearring", slot: "earring2", level: 1, l: "u" },
 
     ],
     luck: [
@@ -308,7 +318,7 @@ const equipmentSets = {
         { itemName: "intbelt", slot: "belt", level: 6, l: "l" },
         //{ itemName: "santasbelt", slot: "belt", level: 3, l: "l"  },
         { itemName: "lmace", slot: "mainhand", level: 9, l: "l" },
-        { itemName: "mshield", slot: "offhand", level: 9, l: "l" },
+        { itemName: "mshield", slot: "offhand", level: 10, l: "l" },
         { itemName: "ringofluck", slot: "ring1", level: 2, l: "u" },
         { itemName: "ringofluck", slot: "ring2", level: 2, l: "l" },
         { itemName: "rabbitsfoot", slot: "orb", level: 3, l: "l" },
@@ -316,13 +326,17 @@ const equipmentSets = {
         { itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
         { itemName: "ecape", slot: "cape", level: 8, l: "l" },
         //{ itemName: "bcape", slot: "cape", level: 7, l: "l"  },
+        { itemName: "mearring", slot: "earring1", level: 1, l: "l" },
+        { itemName: "mearring", slot: "earring2", level: 1, l: "u" },
     ],
     gold: [
-        { itemName: "wcap", slot: "helmet", level: 9, l: "l" },
+        { itemName: "wcap", slot: "helmet", level: 6, l: "l" },
         { itemName: "wattire", slot: "chest", level: 9, l: "l" },
         { itemName: "wbreeches", slot: "pants", level: 6, l: "l" },
         { itemName: "wshoes", slot: "shoes", level: 10, l: "l" },
         { itemName: "handofmidas", slot: "gloves", level: 8, l: "l" },
+		{ itemName: "goldring", slot: "ring1", level: 0, l: "l" },
+		{ itemName: "goldring", slot: "ring2", level: 0, l: "u" },
         { itemName: "spookyamulet", slot: "amulet", l: "l" },
         { itemName: "stealthcape", slot: "cape", level: 0, l: "l" },
     ],
@@ -338,7 +352,7 @@ const equipmentSets = {
         { itemName: "lmace", slot: "mainhand", level: 9, l: "l" },
         //{ itemName: "firestaff", slot: "mainhand", level: 9, l: "s" },
         //{ itemName: "wbook0", slot: "offhand", level: 6, l: "l" },
-        { itemName: "mshield", slot: "offhand", level: 9, l: "l" },
+        { itemName: "mshield", slot: "offhand", level: 10, l: "l" },
         //{ itemName: "zapper", slot: "ring1", level: 2, l: "l" },
         //{ itemName: "zapper", slot: "ring2", level: 2, l: "u" },
         { itemName: "jacko", slot: "orb", level: 5, l: "l" },
@@ -359,7 +373,7 @@ const equipmentSets = {
         { itemName: "intbelt", slot: "belt", level: 6, l: "l" },
         //{ itemName: "santasbelt", slot: "belt", level: 3, l: "l"  },
         { itemName: "lmace", slot: "mainhand", level: 9, l: "l" },
-        { itemName: "mshield", slot: "offhand", level: 9, l: "l" },
+        { itemName: "mshield", slot: "offhand", level: 10, l: "l" },
         //{ itemName: "shield", slot: "offhand", level: 9, l: "l" },
         { itemName: "ringofluck", slot: "ring1", level: 2, l: "u" },
         { itemName: "ringofluck", slot: "ring2", level: 2, l: "l" },
@@ -376,14 +390,15 @@ const equipmentSets = {
     ],
     aHome: [
         { itemName: "xhelmet", slot: "helmet", level: 9, l: "l" },
-        { itemName: "tshirt88", slot: "chest", level: 4, l: "l" },
+        //{ itemName: "tshirt88", slot: "chest", level: 4, l: "l" },
+        { itemName: "vattire", slot: "chest", level: 8, l: "l" },
         { itemName: "starkillers", slot: "pants", level: 8, l: "l" },
         { itemName: "wingedboots", slot: "shoes", level: 9, l: "l" },
         { itemName: "mpxgloves", slot: "gloves", level: 7, l: "l" },
-        { itemName: "intbelt", slot: "belt", level: 6, l: "l" },
-        //{ itemName: "sbelt", slot: "belt", level: 2, l: "l"  },
+        //{ itemName: "intbelt", slot: "belt", level: 6, l: "l" },
+        { itemName: "sbelt", slot: "belt", level: 2, l: "l" },
         { itemName: "lmace", slot: "mainhand", level: 9, l: "l" },
-        { itemName: "mshield", slot: "offhand", level: 9, l: "l" },
+        { itemName: "mshield", slot: "offhand", level: 10, l: "l" },
         //{ itemName: "shield", slot: "offhand", level: 9, l: "l" },
         { itemName: "ringofluck", slot: "ring1", level: 2, l: "u" },
         { itemName: "ringofluck", slot: "ring2", level: 2, l: "l" },
@@ -391,12 +406,14 @@ const equipmentSets = {
         //{ itemName: "test_orb", slot: "orb", level: 0, l: "l" },
         //{ itemName: "talkingskull", slot: "orb", level: 4, l: "l" },
         //{ itemName: "t2stramulet", slot: "amulet", level: 4, l: "l"  },
-        { itemName: "t2intamulet", slot: "amulet", level: 4, l: "l" },
+        //{ itemName: "t2intamulet", slot: "amulet", level: 4, l: "l" },
         //{ itemName: "amuletofspooks", slot: "amulet", l: "l"  },
-        //{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
-        { itemName: "bcape", slot: "cape", level: 7, l: "l" },
+        { itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
         //{ itemName: "gcape", slot: "cape", level: 9, l: "l" },
+        { itemName: "bcape", slot: "cape", level: 7, l: "l" },
         //{ itemName: "fcape", slot: "cape", level: 4, l: "l" },
+		{ itemName: "mearring", slot: "earring1", level: 1, l: "l" },
+        { itemName: "mearring", slot: "earring2", level: 1, l: "u" },
     ],
 };
 
@@ -426,7 +443,7 @@ const targetNames = ["CrownTown", "CrownPriest"];
 async function attackLoop() {
     let delay = 1;
     let disabled = (parent.is_disabled(character) === undefined);
-    let bosses = ["bscorpion", "grinch"];
+    let bosses = ["troll", "grinch"];
     try {
         if (disabled) {
             let heal_target = lowest_health_partymember();
@@ -496,118 +513,110 @@ async function SkillLoop() {
     const delay = 40;
     const dead = character.rip;
     const disabled = parent.is_disabled(character) === undefined;
-    const targetNames = ["CrownTown", "CrownPriest"];
     const mapsToExclude = ["level2n", "level2w"];
     const eventMaps = ["desertland", "halloween"];
     const eventMobs = ["rgoo", "bgoo", "snowman", "icegolem", "franky", "grinch", "dragold", "wabbit", "mrgreen", "mrpumpkin"];
     try {
         if (character.ctype === "priest") {
-            handlePriestSkills(X, Y, dead, disabled, targetNames, mapsToExclude, eventMobs, eventMaps);
+            handlePriestSkills(X, Y, dead, disabled, mapsToExclude, eventMobs, eventMaps);
         }
     } catch (e) {
         console.error(e);
     }
-    setTimeout(SkillLoop, delay);
+    setTimeout(() => SkillLoop(), delay);
 }
 
 SkillLoop();
 
-async function handlePriestSkills(X, Y, dead, disabled, targetNames, mapsToExclude, eventMobs, eventMaps, zapperMobs) {
-    if (!dead && disabled) {
-        handleCursing(X, Y, targetNames);
-        handleAbsorb(dead, mapsToExclude, eventMobs, eventMaps);
-        handlePartyHeal(dead);
-        handleDarkBlessing(dead);
-        //handleZapSpam(dead, zapperMobs);
-    } else {
-        //console.log("Dead or disabled, skipping handlePriestSkills");
+async function safeCall(fn, name) {
+    try {
+        await fn();
+    } catch (e) {
+        console.error(`Error in ${name}:`, e);
     }
 }
 
-async function handleCursing(X, Y, targetNames) {
-    let ctargetTypes = ["rgoo", "bgoo", "skeletor", "crabxx", "phoenix", "mvampire", "rharpy", "stompy", "grinch"];
-    let ctarget = null;
+async function handlePriestSkills(X, Y, dead, disabled, mapsToExclude, eventMobs, eventMaps, zapperMobs) {
+	if (dead || !disabled) return;
 
-    // Find the nearest monster of any type in the ctargetTypes array
-    for (let i = 0; i < ctargetTypes.length; i++) {
-        ctarget = get_nearest_monster_v2({
-            type: ctargetTypes[i],
-        });
-        if (ctarget && !is_on_cooldown("curse")) {
-            await use_skill("curse", ctarget);
+	safeCall(() => handleCursing(X, Y), "handleCursing");
+	safeCall(() => handleAbsorb(mapsToExclude, eventMobs, eventMaps), "handleAbsorb");
+	safeCall(() => handlePartyHeal(), "handlePartyHeal");
+	safeCall(() => handleDarkBlessing(), "handleDarkBlessing");
+	// await safeCall(() => handleZapSpam(zapperMobs), "handleZapSpam");
+}
+
+async function handleCursing(X, Y) {
+    const ctarget = get_nearest_monster_v2({
+        target: "CrownPriest",
+        check_max_hp: true,
+        max_distance: 75,
+        point_for_distance_check: [X, Y],
+    }) || get_targeted_monster();
+
+    if (ctarget && ctarget.hp >= ctarget.max_hp * 0.2 && !ctarget.immune) {
+        if (!is_on_cooldown("curse")) {
+            try {
+                await use_skill("curse", ctarget);
+            } catch (e) {
+                if (e?.reason !== "cooldown") throw e;
+            }
+        }
+    }
+}
+
+async function handleAbsorb(mapsToExclude) {
+    if (!character.party) return;
+    if (mapsToExclude.includes(character.map)) return;
+    if (is_on_cooldown("absorb")) return;
+
+    const partyNames = Object.keys(get_party()).filter(name => name !== character.name);
+
+    const attackers = {};
+    for (const id in parent.entities) {
+        const monster = parent.entities[id];
+        if (monster.type !== "monster" || monster.dead || !monster.visible) continue;
+        if (partyNames.includes(monster.target)) attackers[monster.target] = true;
+    }
+
+    for (const name of partyNames) {
+        if (attackers[name]) {
+            try {
+                await use_skill("absorb", name);
+                game_log(`Absorbing ${name}`, "#FFA600");
+            } catch (e) {
+                if (e?.reason !== "cooldown") throw e;
+            }
             return;
         }
     }
+}
 
-    // If no target found with the initial search, try to find one based on the specific conditions
-    if (!ctarget) {
-        for (const name of targetNames) {
-            ctarget = get_nearest_monster_v2({
-                target: "CrownTown",
-                check_min_hp: true,
-                type: "ent",
-                //target: "CrownPriest",
-                //check_max_hp: true,
-                //max_distance: 75,
-                //point_for_distance_check: [X, Y],
-            });
-            if (ctarget) break;
+async function handlePartyHeal(healThreshold = 0.65, minMp = 2000) {
+    if (!character.party || character.mp <= minMp) return;
+    if (is_on_cooldown("partyheal")) return;
+
+    const partyNames = Object.keys(get_party());
+    for (const name of partyNames) {
+        const ally = get_player(name);
+        if (!ally || ally.rip) continue;
+        if (ally.hp >= ally.max_hp * healThreshold) continue;
+
+        try {
+            await use_skill("partyheal");
+        } catch (e) {
+            if (e?.reason !== "cooldown") throw e;
         }
-    }
-
-    // If still no target found, try to get the targeted monster
-    if (!ctarget) ctarget = get_targeted_monster();
-
-    // If a valid target is found, and conditions are met, use the curse skill
-    if (ctarget && ctarget.hp >= ctarget.max_hp * 0.01 && !ctarget.immune && !is_on_cooldown("curse")) {
-        //if (ctarget && ctarget.hp >= ctarget.max_hp * 0.8 && !ctarget.immune && !is_on_cooldown("curse")) {
-        await use_skill("curse", ctarget);
+        break;
     }
 }
 
-async function handleAbsorb(dead, mapsToExclude, eventMobs, eventMaps) {
-    if (character.party) {
-        for (let char_name in get_party()) {
-            if (character.name == char_name) continue;
-            let monster = get_nearest_monster({ type: home, target: "CrownsAnal" }); // target: char_name
-            if (monster) {
-                if (!is_on_cooldown("absorb") && !mapsToExclude.includes(character.map)) {
-                    await use_skill("absorb", char_name);
-                    game_log("absorbing " + char_name, "#FFA600");
-                }
-            }
-        }
-    }
+async function handleDarkBlessing() {
+    const nearbyHome = get_nearest_monster({ type: "home" });
+    if (!nearbyHome) return;
 
-    if (eventMaps.includes(character.map)) {
-        const entities = Object.values(parent.entities).filter(
-            entity => entity && eventMobs.includes(entity.mtype) && entity.target && entity.target !== character.name
-        );
-        for (const entity of entities) {
-            if (!is_on_cooldown("absorb") && character.mp > 4500) {
-                await use_skill("absorb", entity.target);
-            }
-        }
-    }
-}
-
-async function handlePartyHeal(dead) {
-    for (let char_name of parent.party_list) {
-        let allies = get_entity(char_name);
-        if (allies && allies.hp < allies.max_hp * 0.65 && !allies.rip) {
-            if (!is_on_cooldown("partyheal") && character.mp > 2000) {
-                await use_skill("partyheal");
-            }
-        }
-    }
-}
-
-async function handleDarkBlessing(dead) {
-    let isHome = get_nearest_monster({ type: home });
-    if (!dead && isHome) {
-        if (!is_on_cooldown("darkblessing")) {
-            await use_skill("darkblessing");
-        }
+    if (!is_on_cooldown("darkblessing")) {
+        await use_skill("darkblessing");
     }
 }
 
@@ -623,11 +632,13 @@ async function handleZapSpam(dead) {
 }
 
 async function handleZap() {
-    const zapperMobs = [home, "rgoo", "bgoo"];  // List of mobs to zap
+    const zapperMobs = [home, "rgoo", "bgoo", "sparkbot", "spider", "scorpion"];  // List of mobs to zap
     const delay = 100;
     let zap = true;
+    const dead = character.rip;
     try {
-        if (zap && !smart.moving) {
+		if (currentState === "looting") return;
+        if (!dead && zap && !smart.moving) {
             // Scan all mobs that are in the zapperMobs list
             const entities = Object.values(parent.entities).filter(entity =>
                 entity && entity.type === "monster" && !entity.target &&
@@ -1141,97 +1152,100 @@ const swapCooldown = 500;
 
 // Constants
 const chestThreshold = 12;
-const settings = {
-    delay: 25,
+const setSettings = {
     bossHpThreshold: 50000,
     bosses: ["grinch"],
 };
 
-// Determine which set to equip
-let targetSet = "maxLuck";
-
-// Helper function to set gear
-function equipSet(setName) {
-    if (!isSetEquipped(setName)) {
-        equipSet(setName);
-        console.log(`Equipping ${setName} set`);
-    }
-}
-
 // Function to manage boss fighting
 function handleBosses() {
-    if (currentState !== "idle" && currentState !== "boss") return;
+    let bossMonster = null; // Declare bossMonster at the top to avoid implicit global variable
 
-    const now = Date.now();
-    let bossMonster = null;
-    for (let bossType of settings.bosses) {
-        bossMonster = get_nearest_monster_v2({ type: bossType });
+    // If the current state is not "idle", exit the function
+    if (currentState !== "idle") return;
+
+    const now = Date.now(); // Get the current timestamp for cooldown checking
+
+    // Find the nearest boss from the list of boss types in setSettings.bosses
+    for (let bossType of setSettings.bosses) {
+        bossMonster = get_nearest_monster_v2({
+            type: bossType,
+        });
+
+        // If a boss is found, stop the loop
         if (bossMonster) break;
     }
 
-    if (bossMonster) {
-        currentState = "boss";
-        targetSet = bossMonster.hp < settings.bossHpThreshold ? "maxLuck" : "dps";
-    } else {
-        currentState = "idle";
-        targetSet = "maxLuck";
-    }
+    // Select the set based on the boss's HP, or default to "maxLuck"
+    targetSet = bossMonster
+        ? (bossMonster.hp < setSettings.bossHpThreshold ? "aHome" : "dps")
+        : "aHome";
 
+    // If enough time has passed, equip the new set
     if (now - setSwapTime > swapCooldown) {
-        equipSet(targetSet);
+        equipSet(targetSet); // Equip the selected target set
         setSwapTime = now;
     }
 }
 
-// Function to manage boss fighting
-function handleLooting() {
+// Function to manage looting (async version)
+async function handleLooting() {
     if (currentState !== "looting") return;
 
-    // Step 1: Equip gold set and swap boosters
     lastLoot = Date.now();
-    equipSet("gold"); // Equip gold set
-    let slot = locate_item("luckbooster"); // Find luck booster
-    if (slot !== -1) {
-        shift(slot, "goldbooster"); // Swap to gold booster
+    equipSet("gold");
+    swapBooster("luckbooster", "goldbooster");
+
+    // Add a Xms sleep to ensure the gold set and booster are equipped before looting
+    await sleep(250);
+
+    let looted = 0;
+    const chests = Object.keys(get_chests());
+
+    // Loot all chests until chestThreshold is reached
+    for (let id of chests) {
+        if (looted >= chestThreshold) break;
+        parent.open_chest(id);
+        console.log(`Looting chest with ${character.goldm} goldm`);
+        looted++;
     }
 
-    // Step 2: Loot chests after delay
-    setTimeout(() => {
-        let looted = 0;
-        for (let id in get_chests()) {
-            if (looted >= chestThreshold) break;
-            parent.open_chest(id);
-            console.log("Looting chests with " + character.goldm + " goldm");
-            looted++;
-        }
+    // Add a brief Xms sleep before returning to idle state
+    await sleep(250);
 
-        // Step 3: Return to the appropriate target set
-        currentState = "idle";
-        equipSet(targetSet); // Return to the original set
-        let luckSlot = locate_item("goldbooster"); // Find gold booster
-        if (luckSlot !== -1) {
-            shift(luckSlot, "luckbooster"); // Swap back to luck booster
-        }
-    }, 500); // Increased delay to ensure equipment changes are applied
+    // Return to idle state after looting
+    currentState = "idle";
+    equipSet(targetSet);
+    swapBooster("goldbooster", "luckbooster");
 }
 
 // Main loop to coordinate activities
 setInterval(() => {
-    // Handle looting if chests are ready and character is not in combat
-    if (currentState === "idle" && getNumChests() >= chestThreshold && character.targets < 7) {
+    // Check conditions and handle looting directly
+    if (getNumChests() >= chestThreshold && character.targets < 6) {
         currentState = "looting";
         handleLooting();
     }
 
-    // Handle bosses if no looting is ongoing
+    // Handle bosses only if not looting
     if (currentState !== "looting") {
         handleBosses();
     }
-}, settings.delay);
+}, 250);
+
+// Helper sleep function that returns a promise resolving after a given time (in ms)
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // Function to count the number of available chests
 function getNumChests() {
     return Object.keys(get_chests()).length;
+}
+
+function swapBooster(current, target) {
+    let slot = locate_item(current);
+    if (slot !== -1) shift(slot, target);
 }
 
 function on_cm(name, data) {
@@ -1240,6 +1254,12 @@ function on_cm(name, data) {
             respawn();
             smart_move({ x: data.x, y: data.y, map: data.map });
             game_log("Repsawning & Moving");
+        }
+    }
+    if (name == "CrownMerch") {
+        if (data.message == "Heal Merch") {
+            use_skill("partyheal");
+            game_log("Party Healing CrownMerch");
         }
     }
 }
@@ -1293,13 +1313,20 @@ function inventorySorter() {
 }
 setInterval(inventorySorter, 250);
 
+let respawnCooldown = false;
+
 function suicide() {
     if (!character.rip && character.hp < 2000) {
         parent.socket.emit('harakiri');
         game_log("Harakiri");
-        setTimeout(function () {
+    }
+    let tome = locate_item("xptome");
+    if (tome !== -1 && !respawnCooldown) {
+        respawnCooldown = true;
+        setTimeout(() => {
             respawn();
-        }, 12000);
+            respawnCooldown = false; // Reset cooldown after respawning
+        }, 5000); // 5-second delay before respawning
     }
 }
 setInterval(suicide, 100);
@@ -1428,7 +1455,16 @@ function get_nearest_monster_v2(args = {}) {
     for (let id in parent.entities) {
         let current = parent.entities[id];
         if (current.type != "monster" || !current.visible || current.dead) continue;
-        if (args.type && current.mtype != args.type) continue;
+
+        // Allow type to be an array for multiple types
+        if (args.type) {
+            if (Array.isArray(args.type)) {
+                if (!args.type.includes(current.mtype)) continue; // Check if monster type is in the provided list
+            } else {
+                if (current.mtype !== args.type) continue;
+            }
+        }
+
         if (args.min_level !== undefined && current.level < args.min_level) continue;
         if (args.max_level !== undefined && current.level > args.max_level) continue;
         if (args.target && !args.target.includes(current.target)) continue;
@@ -1572,8 +1608,6 @@ async function fixPromise(promise) {
     return Promise.race(promises);
 }
 
-//let group = ["Mommy", "CrownsAnal", "CrownTown", "CrownPriest", "CrownMerch", "CrownMage"];
-//let group = ["earthWar", "CrownsAnal", "CrownTown", "CrownPriest"];
 let group = ["CrownsAnal", "CrownTown", "CrownPriest"];
 
 function partyMaker() {
@@ -1752,7 +1786,7 @@ function killHandler(data) {
 register_rangerhandler("game_log", killHandler);
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
-
+/*
 function modify_parent_function() {
     const change_parent_function = function () {
         this.render_tracker = function () {
@@ -1777,7 +1811,7 @@ function modify_parent_function() {
                         }
                     }
 
-                    a += "<div style='background-color:#575983; border: 2px solid" + borderColor + ";position: relative; display: inline-block; margin: 2px; /*" + b[0] + "*/' class='clickable' onclick='pcs(event); render_monster_info(\"" + b[0] + "\")'>";
+                    a += "<div style='background-color:#575983; border: 2px solid" + borderColor + ";position: relative; display: inline-block; margin: 2px; " + b[0] + /' class='clickable' onclick='pcs(event); render_monster_info(\"" + b[0] + "\")'>";
 
                     a = 1 > (G.monsters[b[0]].size || 1) ? a + sprite(b[1].skin || b[0], {
                         scale: 1
@@ -1952,7 +1986,7 @@ function updateGUI() {
             let party_modifier = character.party ? 1.5 / parent.party_list.length : 1;
             let monsters_left = Math.ceil(xp_missing / (monster_xp * party_modifier * character.xpm));
             //xp_string += ` (${ncomma(monsters_left)} kills left)`;
-        }*/
+        }
     } else if (till_level === 1) {
         let xp_missing = ncomma(parent.G.levels[character.level] - character.xp);
         //xp_string += ` (${xp_missing} xp to go!)`;
@@ -2161,7 +2195,7 @@ init_xptimer();
 //////////////////////////////////////////////////////////////////////////////////////////
 // All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF" "DPS"
 // The order of the array will be the order of the display
-const damageTypes = ["Base", "Blast", "HPS", "DPS"];
+const damageTypes = ["Base", "HPS", "DPS"];
 let displayClassTypeColors = true; // Set to false to disable class type colors
 let displayDamageTypeColors = true; // Set to false to disable damage type colors
 let showOverheal = true; // Set to true to show overhealing
@@ -2195,7 +2229,7 @@ function initDPSMeter() {
         overflow: 'hidden',
         marginBottom: '-3px',
         width: "100%",
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: 'rgba(0, 0, 0, 1)',
     });
 
     // Create a div for the DPS meter content
@@ -2528,3 +2562,4 @@ function calculateDPSForPartyMember(entry) {
 // Initialize the DPS meter and set up the update interval
 initDPSMeter();
 setInterval(updateDPSMeterUI, 250);
+*/

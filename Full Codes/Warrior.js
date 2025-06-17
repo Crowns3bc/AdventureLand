@@ -1,10 +1,11 @@
 const locations = {
     bat: [{ x: 1200, y: -782 }],
-    bigbird: [{ x: 1343, y: 248 }],
+    bigbird: [{ x: 1304, y: -79 }],
     bscorpion: [{ x: -408, y: -1241 }],
     boar: [{ x: 19, y: -1109 }],
     cgoo: [{ x: -221, y: -274 }],
     crab: [{ x: -11840, y: -37 }],
+    dryad: [{ x: 403, y: -347 }],
     ent: [{ x: -420, y: -1960 }],
     fireroamer: [{ x: 222, y: -827 }],
     ghost: [{ x: -405, y: -1642 }],
@@ -13,6 +14,7 @@ const locations = {
     mechagnome: [{ x: 0, y: 0 }],
     mole: [{ x: 14, y: -1072 }],
     mummy: [{ x: 256, y: -1417 }],
+    odino: [{ x: -42, y: 746 }],
     oneeye: [{ x: -270, y: 160 }],
     pinkgoblin: [{ x: 366, y: 377 }],
     poisio: [{ x: -121, y: 1360 }],
@@ -24,13 +26,14 @@ const locations = {
     stoneworm: [{ x: 830, y: 7 }],
     spider: [{ x: 1247, y: -91 }],
     squig: [{ x: -1175, y: 422 }],
+    targetron: [{ x: -544, y: -275 }],
     wolf: [{ x: 433, y: -2745 }],
     wolfie: [{ x: 113, y: -2014 }],
     xscorpion: [{ x: -495, y: 685 }]
 };
 
-const home = 'plantoid';
-const mobMap = 'desertland';
+const home = 'targetron';
+const mobMap = 'uhills';
 const destination = {
     map: mobMap,
     x: locations[home][0].x,
@@ -310,20 +313,24 @@ eventer();
 const equipmentSets = {
 
     dps: [
-        //{ itemName: "dexearring", slot: "earring2", level: 5, l: "l" },
-        { itemName: "orbofstr", slot: "orb", level: 5, l: "l" },
+        { itemName: "cearring", slot: "earring1", level: 5, l: "l" },
+        { itemName: "cearring", slot: "earring2", level: 5, l: "l" },
+        { itemName: "test_orb", slot: "orb", level: 0, l: "l" },
+        //{ itemName: "orbofstr", slot: "orb", level: 5, l: "l" },
         { itemName: "suckerpunch", slot: "ring1", level: 2, l: "l" },
         { itemName: "suckerpunch", slot: "ring2", level: 2, l: "u" },
     ],
     luck: [
+        { itemName: "mearring", slot: "earring1", level: 0, l: "l" },
+        { itemName: "mearring", slot: "earring2", level: 0, l: "u" },
         { itemName: "rabbitsfoot", slot: "orb", level: 2, l: "l" },
-        { itemName: "ringhs", slot: "ring2", level: 0, l: "l" },
+        { itemName: "ringofluck", slot: "ring2", level: 0, l: "u" },
         { itemName: "ringofluck", slot: "ring1", level: 0, l: "l" },
         //{ itemName: "tshirt88", slot: "chest", level: 0, l: "l" }
     ],
     single: [
         { itemName: "fireblade", slot: "mainhand", level: 13, l: "s" },
-        { itemName: "vhammer", slot: "offhand", level: 9, l: "s" },
+        { itemName: "candycanesword", slot: "offhand", level: 13, l: "s" },
     ],
     aoe: [
         { itemName: "vhammer", slot: "mainhand", level: 9, l: "s" },
@@ -468,49 +475,40 @@ async function moveLoop() {
 //moveLoop();
 //////////////////////////////////////////////////////////////////////////
 const targetNames = ["CrownTown", "CrownPriest"];
-let srSwapTime = 0;
-let stSwapTime = 0;
-const mhCooldown = 75;
-const ofCooldown = 75;
 
 async function attackLoop() {
-    let delay = null; // Default delay
-    const X = locations[home][0].x; // X coordinate of home location
-    const Y = locations[home][0].y; // Y coordinate of home location
-    const now = performance.now();
+    let delay = null;
     try {
-        let nearest = null;
+        let target = null;
 
-        // Find the nearest monster based on the targetNames
-        for (let i = 0; i < targetNames.length; i++) {
-            nearest = get_nearest_monster_v2({
-                target: targetNames[i],
-                check_min_hp: true,  // Checking for monster with minimum HP
-                max_distance: 50,  // Consider monsters within 50 units
-                statusEffects: ["cursed"], // Check for these debuffs
+        // Single loop, prioritized targeting
+        for (const name of targetNames) {
+            target = get_nearest_monster_v2({
+                target: name,
+                check_max_hp: true,
+                max_distance: character.range,
+                statusEffects: ["cursed"],
             });
-            if (nearest) break;
-        }
-        if (!nearest) {
-            for (let i = 0; i < targetNames.length; i++) {
-                nearest = get_nearest_monster_v2({
-                    target: targetNames[i],
-                    max_distance: character.range,
-                    check_min_hp: true,
-                });
-                if (nearest) break;
-            }
+            if (target) break;
+
+            // If no cursed target nearby, check wider range
+            target = get_nearest_monster_v2({
+                target: name,
+                check_max_hp: true,
+                max_distance: character.range,
+            });
+            if (target) break;
         }
 
-        // If a monster is found and is in range, execute the attack
-        if (nearest && is_in_range(nearest)) {
-            await attack(nearest); // Initiate attack
-            delay = ms_to_next_skill("attack"); // Calculate delay for the next attack
+        if (target) {
+            await attack(target);
+			reduce_cooldown("attack", character.ping * 0.95);
+            delay = ms_to_next_skill("attack");
         }
     } catch (e) {
-        //console.error(e);
+        // optional error logging
     }
-    setTimeout(attackLoop, delay);
+    setTimeout(attackLoop, delay ?? 50); // Retry sooner if no attack
 }
 
 attackLoop();
@@ -529,7 +527,7 @@ async function skillLoop() {
         const cc = character.cc < 135;
         const zapperMobs = ["plantoid"];
         const stMaps = ["", "winter_cove", "arena", "",];
-        const aoeMaps = ["halloween", "goobrawl", "spookytown", "tunnel", "main", "winterland", "cave", "level2n", "level2w", "desertland"];
+        const aoeMaps = ["halloween", "goobrawl", "spookytown", "tunnel", "main", "winterland", "cave", "level2n", "level2w", "desertland", "uhills", "mforest"];
         let tank = get_entity("CrownPriest");
 
         if (character.ctype === "warrior") {
@@ -570,7 +568,7 @@ async function skillLoop() {
         if (character.ctype === "mage") {
             try {
                 //console.log("Calling handleMageSkills");
-                //handleMageSkills();
+                handleMageSkills();
             } catch (e) {
                 console.error("Error in mage section:", e);
             }
@@ -595,100 +593,121 @@ async function handleStomp(Mainhand, stMaps, aoeMaps, tank) {
     }
 }
 
-function handleWeaponSwap(stMaps, aoeMaps, Mainhand, offhand) {
-    const currentTime = performance.now();
-    if (stMaps.includes(character.map) && currentTime - eTime > 50) {
-        eTime = currentTime;
-        equipSet('single');
-    } else if (aoeMaps.includes(character.map) && currentTime - eTime > 50) {
-        eTime = currentTime;
-        equipSet('aoe');
+function handleWeaponSwap(stMaps, aoeMaps) {
+    const now = performance.now();
+    if (now - eTime <= 50) return;
+
+    if (stMaps.includes(character.map)) {
+        equipSet("single");
+        eTime = now;
+    } else if (aoeMaps.includes(character.map)) {
+        equipSet("aoe");
+        eTime = now;
     }
 }
 
 let lastCleaveTime = 0;
-const CLEAVE_THRESHOLD = 500; // Time in milliseconds between cleave uses
+const CLEAVE_THRESHOLD = 500;
+const cleaveRange = G.skills.cleave.range;
+const mapsToInclude = new Set([
+    "desertland", "goobrawl", "main", "level2w", "cave", "halloween",
+    "spookytown", "tunnel", "winterland", "level2n", "uhills", "mforest"
+]);
 
 function handleCleave(Mainhand, aoe, cc, stMaps, aoeMaps, tank) {
-    const currentTime = performance.now();
-    const timeSinceLastCleave = currentTime - lastCleaveTime;
-    const mapsToInclude = ["desertland", "goobrawl", "main", "level2w", "cave", "halloween", "spookytown", "tunnel", "winterland", "level2n"];
-    const monstersInRange = Object.values(parent.entities).filter(({ type, visible, dead, x, y }) =>
-        type === "monster" &&
-        visible &&
-        !dead &&
-        distance(character, { x, y }) <= G.skills.cleave.range
+    const now = performance.now();
+    const timeSinceLast = now - lastCleaveTime;
+
+    const monsters = Object.values(parent.entities).filter(e =>
+        e?.type === "monster" &&
+        !e.dead &&
+        e.visible &&
+        distance(character, e) <= cleaveRange
     );
 
-    const untargetedMonsters = monstersInRange.filter(({ target }) => !target)
+    const untargeted = monsters.some(m => !m.target);
 
-    if (canCleave(aoe, cc, mapsToInclude, monstersInRange, tank, timeSinceLastCleave, untargetedMonsters)) {
-        if (Mainhand !== "scythe") {
-            scytheSet(); // Equip the scythe
-        }
-        use_skill("cleave"); // Use the cleave skill
+    if (canCleave(aoe, cc, mapsToInclude, monsters, tank, timeSinceLast, untargeted)) {
+        if (Mainhand !== "scythe") scytheSet();
+        use_skill("cleave");
         reduce_cooldown("cleave", character.ping * 0.95);
-        lastCleaveTime = currentTime; // Update the last cleave time
+        lastCleaveTime = now;
     }
 
-    // Handle weapon swapping outside of cleave logic to keep it separate
+    // Swap back instantly (don't delay this)
     handleWeaponSwap(stMaps, aoeMaps);
 }
 
-function canCleave(aoe, cc, mapsToInclude, monstersInRange, tank, timeSinceLastCleave, untargetedMonsters) {
+function canCleave(aoe, cc, maps, monsters, tank, timeSince, hasUntargeted) {
     return (
-        !smart.moving // Don't cleave if moving smartly
-        && cc // CC check: Ensure you have CC up
-        && aoe // Mana check: Ensure AOE is available
-        && timeSinceLastCleave >= CLEAVE_THRESHOLD // Prevent cleave spamming
-        && monstersInRange.length > 0 // Ensure there are monsters in range
-        && untargetedMonsters.length === 0 // Only cleave if no untargeted monsters (no aggro)
-        && mapsToInclude.includes(character.map) // Map check (optional, clarify if needed)
-        && tank // Ensure tank (priest) is around
-        && !is_on_cooldown("cleave") // Ensure cleave is not on cooldown
-        && ms_to_next_skill("attack") > 75 // Ensure attack isn't about to be ready
+        !smart.moving &&
+        cc && aoe && tank &&
+        timeSince >= CLEAVE_THRESHOLD &&
+        monsters.length > 0 &&
+        //!hasUntargeted &&
+        maps.has(character.map) &&
+        !is_on_cooldown("cleave") &&
+        ms_to_next_skill("attack") > 75
     );
 }
 
+
 async function handleWarriorSkills(tank) {
-    if (!is_on_cooldown("warcry") && !character.s.warcry && character.s.darkblessing) {
+    const { s, hp } = character;
+    const { entities } = parent;
+    const skillRange = G.skills.agitate.range;
+
+    const canUse = (skill) => !is_on_cooldown(skill);
+
+    if (canUse("warcry") && !s.warcry && s.darkblessing) {
         await use_skill("warcry");
     }
 
-    const crabsInRange = Object.values(parent.entities)
-        .filter(entity => entity.mtype === "crabx" && entity.visible && !entity.dead && distance(character, entity) <= G.skills.agitate.range);
-    const untargetedCrabs = crabsInRange.filter(monster => !monster.target);
+    // Pre-filter for relevant entities once
+    const filteredEntities = Object.values(entities).filter(e =>
+        e.visible && !e.dead && distance(character, e) <= skillRange
+    );
 
-    if (!is_on_cooldown("agitate") && crabsInRange.length >= 5 && untargetedCrabs.length === 5 && tank) {
-        await use_skill("agitate");
+    const crabx = [];
+    const otherMobs = [];
+    const entList = [];
+
+    for (const entity of filteredEntities) {
+        if (entity.mtype === "crabx") crabx.push(entity);
+        else if (["sparkbot", "spider", "scorpion", home].includes(entity.mtype)) otherMobs.push(entity);
+        if (entity.mtype === "ent" && entity.target !== character.name) entList.push(entity);
     }
 
-    const mobTypes = ["bat", "bigbird"];
-    const mobsInRange = Object.values(parent.entities)
-        .filter(entity => mobTypes.includes(entity.mtype) && entity.visible && !entity.dead && distance(character, entity) <= G.skills.agitate.range);
-    const untargetedMobs = mobsInRange.filter(monster => !monster.target);
-
-    if (!is_on_cooldown("agitate") && mobsInRange.length >= 3 && untargetedMobs.length >= 3 && !smart.moving && tank) {
-        let porc = get_nearest_monster({ type: "porcupine" });
-        if (!is_in_range(porc, "agitate")) {
+    if (canUse("agitate") && tank) {
+        const untargetedCrabs = crabx.filter(m => !m.target);
+        if (crabx.length >= 5 && untargetedCrabs.length === 5) {
             await use_skill("agitate");
+        } else if (otherMobs.length >= 3 && otherMobs.filter(m => !m.target).length >= 3 && !smart.moving) {
+            const needsProtecting = ["porcupine", "redfairy"];
+            const nearbyThreat = needsProtecting.some(type => {
+                const target = get_nearest_monster({ type });
+                return target && is_in_range(target, "agitate");
+            });
+            if (!nearbyThreat && !tank.rip) {
+                await use_skill("agitate");
+            }
         }
     }
 
-    if (!is_on_cooldown("charge")) {
+    if (canUse("charge")) {
         await use_skill("charge");
     }
 
-    if (!is_on_cooldown("hardshell") && character.hp < 12000) {
+    if (canUse("hardshell") && hp < 12000) {
         await use_skill("hardshell");
     }
 
-    for (let id in parent.entities) {
-        let current = parent.entities[id];
-        if (current.mtype === "ent" && current.target !== character.name) {
-            if (is_in_range(current, "taunt") && !is_on_cooldown("taunt")) {
-                await use_skill("taunt", current.id);
-                game_log("Taunting " + current.name, "#FFA600");
+    if (canUse("taunt")) {
+        for (const ent of entList) {
+            if (is_in_range(ent, "taunt")) {
+                await use_skill("taunt", ent.id);
+                game_log("Taunting " + ent.name, "#FFA600");
+                break; // Only taunt one
             }
         }
     }
@@ -764,23 +783,38 @@ async function handleRogueSkills() {
 }
 
 async function handleMageSkills() {
-    const c1 = get_player("CrownsAnal");
-    const c2 = get_player("CrownMage");
+	const c1 = get_player("CrownsAnal");
+	const c2 = get_player("CrownMage");
+	if (!is_on_cooldown("energize")) {
+		if (c1 && c1.mp < 5000 && character.mp > 2700) {
+			await use_skill("energize", 'CrownsAnal');
+		}
 
-    if (c1 && c1.mp < 450 && character.mp > 2700) {
-        //await use_skill("energize", 'CrownsAnal');
-    }
+		if (c2 && c2.mp < 14000 && character.mp > 2700) {
+			await use_skill("energize", 'CrownMage', 1);
+		}
+	}
 
-    if (c2 && c2.mp < 14000 && character.mp > 2700) {
-        if (!is_on_cooldown("energize")) {
-            await use_skill("energize", 'CrownMage', 1);
-        }
-    }
+	let nearest = get_nearest_monster({ target: "CrownPriest" });
+	if (nearest && character.mp > 6000) {
+		//await use_skill("zapperzap", nearest);
+	}
+	let targets = [];
 
-    let nearest = get_nearest_monster({ target: "CrownPriest" });
-    if (nearest && character.mp > 6000) {
-        //await use_skill("zapperzap", nearest);
-    }
+	for (let id in parent.entities) {
+		const entity = parent.entities[id];
+
+		const isDesiredType = entity.mtype === "sparkbot" || entity.mtype === "targetron";
+		const hasNoTarget = !entity.target;
+
+		if (isDesiredType && is_in_range(entity, "cburst") && hasNoTarget) {
+			targets.push([entity, 1]);
+		}
+	}
+
+	if (targets.length >= 3 && character.mp > 100) {
+		await use_skill("cburst", targets);
+	}
 }
 
 function clearInventory() {
@@ -814,7 +848,7 @@ function clearInventory() {
 }
 
 // Adjusted interval for efficiency
-setInterval(clearInventory, 5000); // Increased interval to 5 seconds
+setInterval(clearInventory, 1000); // Increased interval to 5 seconds
 
 
 function scare() {
@@ -904,7 +938,7 @@ const settings = {
     delay: 25, // Delay in ms for the loop
     hpThreshold: 15000, // HP threshold for swaps
     bossHpThreshold: 50000, // HP threshold for boss swaps
-    xpMonsters: ["ent"], // Monsters to monitor for XP swaps
+    xpMonsters: ["sparkbot", "targetron"], // Monsters to monitor for XP swaps
     mpThresholds: { upper: 1350, lower: 1250 }, // MP thresholds for coat swap
     chestThreshold: 12, // Chest count for cape swap
 };
@@ -923,14 +957,14 @@ async function itemSwap() {
             let desiredBooster = null;
 
             if (grinch && grinch.hp < settings.bossHpThreshold) {
-                desiredBooster = "luckbooster";
+                desiredBooster = "xpbooster";
             } else {
                 const monstersBelowThreshold = Object.values(parent.entities).some(entity =>
                     settings.xpMonsters.includes(entity.mtype) && entity.hp < settings.hpThreshold
                 );
 
                 if (monstersBelowThreshold) {
-                    desiredBooster = "luckbooster";
+                    desiredBooster = "xpbooster";
                 } else {
                     desiredBooster = "xpbooster"; // Default booster
                 }
@@ -952,7 +986,7 @@ async function itemSwap() {
         // ORB SWAP LOGIC
         const grinch = parent.S.grinch;
         if (grinch && grinch.hp < settings.bossHpThreshold) {
-            targetOrbSet = "luck";
+            targetOrbSet = "xpbooster";
         } else {
             const monstersBelowThreshold = Object.values(parent.entities).some(entity =>
                 settings.xpMonsters.includes(entity.mtype) && entity.hp < settings.hpThreshold
@@ -969,7 +1003,7 @@ async function itemSwap() {
         // CAPE SWAP LOGIC
         const chestCount = getNumChests();
         const numTargets = getNumTargets("CrownPriest"); // Check number of monsters targeting CrownPriest
-        if (chestCount >= settings.chestThreshold && numTargets < 7) {
+        if (chestCount >= settings.chestThreshold && numTargets < 6) {
             targetCapeSet = "stealth";
         } else {
             targetCapeSet = "cape";
@@ -1049,7 +1083,7 @@ let moveStuff = {
     rapier: 41,
     scythe: 39,
     tracker: 0,
-    woodensword: 36,
+    candycanesword: 36,
     xptome: 4,
     //vhammer: [9, 38, 37],
 };
@@ -1171,13 +1205,20 @@ function getNumChests() {
     return Object.keys(get_chests()).length;
 }
 
+let respawnCooldown = false;
+
 function suicide() {
     if (!character.rip && character.hp < 2000) {
         parent.socket.emit('harakiri');
         game_log("Harakiri");
-        setTimeout(function () {
+    }
+    let tome = locate_item("xptome");
+    if (tome !== -1 && !respawnCooldown) {
+        respawnCooldown = true;
+        setTimeout(() => {
             respawn();
-        }, 12000);
+            respawnCooldown = false; // Reset cooldown after respawning
+        }, 5000); // 5-second delay before respawning
     }
 }
 setInterval(suicide, 100);
@@ -1434,7 +1475,6 @@ async function fixPromise(promise) {
     return Promise.race(promises);
 }
 
-//let group = ["Mommy", "CrownsAnal", "CrownTown", "CrownPriest", "CrownMerch", "CrownMage"];
 let group = ["CrownsAnal", "CrownTown", "CrownPriest"];
 
 function partyMaker() {
@@ -1876,378 +1916,286 @@ init_xptimer();
 /////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////
 
-// All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF" "DPS"
-// The order of the array will be the order of the display
+// All currently supported damageTypes: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF", "DPS", "Dmg Taken"
+// Displaying too many "Types" will result in a really wide meter that will effect the game_log window. i reccomend only tracking 4/5 things at a time for general use
 const damageTypes = ["Base", "Blast", "HPS", "DPS"];
-let displayClassTypeColors = true; // Set to false to disable class type colors
-let displayDamageTypeColors = true; // Set to false to disable damage type colors
-let showOverheal = true; // Set to true to show overhealing
-let showOverManasteal = true; // Set to true to show overMana'ing?
 
+// Toggle settings
+let displayClassTypeColors = true;
+let displayDamageTypeColors = true;
+let showOverheal = false;
+let showOverManasteal = true;
+
+// Color mapping
 const damageTypeColors = {
     Base: '#A92000',
-    HPS: '#9A1D27',
     Blast: '#782D33',
     Burn: '#FF7F27',
+    HPS: '#9A1D27',
     MPS: '#353C9C',
     DR: '#E94959',
     RF: '#D880F0',
+    DPS: '#FFD700',
+    "Dmg Taken": '#FF4C4C'
 };
 
-// Initialize the DPS meter
-function initDPSMeter() {
-    let $ = parent.$;
-    let brc = $('#bottomrightcorner');
+// Initialize the class color mapping
+const classColors = {
+    mage: '#3FC7EB',
+    paladin: '#F48CBA',
+    priest: '#FFFFFF', // White
+    ranger: '#AAD372',
+    rogue: '#FFF468',
+    warrior: '#C69B6D'
+};
 
-    // Remove any existing DPS meter
-    brc.find('#dpsmeter').remove();
+// Overall-sums variables (optional use)
+let damage = 0, burnDamage = 0, blastDamage = 0, baseDamage = 0;
+let baseHeal = 0, lifesteal = 0, manasteal = 0, dreturn = 0, reflect = 0;
+const METER_START = performance.now();
 
-    // Create a container for the DPS meter
-    let dpsmeter_container = $('<div id="dpsmeter"></div>').css({
-        //position: 'relative',
-        fontSize: '20px',
-        color: 'white',
-        textAlign: 'center',
-        display: 'table',
-        overflow: 'hidden',
-        marginBottom: '-3px',
-        width: "100%",
-        //backgroundColor: 'rgba(0, 0, 0, 0.6)',
-        backgroundColor: 'rgba(0, 0, 0, 1)',
-    });
+// Per-member tracking
+let playerDamageSums = {};
 
-    // Create a div for the DPS meter content
-    let dpsmeter_content = $('<div id="dpsmetercontent"></div>').css({
-        display: 'table-cell',
-        verticalAlign: 'middle',
-        backgroundColor: 'rgba(0, 0, 0, 0)',
-        padding: '2px',
-        border: '4px solid grey',
-    }).appendTo(dpsmeter_container);
-
-    // Insert the DPS meter container
-    brc.children().first().after(dpsmeter_container);
-}
-
-// Initialize variables
-let damage = 0;
-let burnDamage = 0;
-let blastDamage = 0;
-let baseDamage = 0;
-let baseHeal = 0;
-let lifesteal = 0;
-let manasteal = 0;
-let dreturn = 0;
-let reflect = 0;
-let METER_START = performance.now();
-
-// Damage tracking object for party members
-let partyDamageSums = {};
-let playerDamageReturns = {}; // Initialize playerDamageReturns
-let playerDamageReflects = {}; // Initialize playerDamageReflects
-
-// Format DPS with commas for readability
-function getFormattedDPS(dps) {
-    try {
-        return dps.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-    } catch (error) {
-        console.error('Formatting DPS error:', error);
-        return 'N/A';
+function getPlayerEntry(id) {
+    if (!playerDamageSums[id]) {
+        playerDamageSums[id] = {
+            startTime: performance.now(),
+            sumDamage: 0,
+            sumBurnDamage: 0,
+            sumBlastDamage: 0,
+            sumBaseDamage: 0,
+            sumHeal: 0,
+            sumLifesteal: 0,
+            sumManaSteal: 0,
+            sumDamageReturn: 0,
+            sumReflection: 0,
+            sumDamageTakenPhys: 0,
+            sumDamageTakenMag: 0
+        };
     }
+    return playerDamageSums[id];
 }
 
-// Handle "hit" events
-parent.socket.on("hit", function (data) {
+function getFormatted(val) {
+    return val.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function initDPSMeter() {
+    const $ = parent.$;
+    const brc = $('#bottomrightcorner');
+    brc.find('#dpsmeter').remove();
+    const container = $("<div id='dpsmeter'></div>").css({
+        fontSize: '20px', color: 'white', textAlign: 'center', display: 'table', overflow: 'hidden', marginBottom: '-3px', width: '100%', backgroundColor: 'rgba(0,0,0,1)'
+    });
+    container.append(
+        $("<div id='dpsmetercontent'></div>").css({ display: 'table-cell', verticalAlign: 'middle', padding: '2px', border: '4px solid grey' })
+    );
+    brc.children().first().after(container);
+}
+
+// Handle all hit events
+parent.socket.on('hit', data => {
+    const isParty = id => parent.party_list.includes(id)
     try {
-        // My personal logging for ranger healing
-        if (data.hid === "CrownsAnal" && data.damage_type === "heal") {
-            game_log("Healed " + data.id + " for " + data.heal, "#ac1414");
+        // == Party-only filter ==
+        const attackerInParty = isParty(data.hid);
+        const targetInParty = isParty(data.id);
+
+        if (!attackerInParty && !targetInParty) return;
+
+        // == Overall sums ==
+        if (data.damage) {
+            damage += data.damage;
+            if (data.source === 'burn') burnDamage += data.damage;
+            else if (data.splash) blastDamage += data.damage;
+            else baseDamage += data.damage;
         }
-        if (data.hid) {
-            let targetId = data.hid;
-            let player = get_entity(targetId);
-            let maxHealth = player.max_hp;
-            let currentHealth = player.hp;
-            let maxMana = player.max_mp;
-            let currentMana = player.mp;
+        if (data.heal || data.lifesteal) {
+            baseHeal += (data.heal ?? 0) + (data.lifesteal ?? 0);
+            lifesteal += data.lifesteal ?? 0;
+        }
+        if (data.manasteal) manasteal += data.manasteal;
 
-            if (parent.party_list && parent.party_list.includes(targetId)) {
-                let entry = partyDamageSums[targetId] ?? {
-                    startTime: performance.now(),
-                    sumDamage: 0,
-                    sumHeal: 0,
-                    sumBurnDamage: 0,
-                    sumBlastDamage: 0,
-                    sumBaseDamage: 0,
-                    sumLifesteal: 0,
-                    sumManaSteal: 0,
-                    sumDamageReturn: 0,
-                    sumReflection: 0,
-                };
+        // == Damage Return attribution (only mob→player) ==
+        if (data.dreturn && get_player(data.id) && !get_player(data.hid)) {
+            dreturn += data.dreturn;
+            const e = getPlayerEntry(data.id);
+            e.sumDamageReturn ??= 0;
+            e.sumDamageReturn += data.dreturn;
+        }
 
-                // Calculate actual heal and lifesteal
-                let actualHeal = (data.heal ?? 0) + (data.lifesteal ?? 0);
+        // == Reflection attribution (only mob→player) ==
+        if (data.reflect && get_player(data.id) && !get_player(data.hid)) {
+            reflect += data.reflect;
+            const e = getPlayerEntry(data.id);
+            e.sumReflection ??= 0;
+            e.sumReflection += data.reflect;
+        }
 
-                // Add healing and lifesteal based on the toggle for showing overheal
-                if (showOverheal) {
-                    entry.sumHeal += actualHeal; // Include all heal and lifesteal
-                } else {
-                    entry.sumHeal += Math.min(actualHeal, maxHealth - currentHealth); // Only actual healing
-                }
+        // == Damage taken by character ==
+        // — normal hits from mobs
+        if (data.damage && get_player(data.id)) {
+            const e = getPlayerEntry(data.id);
+            if (data.damage_type === 'physical') e.sumDamageTakenPhys += data.damage;
+            else e.sumDamageTakenMag += data.damage;
+        }
+        // — self-damage from hitting a dreturn mob (physical)
+        if (data.dreturn && get_player(data.hid)) {
+            //console.log('Dreturn self-hit by', data.hid, 'for', data.dreturn);
+            const e = getPlayerEntry(data.hid);
+            e.sumDamageTakenPhys += data.dreturn;
+        }
+        // — self-damage from hitting a reflect mob (magical)
+        if (data.reflect && get_player(data.hid)) {
+            //console.log('Reflect self-hit by', data.hid, 'for', data.reflect);
+            const e = getPlayerEntry(data.hid);
+            e.sumDamageTakenMag += data.reflect;
+        }
 
-                // Handle mana steal based on the toggle for showing overmana steal
-                if (showOverManasteal) {
-                    entry.sumManaSteal += data.manasteal ?? 0; // Include all manasteal
-                } else {
-                    entry.sumManaSteal += Math.min(data.manasteal ?? 0, maxMana - currentMana); // Only actual manasteal
-                }
+        // == Character actions ==
+        // Heal / Lifesteal
+        if (get_player(data.hid) && (data.heal || data.lifesteal)) {
+            const e = getPlayerEntry(data.hid);
+            const healer = get_player(data.hid);
+            const target = get_player(data.id);
 
-                // Accumulate damage values
-                entry.sumDamage += data.damage ?? 0;
-
-                if (data.source === "burn") {
-                    entry.sumBurnDamage += data.damage;
-                } else if (data.splash) {
-                    entry.sumBlastDamage += data.damage;
-                } else {
-                    entry.sumBaseDamage += data.damage ?? 0;
-                }
-
-                // Update partyDamageSums with the entry
-                partyDamageSums[targetId] = entry;
-            }
-
-            // Handle damage return
-            if (data.dreturn) {
-                let playerId = data.id;
-
-                if (!playerDamageReturns[playerId]) {
-                    playerDamageReturns[playerId] = {
-                        startTime: performance.now(),
-                        sumDamageReturn: 0,
-                    };
-                }
-
-                let playerEntry = playerDamageReturns[playerId];
-                playerEntry.sumDamageReturn += data.dreturn ?? 0;
-
-                // Update the partyDamageSums for damage return
-                if (parent.party_list && parent.party_list.includes(playerId)) {
-                    let partyEntry = partyDamageSums[playerId] ?? {
-                        startTime: performance.now(),
-                        sumDamage: 0,
-                        sumHeal: 0,
-                        sumBurnDamage: 0,
-                        sumBlastDamage: 0,
-                        sumBaseDamage: 0,
-                        sumLifesteal: 0,
-                        sumManaSteal: 0,
-                        sumDamageReturn: 0,
-                        sumReflection: 0,
-                    };
-                    partyEntry.sumDamageReturn += data.dreturn ?? 0; // Add dreturn to party damage sums
-                    partyDamageSums[playerId] = partyEntry; // Update the partyDamageSums
-                }
-            }
-            // Handle reflection damage
-            if (data.reflect) {
-                console.log(`Reflection event: Target = ${data.target}, Reflect Damage = ${data.reflect}`);
-                let playerId = data.id;
-
-                // Initialize playerDamageReflects entry for the player if it doesn't exist
-                if (!playerDamageReflects[playerId]) {
-                    playerDamageReflects[playerId] = {
-                        startTime: performance.now(),
-                        sumReflection: 0,
-                    };
-                }
-
-                // Update reflection damage in playerDamageReflects
-                let playerEntry = playerDamageReflects[playerId];
-                playerEntry.sumReflection += data.reflect ?? 0;
-
-                // Update partyDamageSums for reflection damage
-                if (parent.party_list && parent.party_list.includes(playerId)) {
-                    let partyEntry = partyDamageSums[playerId] ?? {
-                        startTime: performance.now(),
-                        sumDamage: 0,
-                        sumHeal: 0,
-                        sumBurnDamage: 0,
-                        sumBlastDamage: 0,
-                        sumBaseDamage: 0,
-                        sumLifesteal: 0,
-                        sumManaSteal: 0,
-                        sumDamageReturn: 0,
-                        sumReflection: 0,
-                    };
-
-                    partyEntry.sumReflection += data.reflect ?? 0; // Add reflect to party damage sums
-                    partyDamageSums[playerId] = partyEntry; // Update the partyDamageSums
-                }
+            const totalHeal = (data.heal ?? 0) + (data.lifesteal ?? 0);
+            if (showOverheal) {
+                e.sumHeal += totalHeal;
+            } else {
+                const actualHeal = (data.heal
+                    ? Math.min(data.heal, (target?.max_hp ?? 0) - (target?.hp ?? 0))
+                    : 0
+                ) + (data.lifesteal
+                    ? Math.min(data.lifesteal, healer.max_hp - healer.hp)
+                    : 0
+                    );
+                e.sumHeal += actualHeal;
             }
         }
-    } catch (error) {
-        console.error('Error in hit event handler:', error);
+
+        // Mana steal
+        if (get_player(data.hid) && data.manasteal) {
+            const e = getPlayerEntry(data.hid);
+            const p = get_entity(data.hid);
+            if (showOverManasteal) e.sumManaSteal += data.manasteal;
+            else e.sumManaSteal += Math.min(data.manasteal, p.max_mp - p.mp);
+        }
+
+        // Other damage done (per-player breakdown)
+        if (data.damage && get_player(data.hid)) {
+            const e = getPlayerEntry(data.hid);
+            e.sumDamage += data.damage;
+            if (data.source === 'burn') e.sumBurnDamage += data.damage;
+            else if (data.splash) e.sumBlastDamage += data.damage;
+            else e.sumBaseDamage += data.damage;
+        }
+
+    } catch (err) {
+        console.error('hit handler error', err);
     }
 });
 
-// Function to calculate the elapsed time in hours and minutes
-function getElapsedTime() {
-    let elapsedMs = performance.now() - METER_START;
-    let elapsedHours = Math.floor(elapsedMs / (1000 * 60 * 60));
-    let elapsedMinutes = Math.floor((elapsedMs % (1000 * 60 * 60)) / (1000 * 60));
-    return `${elapsedHours}h ${elapsedMinutes}m`;
-}
-
-// Update the DPS meter UI
-function updateDPSMeterUI() {
-    try {
-        let elapsed = performance.now() - METER_START;
-
-        // Initialize damage variables
-        let dps = Math.floor((damage * 1000) / elapsed);
-        let burnDps = Math.floor((burnDamage * 1000) / elapsed);
-        let blastDps = Math.floor((blastDamage * 1000) / elapsed);
-        let baseDps = Math.floor((baseDamage * 1000) / elapsed);
-        let hps = Math.floor((baseHeal * 1000) / elapsed);
-        let mps = Math.floor((manasteal * 1000) / elapsed);
-        let dr = Math.floor((dreturn * 1000) / elapsed);
-        let RF = Math.floor((reflect * 1000) / elapsed);
-
-        let $ = parent.$;
-        let dpsDisplay = $('#dpsmetercontent');
-
-        if (dpsDisplay.length === 0) return;
-
-        let elapsedTime = getElapsedTime();
-
-        let listString = `<div>👑 Elapsed Time: ${elapsedTime} 👑</div>`;
-        listString += '<table border="1" style="width:100%">';
-
-        // Header row
-        listString += '<tr><th></th>';
-        for (const type of damageTypes) {
-            const color = displayDamageTypeColors ? (damageTypeColors[type] || 'white') : 'white'; // Use color if enabled
-            listString += `<th style="color: ${color};">${type}</th>`;
-        }
-        listString += '</tr>';
-
-        // Sort players by DPS
-        let sortedPlayers = Object.entries(partyDamageSums)
-            .map(([id, entry]) => ({
-                id,
-                dps: calculateDPSForPartyMember(entry),
-                entry
-            }))
-            .sort((a, b) => b.dps - a.dps);
-
-        // Define a color mapping for player classes
-        const classColors = {
-            mage: '#3FC7EB',
-            paladin: '#F48CBA',
-            priest: '#FFFFFF', // White
-            ranger: '#AAD372',
-            rogue: '#FFF468',
-            warrior: '#C69B6D'
-        };
-
-        // Player rows
-        for (let { id, entry } of sortedPlayers) {
-            const player = get_player(id);
-            if (player) {
-                listString += '<tr>';
-                // Get the player's class type and corresponding color
-                const playerClass = player.ctype.toLowerCase(); // Ensure class type is in lowercase
-                const nameColor = displayClassTypeColors ? (classColors[playerClass] || '#FFFFFF') : '#FFFFFF'; // Use color if enabled
-
-                // Apply color to the player's name
-                listString += `<td style="color: ${nameColor};">${player.name}</td>`;
-
-                for (const type of damageTypes) {
-                    // Directly fetch value for each type from entry
-                    let value = getTypeValue(type, entry);
-                    listString += `<td>${getFormattedDPS(value)}</td>`; // No color for values
-                }
-
-                listString += '</tr>';
-            }
-        }
-
-        // Total DPS row
-        listString += '<tr><td>Total DPS</td>';
-        for (const type of damageTypes) {
-            let totalDPS = 0;
-
-            for (let id in partyDamageSums) {
-                const entry = partyDamageSums[id];
-                const value = getTypeValue(type, entry);
-                totalDPS += value;
-            }
-            listString += `<td>${getFormattedDPS(totalDPS)}</td>`; // No color for total values
-        }
-        listString += '</tr>';
-
-        listString += '</table>';
-
-        dpsDisplay.html(listString);
-    } catch (error) {
-        console.error('Error updating DPS meter UI:', error);
-    }
-}
-
-// Get value for a specific damage type
+// Compute stat value for type
 function getTypeValue(type, entry) {
-    const elapsedTime = performance.now() - (entry.startTime || performance.now());
-
-    // Ensure elapsedTime is greater than 0 to prevent division by zero
-    if (elapsedTime > 0) {
-        switch (type) {
-            case "DPS":
-                return calculateDPSForPartyMember(entry);
-            case "Burn":
-                return Math.floor((entry.sumBurnDamage * 1000) / elapsedTime) || 0;
-            case "Blast":
-                return Math.floor((entry.sumBlastDamage * 1000) / elapsedTime) || 0;
-            case "Base":
-                return Math.floor((entry.sumBaseDamage * 1000) / elapsedTime) || 0;
-            case "HPS":
-                return Math.floor((entry.sumHeal * 1000) / elapsedTime) || 0;
-            case "MPS":
-                return Math.floor((entry.sumManaSteal * 1000) / elapsedTime) || 0;
-            case "DR":
-                return Math.floor((entry.sumDamageReturn * 1000) / elapsedTime) || 0;
-            case "RF":
-                return Math.floor((entry.sumReflection * 1000) / elapsedTime) || 0;
-            default:
-                return 0;
+    const elapsed = performance.now() - entry.startTime;
+    if (elapsed <= 0) return 0;
+    switch (type) {
+        case 'DPS': {
+            const total = entry.sumDamage + entry.sumDamageReturn + entry.sumReflection;
+            return Math.floor(total * 1000 / elapsed);
         }
-    } else {
-        return 0; // If elapsedTime is 0 or less, return 0 for safety
-    }
-}
-
-// Calculate DPS for a specific party member
-function calculateDPSForPartyMember(entry) {
-    try {
-        const elapsedTime = performance.now() - (entry.startTime || performance.now());
-        const totalDamage = entry.sumDamage || 0;
-        const totalDamageReturn = entry.sumDamageReturn || 0;
-        const totalReflection = entry.sumReflection || 0; // Include reflection damage
-        const totalCombinedDamage = totalDamage + totalDamageReturn + totalReflection; // Combine for DPS calculation
-
-        // Prevent division by zero
-        if (elapsedTime > 0) {
-            return Math.floor((totalCombinedDamage * 1000) / elapsedTime);
-        } else {
+        case 'Burn': return Math.floor(entry.sumBurnDamage * 1000 / elapsed);
+        case 'Blast': return Math.floor(entry.sumBlastDamage * 1000 / elapsed);
+        case 'Base': return Math.floor(entry.sumBaseDamage * 1000 / elapsed);
+        case 'HPS': return Math.floor(entry.sumHeal * 1000 / elapsed);
+        case 'MPS': return Math.floor(entry.sumManaSteal * 1000 / elapsed);
+        case 'DR': return Math.floor(entry.sumDamageReturn * 1000 / elapsed);
+        case 'RF': return Math.floor(entry.sumReflection * 1000 / elapsed);
+        case 'Dmg Taken': {
+            const phys = Math.floor(entry.sumDamageTakenPhys * 1000 / elapsed);
+            const mag = Math.floor(entry.sumDamageTakenMag * 1000 / elapsed);
+            return { phys, mag };
+        }
+        default:
             return 0;
-        }
-    } catch (error) {
-        console.error('Error calculating DPS for party member:', error);
-        return 0;
     }
 }
 
-// Initialize the DPS meter and set up the update interval
+// Calculate DPS for sorting
+function calculateDPSForEntry(entry) {
+    const elapsed = performance.now() - entry.startTime;
+    if (elapsed <= 0) return 0;
+    const total = entry.sumDamage + entry.sumDamageReturn + entry.sumReflection;
+    return Math.floor(total * 1000 / elapsed);
+}
+
+// Render the DPS meter UI
+function updateDPSMeterUI() {
+    const $ = parent.$;
+    const c = $('#dpsmetercontent'); if (!c.length) return;
+    // Elapsed time display
+    const elapsedMs = performance.now() - METER_START;
+    const hrs = Math.floor(elapsedMs / 3600000);
+    const mins = Math.floor((elapsedMs % 3600000) / 60000);
+    let html = `<div>👑 Elapsed Time: ${hrs}h ${mins}m 👑</div>` +
+        '<table border="1" style="width:100%"><tr><th></th>';
+    // Header row
+    damageTypes.forEach(t => {
+        const col = displayDamageTypeColors ? damageTypeColors[t] || 'white' : 'white';
+        html += `<th style='color:${col}'>${t}</th>`;
+    });
+    html += '</tr>';
+    // Player rows
+    const classColors = { mage: '#3FC7EB', paladin: '#F48CBA', priest: '#FFFFFF', ranger: '#AAD372', rogue: '#FFF468', warrior: '#C69B6D' };
+    const sorted = Object.entries(playerDamageSums)
+        .map(([id, e]) => ({ id, dps: calculateDPSForEntry(e), e }))
+        .sort((a, b) => b.dps - a.dps);
+    sorted.forEach(({ id, e }) => {
+        const p = get_player(id); if (!p) return;
+        const nameCol = displayClassTypeColors ? classColors[p.ctype.toLowerCase()] || '#FFFFFF' : '#FFFFFF';
+        html += `<tr><td style='color:${nameCol}'>${p.name}</td>`;
+        damageTypes.forEach(t => {
+            if (t === 'Dmg Taken') {
+                const { phys, mag } = getTypeValue(t, e);
+                html += `<td><span style='color:#FF4C4C'>${getFormatted(phys)}</span> | <span style='color:#6ECFF6'>${getFormatted(mag)}</span></td>`;
+            } else {
+                const val = getTypeValue(t, e);
+                html += `<td>${getFormatted(val)}</td>`;
+            }
+        });
+        html += '</tr>';
+    });
+    // Total row
+    html += `<tr><td style='color:${damageTypeColors['DPS']}'>Total DPS</td>`;
+    damageTypes.forEach(t => {
+        if (t === 'Dmg Taken') {
+            let totP = 0, totM = 0;
+            Object.values(playerDamageSums).forEach(e => {
+                const { phys, mag } = getTypeValue(t, e);
+                totP += phys; totM += mag;
+            });
+            html += `<td><span style='color:#FF4C4C'>${getFormatted(totP)}</span> | <span style='color:#6ECFF6'>${getFormatted(totM)}</span></td>`;
+        } else if (t === 'DPS') {
+            let totalDmg = 0;
+            Object.values(playerDamageSums).forEach(e => {
+                totalDmg += e.sumDamage + e.sumDamageReturn + e.sumReflection;
+            });
+            const elapsed = performance.now() - METER_START;
+            const totalDPS = Math.floor(totalDmg * 1000 / Math.max(elapsed, 1));
+            html += `<td>${getFormatted(totalDPS)}</td>`;
+        } else {
+            let tot = 0;
+            Object.values(playerDamageSums).forEach(e => tot += getTypeValue(t, e));
+            html += `<td>${getFormatted(tot)}</td>`;
+        }
+    });
+    html += '</tr></table>';
+    c.html(html);
+}
+
+// Initialize and run
 initDPSMeter();
 setInterval(updateDPSMeterUI, 250);
 /*

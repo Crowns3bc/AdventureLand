@@ -2029,7 +2029,7 @@ function sendRareLootToDiscord(itemID, quantity, itemData, mentionUserID) {
     };
 
     // Send message to Discord
-    fetch("https://discordapp.com/api/webhooks/1327927131732447265/qIbOFPXL8voYGRhJNcwYRBf6033kP68g8DZldAalYecaVHd5HCTEiuN3gxjzu0ukPyLj", {
+    fetch("https://discordapp.com/api/webhooks/1327927131732447265/**********************************************", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(discordMessage)

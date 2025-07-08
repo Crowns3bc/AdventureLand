@@ -203,7 +203,7 @@ function updatePartyFrames() {
 				shareColor: 'teal',
 			};
 
-			for (let key of ['hp', 'mp', 'xp']) {
+			for (let key of ['hp', 'mp', 'xp']) { // add what you want to see here
 				const text = key.toUpperCase();
 				const value = data[key];
 				const width = data[key + 'Width'];

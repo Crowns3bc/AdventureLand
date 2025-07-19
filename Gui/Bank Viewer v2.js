@@ -1,210 +1,213 @@
+const stackBankItems = true;
+// false = show every single copy separately (but still display .q when present)
+// true  = stack all items by name:level:p
+
+function pretty3(q) {
+    // Below 10 000, show the exact count
+    if (q < 10_000) {
+        return `${q}`;
+    }
+    // Millions
+    if (q >= 1_000_000) {
+        let mil = q / 1_000_000;
+        return mil >= 100
+            ? `${Math.floor(mil)}m`
+            : `${strip(mil)}m`;
+    }
+    // Thousands  (10 000 ≤ q < 1 000 000)
+    let k = q / 1_000;
+    return k >= 100
+        ? `${Math.floor(k)}k`
+        : `${strip(k)}k`;
+}
+
+function strip(num) {
+    let fixed = num.toFixed(1);
+    return fixed.endsWith('.0') ? fixed.slice(0, -2) : fixed;
+}
+
 function add_bank_button() {
     let $ = parent.$;
     let trc = $("#toprightcorner");
     $('#bankbutton').remove();
-    let bankButton = $('<div id="bankbutton" class="gamebutton" onclick="parent.$(`#maincode`)[0].contentWindow.render_bank_items()">BANK</div>');
+    let bankButton = $(
+        `<div id="bankbutton" class="gamebutton" 
+         onclick="parent.$('#maincode')[0].contentWindow.render_bank_items()">
+         🏧
+       </div>`
+    );
     trc.children().first().after(bankButton);
 }
-
 add_bank_button();
 
-// Save bank data to local storage
-function save_bank_to_local_storage() {
+function saveBankLocal() {
     if (character.bank) {
         localStorage.setItem("savedBank", JSON.stringify(character.bank));
-        game_log("Bank data saved to local storage!");
+        game_log("Bank saved!");
     } else {
-        game_log("No bank data to save!");
+        game_log("No bank data!");
     }
 }
 
-// Load bank data from local storage
 function load_bank_from_local_storage() {
-    const savedBank = localStorage.getItem("savedBank");
-    if (savedBank) {
-        return JSON.parse(savedBank);
-    } else {
-        game_log("No saved bank data found.");
-        return null;
-    }
+    const saved = localStorage.getItem("savedBank");
+    if (saved) return JSON.parse(saved);
+    game_log("No saved bank data found.");
+    return null;
 }
 
-function render_items(a) {
-    if (a.length > 0 && !Array.isArray(a[0])) {
-        a = [["Items", a]];
-    }
+function render_items(categories, used, total) {
+    categories = categories.filter(([, items]) => items.length > 0);
+    let html = `
+      <div style='position: relative; border: 5px solid gray;
+                  background-color: black; padding: 10px;
+                  width: 90%; height: 90%;'>
+        <div style="position: absolute; top: 5px; right: 10px;
+                    font-size: 24px; color: white; z-index: 10;">
+          ${used}/${total}
+        </div>
+    `;
 
-    let html = "<div style='border: 5px solid gray; background-color: black; padding: 10px; width: 90%; height: 90%;'>";
+    categories.forEach(([label, items]) => {
+        html += `
+          <div style='float:left; margin-left:5px;'>
+            <div class='gamebutton gamebutton-small' style='margin-bottom: 5px'>
+              ${label}
+            </div>
+            <div style='margin-bottom: 10px'>
+        `;
 
-    a.forEach((category) => {
-        html += `<div style='float:left; margin-left:5px;'><div class='gamebutton gamebutton-small' style='margin-bottom: 5px'>${category[0]}</div>`;
-        html += "<div style='margin-bottom: 10px'>";
-
-        category[1].forEach((item) => {
-            let itemDiv = parent.item_container({ skin: G.items[item.name].skin, onclick: `render_item_info('${item.name}')` }, item);
-
+        items.forEach(item => {
+            let opts = { skin: G.items[item.name].skin, onclick: `render_item_info('${item.name}')` };
+            let itemDiv = parent.item_container(opts, item);
             if (item.p) {
                 let corner = "";
                 switch (item.p) {
-                    case "festive":
-                        corner = `<div class='trruui imu' style='border-color: grey; color:#79ff7e'>F</div>`;
-                        break;
-                    case "firehazard":
-                        corner = `<div class='trruui imu' style='border-color: grey; color:#f79b11'>H</div>`;
-                        break;
-                    case "glitched":
-                        corner = `<div class='trruui imu' style='border-color: grey; color:grey'>#</div>`;
-                        break;
-                    case "gooped":
-                        corner = `<div class='trruui imu' style='border-color: grey; color:#64B867'>G</div>`;
-                        break;
-                    case "legacy":
-                        corner = `<div class='trruui imu' style='border-color: grey; color:white'>L</div>`;
-                        break;
-                    case "lucky":
-                        corner = `<div class='trruui imu' style='border-color: grey; color:#00f3ff'>L</div>`;
-                        break;
-                    case "shiny":
-                        corner = `<div class='trruui imu' style='border-color: grey; color:#99b2d8'>S</div>`;
-                        break;
-                    case "superfast":
-                        corner = `<div class='trruui imu' style='border-color: grey; color:#c681dc'>U</div>`;
-                        break;
-                    default:
-                        corner = `<div class='trruui imu' style='border-color: black; color:grey'>?</div>`;
-                        break;
+                    case "festive": corner = `<div class='trruui imu' style='border-color:grey;color:#79ff7e'>F</div>`; break;
+                    case "firehazard": corner = `<div class='trruui imu' style='border-color:grey;color:#f79b11'>H</div>`; break;
+                    case "glitched": corner = `<div class='trruui imu' style='border-color:grey;color:grey'>#</div>`; break;
+                    case "gooped": corner = `<div class='trruui imu' style='border-color:grey;color:#64B867'>G</div>`; break;
+                    case "legacy": corner = `<div class='trruui imu' style='border-color:grey;color:white'>L</div>`; break;
+                    case "lucky": corner = `<div class='trruui imu' style='border-color:grey;color:#00f3ff'>L</div>`; break;
+                    case "shiny": corner = `<div class='trruui imu' style='border-color:grey;color:#99b2d8'>S</div>`; break;
+                    case "superfast": corner = `<div class='trruui imu' style='border-color:grey;color:#c681dc'>U</div>`; break;
+                    default: corner = `<div class='trruui imu' style='border-color:black;color:grey'>?</div>`; break;
                 }
                 itemDiv = itemDiv.replace('</div></div>', `</div>${corner}</div>`);
             }
-
             html += itemDiv;
         });
 
-        html += "</div></div>";
+        html += `</div></div>`;
     });
 
-    html += "<div style='clear:both;'></div></div>";
-    parent.show_modal(html, { wrap: false, hideinbackground: true, url: "/docs/guide/all/items" });
+    html += `<div style='clear:both;'></div></div>`;
+    parent.show_modal(html, {
+        wrap: false,
+        hideinbackground: true,
+        url: "/docs/guide/all/items"
+    });
 }
 
 function render_bank_items() {
     let bankData = character.bank || load_bank_from_local_storage();
-
-    if (!bankData) {
-        return game_log("No bank data found. You must be inside the bank or have saved data.");
-    }
+    if (!bankData) return game_log("No bank data found.");
 
     function itm_cmp(a, b) {
-        return (
-            (a == null) - (b == null) ||
-            (a && (a.name < b.name ? -1 : +(a.name > b.name))) ||
-            (a && b.level - a.level)
-        );
+        return (a == null) - (b == null)
+            || (a && (a.name < b.name ? -1 : +(a.name > b.name)))
+            || (a && b.level - a.level);
     }
 
-    var a = [
-        ["Helmets", []],
-        ["Armors", []],
-        ["Underarmors", []],
-        ["Gloves", []],
-        ["Shoes", []],
-        ["Capes", []],
-        ["Rings", []],
-        ["Earrings", []],
-        ["Amulets", []],
-        ["Belts", []],
-        ["Orbs", []],
-        ["Weapons", []],
-        ["Shields", []],
-        ["Offhands", []],
-        ["Elixirs", []],
-        ["Potions", []],
-        ["Scrolls", []],
+    // Categories & slot mapping
+    let categories = [
+        ["Helmets", []], ["Armors", []], ["Underarmors", []],
+        ["Gloves", []], ["Shoes", []], ["Capes", []],
+        ["Rings", []], ["Earrings", []], ["Amulets", []],
+        ["Belts", []], ["Orbs", []], ["Weapons", []],
+        ["Shields", []], ["Offhands", []], ["Elixirs", []],
+        ["Potions", []], ["Scrolls", []],
         ["Crafting and Collecting", []],
-        ["Exchangeables", []],
-        ["Others", []],
+        ["Exchangeables", []], ["Others", []]
     ];
-
     let slot_ids = [
-        "helmet", "chest", "pants", "gloves", "shoes", "cape", "ring", "earring", "amulet", "belt",
-        "orb", "weapon", "shield", "offhand", "elixir", "pot", "scroll", "material", "exchange", "",
+        "helmet", "chest", "pants", "gloves", "shoes", "cape", "ring",
+        "earring", "amulet", "belt", "orb", "weapon", "shield",
+        "offhand", "elixir", "pot", "scroll", "material", "exchange", ""
     ];
 
-    object_sort(G.items, "gold_value").forEach(function (b) {
-        if (!b[1].ignore)
-            for (var c = 0; c < a.length; c++)
-                if (
-                    !slot_ids[c] ||
-                    b[1].type == slot_ids[c] ||
-                    ("offhand" == slot_ids[c] &&
-                        in_arr(b[1].type, ["source", "quiver", "misc_offhand"])) ||
-                    ("scroll" == slot_ids[c] &&
-                        in_arr(b[1].type, ["cscroll", "uscroll", "pscroll", "offering"])) ||
-                    ("exchange" == slot_ids[c] && G.items[b[0]].e)
-                ) {
-                    const dest_type = b[1].id;
-                    let type_in_bank = [];
-                    for (let bank_pock in bankData) {
-                        const bank_pack = bankData[bank_pock];
-                        for (let bonk_item in bank_pack) {
-                            const bank_item = bank_pack[bonk_item];
-                            if (bank_item && bank_item.name == dest_type)
-                                type_in_bank.push(bank_item);
-                        }
-                    }
-                    type_in_bank.sort(itm_cmp);
-                    for (let io = type_in_bank.length - 1; io >= 1; io--) {
-                        if (itm_cmp(type_in_bank[io], type_in_bank[io - 1]) == 0) {
-                            type_in_bank[io - 1].q =
-                                (type_in_bank[io - 1].q || 1) + (type_in_bank[io].q || 1);
-                            type_in_bank.splice(io, 1);
-                        }
-                    }
-                    a[c][1].push(type_in_bank);
-                    break;
+    // Gather raw slices
+    object_sort(G.items, "gold_value").forEach(([id, def]) => {
+        if (def.ignore) return;
+        for (let ci = 0; ci < categories.length; ci++) {
+            let type = slot_ids[ci];
+            if (
+                !type
+                || def.type === type
+                || (type === "offhand" && in_arr(def.type, ["source", "quiver", "misc_offhand"]))
+                || (type === "scroll" && in_arr(def.type, ["cscroll", "uscroll", "pscroll", "offering"]))
+                || (type === "exchange" && def.e)
+            ) {
+                let slice = [];
+                for (let pack in bankData) {
+                    let arr = bankData[pack];
+                    if (!Array.isArray(arr)) continue;
+                    arr.forEach(it => { if (it && it.name === id) slice.push(it); });
                 }
+                slice.sort(itm_cmp);
+                categories[ci][1].push(slice);
+                break;
+            }
+        }
     });
 
-    for (var c = 0; c < a.length; c++) {
-        let stackableItems = [];
-        let unstackableItems = [];
-        let stackableMap = new Map(); // Map to consolidate stackable items
+    // Final pass: stack vs. flatten
+    categories.forEach(cat => {
+        let flat = cat[1].flat();
 
-        a[c][1].flat().forEach(item => {
-            if (item.q && item.q > 1) {
-                if (stackableMap.has(item.name + item.level)) { // Group by item name and level
-                    stackableMap.set(item.name + item.level, {
-                        name: item.name,
-                        level: item.level,
-                        q: stackableMap.get(item.name + item.level).q + item.q
-                    });
+        if (stackBankItems) {
+            let map = new Map();
+            flat.forEach(item => {
+                let key = `${item.name}:${item.level}:${item.p || ""}`;
+                if (!map.has(key)) {
+                    map.set(key, { ...item, q: item.q || 1 });
                 } else {
-                    stackableMap.set(item.name + item.level, { name: item.name, level: item.level, q: item.q });
+                    map.get(key).q += (item.q || 1);
                 }
-            } else {
-                unstackableItems.push(item);
-            }
-        });
-
-        a[c][1] = Array.from(stackableMap, ([nameLevel, data]) => {
-            if (data.q > 1000) {
-                if (data.q % 1 === 0) {
-                    return { name: data.name, level: data.level, q: (data.q / 1000).toFixed(0) + "k" };
-                } else {
-                    return { name: data.name, level: data.level, q: (data.q / 1000).toFixed(1).replace(/\.0$/, "") + "k" };
+            });
+            cat[1] = Array.from(map.values()).map(d => {
+                d.q = pretty3(d.q);
+                return d;
+            });
+        } else {
+            // keep original .q if present (formatted), otherwise show individual copy
+            cat[1] = flat.map(item => {
+                if (item.q != null) {
+                    return { ...item, q: pretty3(item.q) };
                 }
-            } else {
-                return { name: data.name, level: data.level, q: data.q };
-            }
-        });
+                return { ...item };
+            });
+        }
 
-        a[c][1] = a[c][1].concat(unstackableItems);
+        cat[1].sort((a, b) => a.name > b.name ? 1 : -1);
+    });
 
-        a[c][1] = a[c][1].sort((a, b) => (a.name > b.name ? 1 : -1)); // Sorting the items by name
-    }
+    // Count slots
+    let used = 0, total = 0;
+    Object.values(bankData).forEach(arr => {
+        if (Array.isArray(arr)) {
+            total += arr.length;
+            used += arr.filter(x => !!x).length;
+        }
+    });
 
-    render_items(a);
+    render_items(categories, used, total);
 }
-// Add a button to save bank data
-let saveBankButton = $('<div id="saveBankButton" class="gamebutton" onclick="parent.$(`#maincode`)[0].contentWindow.save_bank_to_local_storage()">SAVE BANK</div>');
-$("#toprightcorner").children().first().after(saveBankButton);
+
+let saveBtn = $(
+    `<div id="saveBankButton" class="gamebutton"
+         onclick="parent.$('#maincode')[0].contentWindow.saveBankLocal()">
+     SAVE BANK
+   </div>`
+);
+$("#toprightcorner").children().first().after(saveBtn);

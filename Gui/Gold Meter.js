@@ -57,24 +57,20 @@ setInterval(updateGoldDisplay, 500);
 initGoldMeter();
 
 character.on("loot", (data) => {
-    if (data.gold && typeof data.gold === 'number' && !Number.isNaN(data.gold)) {
-        const partyShare = parent.party?.[character.name]?.share || 1;
+	if (data.gold && typeof data.gold === 'number' && !Number.isNaN(data.gold)) {
+		const myCharCount = countMyPartyCharacters(); 
+		// should return 3 if your running 3 characters that are nearby
+		const myGold = Math.round(data.gold * myCharCount); 
+		// total gold you (as a player) earned amongst all your characters
 
-        const myCharCount = countMyCharacters();
+		sumGold += myGold;
 
-        // Multiply by how many characters you actually control
-        const myTotalShare = partyShare * myCharCount;
-
-        const myGold = Math.round(data.gold * myTotalShare);
-
-        sumGold += myGold;
-
-        if (myGold > largestGoldDrop) {
-            largestGoldDrop = myGold;
-        }
-    } else {
-        console.warn("Invalid gold value:", data);
-    }
+		if (myGold > largestGoldDrop) {
+			largestGoldDrop = myGold;
+		}
+	} else {
+		console.warn("Invalid gold value:", data);
+	}
 });
 
 // Calculate average gold based on the selected interval
@@ -89,16 +85,16 @@ const calculateAverageGold = () => {
 };
 
 // Get number of a characters a person is running
-const myOwnerId = character.owner;  // Your unique owner ID
-function countMyCharacters() {
+function countMyPartyCharacters() {
     let count = 0;
-    for (const id in parent.entities) {
-        const entity = parent.entities[id];
-        if (entity.owner === myOwnerId) {
+
+    for (const name in parent.party) {
+        if (name === character.name || (parent.entities[name]?.owner === character.owner)) {
             count++;
         }
     }
-    return count + 1; // Add yourself
+
+    return count;
 }
 
 // Function to change the interval (can be called externally)

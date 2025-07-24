@@ -15,7 +15,7 @@ Shows your average gold earnings over configurable time frames, including gold p
 <img width="428" height="72" alt="image" src="https://github.com/user-attachments/assets/028eb9b5-8a23-47af-8392-f53284cc6b8b" />
 
 Kill Tracker: 
-Estimates the number of kills over specific time intervals, helping you track your combat efficiency. Displays in Buttons or set_message()
+Estimates the number of kills over specific time intervals, helping you track your combat efficiency. Displays in Buttons or set_message().     
 <img width="144" height="68" alt="image" src="https://github.com/user-attachments/assets/5271256d-7258-4131-babe-cb66d48f8adb" /> 
 <img width="149" height="71" alt="image" src="https://github.com/user-attachments/assets/b5e7ddb8-b919-486c-963f-3c37d8dee993" />
 

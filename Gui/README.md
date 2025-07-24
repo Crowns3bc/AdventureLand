@@ -3,7 +3,10 @@ Displays all your bank tabs combined into a single window for easy viewing. Note
 <img width="1719" height="715" alt="image" src="https://github.com/user-attachments/assets/2975bd78-6d0c-439e-bd78-3b4faeb44535" />
 
 DPS Meter: 
-Shows DPS for each party member. Appearance may vary across browsers and Steam.
+A configurable DPS tracker that displays party member performance across multiple damage and support types.
+Supports: "Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF", "DPS", and "Dmg Taken".
+Note: Tracking too many types at once can make the meter very wide and may stretch the game log window. For best results, limit to 4–5 types.
+Appearance may vary across browsers and Steam.
 <img width="394" height="252" alt="image" src="https://github.com/user-attachments/assets/1a5b025c-6ba5-4fae-b897-900ba4177ed1" />
 
 Game Log Filter: 

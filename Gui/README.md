@@ -34,7 +34,7 @@ Adds convenient buttons for quickly buying scrolls and offerings, plus easy acce
 <img width="406" height="256" alt="image" src="https://github.com/user-attachments/assets/2a52e385-6636-44e4-8f47-058349c76d9b" />
 
 XP Bar Decimals:                                     
-Enhances your XP bar by adding decimal values for more precise progress tracking.
+Enhances your XP bar by adding decimal values for more precise progress tracking.                       
 <img width="355" height="40" alt="image" src="https://github.com/user-attachments/assets/27aede5c-5455-4790-bb59-2c0f9edf6bf0" />
 
 XP Meter:                                         

@@ -1,6 +1,6 @@
 const stackBankItems = true;
-// false = show every single copy separately (but still display .q when present)
-// true  = stack all items by name:level:p
+//false = show every single copy separately (but still display .q when present)
+//true  = stack all items by name:level:p
 
 function pretty3(q) {
     // Below 10 000, show the exact count
@@ -26,34 +26,61 @@ function strip(num) {
     return fixed.endsWith('.0') ? fixed.slice(0, -2) : fixed;
 }
 
+
+// 2) Replace your old add_bank_button with this:
 function add_bank_button() {
     let $ = parent.$;
     let trc = $("#toprightcorner");
     $('#bankbutton').remove();
-    let bankButton = $(
-        `<div id="bankbutton" class="gamebutton" 
-         onclick="parent.$('#maincode')[0].contentWindow.render_bank_items()">
-         🏧
-       </div>`
-    );
+    let bankButton = $(`
+    <div id="bankbutton" class="gamebutton" title="View Player Banks">
+      🏧
+    </div>
+  `).css('cursor', 'pointer')
+        .on('click', showBankSelector);
     trc.children().first().after(bankButton);
 }
 add_bank_button();
 
-function saveBankLocal() {
-    if (character.bank) {
-        localStorage.setItem("savedBank", JSON.stringify(character.bank));
-        game_log("Bank saved!");
-    } else {
-        game_log("No bank data!");
-    }
-}
+async function showBankSelector() {
+    let $ = parent.$;
+    try {
+        const res = await fetch("https://aldata.earthiverse.ca/active-owners");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
 
-function load_bank_from_local_storage() {
-    const saved = localStorage.getItem("savedBank");
-    if (saved) return JSON.parse(saved);
-    game_log("No saved bank data found.");
-    return null;
+        // Only add yourself if you're not already listed
+        const alreadyListed = data.some(entry => entry.owner === character.owner);
+        if (!alreadyListed) {
+            data.unshift({
+                owner: character.owner,
+                characters: [character.name],
+                bank: character.bank || load_bank_from_local_storage()
+            });
+        }
+
+        // Build modal
+        let html = `<div style="padding:10px;">`;
+        html += `<div style="font-size:16px; margin-bottom:6px;">Select a public bank:</div>`;
+        data.forEach(({ owner, characters }) => {
+            if (!characters.length) return;
+            const label = characters[0]; // Display first character
+            html += `
+                <div class="gamebutton" style="margin:2px;" onclick="parent.$('#maincode')[0].contentWindow.render_bank_items('${owner}')">
+                    ${label}
+                </div>
+            `;
+        });
+        html += `</div>`;
+
+        parent.show_modal(html, {
+            wrap: false,
+            hideinbackground: true,
+            title: "Public Banks"
+        });
+    } catch (e) {
+        game_log(`Couldn't load public banks: ${e.message}`, "red");
+    }
 }
 
 function render_items(categories, used, total) {
@@ -109,10 +136,31 @@ function render_items(categories, used, total) {
     });
 }
 
-function render_bank_items() {
-    let bankData = character.bank || load_bank_from_local_storage();
-    if (!bankData) return game_log("No bank data found.");
+// 3) Tweak render_bank_items so it can accept an ownerId
+async function render_bank_items(ownerId) {
+    let bankData = null;
 
+    // 1) if no ownerId, try in-game or localStorage:
+    if (!ownerId) {
+        bankData = character.bank || load_bank_from_local_storage();
+    }
+
+    // 2) if we still have nothing—or if an explicit ownerId was passed—fetch remote:
+    if (ownerId || !bankData) {
+        try {
+            const resp = await fetch(`https://aldata.earthiverse.ca/bank/${ownerId || character.owner}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            bankData = await resp.json();
+        } catch (err) {
+            return game_log(`Couldn’t fetch bank data: ${err.message}`);
+        }
+    }
+
+    if (!bankData) {
+        return game_log("No bank data found.");
+    }
+
+    // ——— then drop into your existing sorting & render_items logic ———
     function itm_cmp(a, b) {
         return (a == null) - (b == null)
             || (a && (a.name < b.name ? -1 : +(a.name > b.name)))
@@ -204,10 +252,20 @@ function render_bank_items() {
     render_items(categories, used, total);
 }
 
-let saveBtn = $(
-    `<div id="saveBankButton" class="gamebutton"
-         onclick="parent.$('#maincode')[0].contentWindow.saveBankLocal()">
-     SAVE BANK
-   </div>`
-);
-$("#toprightcorner").children().first().after(saveBtn);
+// call this somewhere to save your bank to local storage if you want. 
+// otherwise, youll have to be in the bank to see your own data if your not posting your data to earthverse's database
+function saveBankLocal() {
+    if (character.bank) {
+        localStorage.setItem("savedBank", JSON.stringify(character.bank));
+        game_log("Bank saved!");
+    } else {
+        game_log("No bank data!");
+    }
+}
+
+function load_bank_from_local_storage() {
+    const saved = localStorage.getItem("savedBank");
+    if (saved) return JSON.parse(saved);
+    game_log("No saved bank data found.");
+    return null;
+}

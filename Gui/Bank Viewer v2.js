@@ -61,7 +61,16 @@ async function showBankSelector() {
 
         // Build modal
         let html = `<div style="padding:10px;">`;
-        html += `<div style="font-size:16px; margin-bottom:6px;">Select a public bank:</div>`;
+        html += `
+          <div style="position: relative; font-size:16px; margin-bottom:6px; display: inline-block;">
+            <div style="position: absolute; top: -1px; left: -1px; color: black; z-index: 0; user-select: none;">
+              Select a public bank:
+            </div>
+            <div style="position: relative; color: white; z-index: 1;">
+              Select a public bank:
+            </div>
+          </div>
+        `;
         data.forEach(({ owner, characters }) => {
             if (!characters.length) return;
             const label = characters[0]; // Display first character
@@ -87,7 +96,7 @@ function render_items(categories, used, total) {
     categories = categories.filter(([, items]) => items.length > 0);
     let html = `
       <div style='position: relative; border: 5px solid gray;
-                  background-color: black; padding: 10px;
+                  background-color: black; padding: 12px;
                   width: 90%; height: 90%;'>
         <div style="position: absolute; top: 5px; right: 10px;
                     font-size: 24px; color: white; z-index: 10;">
@@ -110,14 +119,14 @@ function render_items(categories, used, total) {
             if (item.p) {
                 let corner = "";
                 switch (item.p) {
-                    case "festive": corner = `<div class='trruui imu' style='border-color:grey;color:#79ff7e'>F</div>`; break;
-                    case "firehazard": corner = `<div class='trruui imu' style='border-color:grey;color:#f79b11'>H</div>`; break;
-                    case "glitched": corner = `<div class='trruui imu' style='border-color:grey;color:grey'>#</div>`; break;
-                    case "gooped": corner = `<div class='trruui imu' style='border-color:grey;color:#64B867'>G</div>`; break;
-                    case "legacy": corner = `<div class='trruui imu' style='border-color:grey;color:white'>L</div>`; break;
-                    case "lucky": corner = `<div class='trruui imu' style='border-color:grey;color:#00f3ff'>L</div>`; break;
-                    case "shiny": corner = `<div class='trruui imu' style='border-color:grey;color:#99b2d8'>S</div>`; break;
-                    case "superfast": corner = `<div class='trruui imu' style='border-color:grey;color:#c681dc'>U</div>`; break;
+                    case "festive": corner = `<div class='trruui imu' style='border-color:grey;color: #00FF00'>F</div>`; break;
+                    case "firehazard": corner = `<div class='trruui imu' style='border-color:grey;color: #FF4500'>H</div>`; break;
+                    case "glitched": corner = `<div class='trruui imu' style='border-color:grey;color: #00CED1'>G</div>`; break;
+                    case "gooped": corner = `<div class='trruui imu' style='border-color:grey;color: #3CB371'>G</div>`; break;
+                    case "legacy": corner = `<div class='trruui imu' style='border-color:grey;color: #C0C0C0'>L</div>`; break;
+                    case "lucky": corner = `<div class='trruui imu' style='border-color:grey;color: #7CFC00'>L</div>`; break;
+                    case "shiny": corner = `<div class='trruui imu' style='border-color:grey;color: #FFD700'>S</div>`; break;
+                    case "superfast": corner = `<div class='trruui imu' style='border-color:grey;color: #8A2BE2'>S</div>`; break;
                     default: corner = `<div class='trruui imu' style='border-color:black;color:grey'>?</div>`; break;
                 }
                 itemDiv = itemDiv.replace('</div></div>', `</div>${corner}</div>`);

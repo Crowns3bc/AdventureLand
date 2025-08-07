@@ -19,7 +19,7 @@ const locations = {
     oneeye: [{ x: -255, y: 176 }],
     pinkgoblin: [{ x: 366, y: 377 }],
     poisio: [{ x: -121, y: 1360 }],
-    prat: [{ x: -280, y: 552 }], //[{ x: 6, y: 430 }]
+    prat: [{ x: 11, y: 84 }], //[{ x: 6, y: 430 }]
     pppompom: [{ x: 292, y: -189 }],
     plantoid: [{ x: -780, y: -387 }], // [{ x: -840, y: -340 }]
     rat: [{ x: 6, y: 430 }],
@@ -35,6 +35,9 @@ const locations = {
 const home = 'targetron';
 const mobMap = 'uhills';
 const home2 = 'sparkbot';
+
+let currentState = "idle";
+let targetSet = null;
 
 const destination = {
     map: mobMap,
@@ -72,7 +75,7 @@ async function eventer() {
             //handleBosses();
         } else if (!get_nearest_monster({ type: home })) {
             handleHome();
-        } else {
+        } else if (!is_disabled(character)) {
             walkInCircle();
         }
         if (character.map !== mobMap) {
@@ -81,7 +84,6 @@ async function eventer() {
     } catch (e) {
         console.error(e);
     }
-
     setTimeout(eventer, delay);
 }
 eventer();
@@ -331,14 +333,14 @@ const equipmentSets = {
     ],
     gold: [
         { itemName: "wcap", slot: "helmet", level: 6, l: "l" },
-        { itemName: "wattire", slot: "chest", level: 9, l: "l" },
+        { itemName: "wattire", slot: "chest", level: 6, l: "l" },
         { itemName: "wbreeches", slot: "pants", level: 6, l: "l" },
-        { itemName: "wshoes", slot: "shoes", level: 10, l: "l" },
+        { itemName: "wshoes", slot: "shoes", level: 6, l: "l" },
         { itemName: "handofmidas", slot: "gloves", level: 8, l: "l" },
-		{ itemName: "goldring", slot: "ring1", level: 0, l: "l" },
-		{ itemName: "goldring", slot: "ring2", level: 0, l: "u" },
+        { itemName: "goldring", slot: "ring1", level: 0, l: "l" },
+        { itemName: "goldring", slot: "ring2", level: 0, l: "u" },
         { itemName: "spookyamulet", slot: "amulet", l: "l" },
-        { itemName: "stealthcape", slot: "cape", level: 0, l: "l" },
+        //{ itemName: "stealthcape", slot: "cape", level: 0, l: "l" },
     ],
     dps: [
         { itemName: "xhelmet", slot: "helmet", level: 9, l: "l" },
@@ -408,12 +410,18 @@ const equipmentSets = {
         //{ itemName: "t2stramulet", slot: "amulet", level: 4, l: "l"  },
         //{ itemName: "t2intamulet", slot: "amulet", level: 4, l: "l" },
         //{ itemName: "amuletofspooks", slot: "amulet", l: "l"  },
-        { itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
+        //{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
         //{ itemName: "gcape", slot: "cape", level: 9, l: "l" },
         { itemName: "bcape", slot: "cape", level: 7, l: "l" },
         //{ itemName: "fcape", slot: "cape", level: 4, l: "l" },
-		{ itemName: "mearring", slot: "earring1", level: 1, l: "l" },
+        { itemName: "mearring", slot: "earring1", level: 1, l: "l" },
         { itemName: "mearring", slot: "earring2", level: 1, l: "u" },
+    ],
+    int: [
+        { itemName: "t2intamulet", slot: "amulet", level: 4, l: "l" },
+    ],
+    mpx: [
+        { itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
     ],
 };
 
@@ -442,177 +450,177 @@ const targetNames = ["CrownTown", "CrownPriest"];
 
 async function attackLoop() {
     let delay = 1;
-    let disabled = (parent.is_disabled(character) === undefined);
-    let bosses = ["troll", "grinch"];
+    const bosses = ["troll", "grinch"];
+
     try {
-        if (disabled) {
-            let heal_target = lowest_health_partymember();
-            if (heal_target && heal_target.hp < heal_target.max_hp - (character.heal / 1.33) && is_in_range(heal_target)) {
-                await heal(heal_target);
-                if (heal_target.name === "CrownPriest") {
-                    game_log("Healing " + heal_target.name, "#FFFFFF");
-                } else if (heal_target.name === "CrownTown") {
-                    game_log("Healing " + heal_target.name, "#FF00E0");
-                } else if (heal_target.name === "CrownTown") {
-                    game_log("Healing " + heal_target.name, "#FFFF00");
-                } else if (heal_target.name === "CrownZone") {
-                    game_log("Healing " + heal_target.name, "#585858");
-                } else {
-                    game_log("Healing " + heal_target.name, "#27FF00");
-                }
-                delay = ms_to_next_skill('attack');
-            } else {
-                let target = null;
-                let bossMonster = null;
+        if (is_disabled(character)) {
+            delay = 250; // or longer if you want, like 500 or 1000
+            return setTimeout(attackLoop, delay);
+        }
 
-                //Prioritize Bosses
-                if (!target) {
-                    for (let i = 0; i < bosses.length; i++) {
-                        bossMonster = get_nearest_monster_v2({
-                            type: bosses[i],
-                            max_distance: 250, // Higher range for bosses
-                        });
-                        if (bossMonster) break;
-                    }
-                }
+        const healTarget = lowest_health_partymember();
+        if (
+            healTarget &&
+            healTarget.hp < healTarget.max_hp - character.heal / 1.33 &&
+            is_in_range(healTarget)
+        ) {
+            await heal(healTarget);
+            reduce_cooldown("heal", character.ping * 0.95)
 
-                // If no Bosses, find regular mobs
-                for (let i = 0; i < targetNames.length; i++) {
-                    target = get_nearest_monster_v2({
-                        target: targetNames[i],
-                        check_min_hp: true,
-                        max_distance: 50, // Only consider monsters within 50 units
-                    });
-                    if (target) break;
-                }
+            const nameColors = {
+                CrownPriest: "#FFFFFF",
+                CrownsAnal: "#FF00E0",
+                CrownTown: "#FF00E0",
+                CrownZone: "#585858"
+            };
 
-                // Prioritize boss target if found, otherwise use regular target
-                if (bossMonster) {
-                    target = bossMonster;
-                }
+            const color = nameColors[healTarget.name] || "#27FF00";
+            game_log(`Healing ${healTarget.name}`, color);
 
-                if (target) {
-                    if (is_in_range(target)) {
-                        await attack(target);
-                        delay = ms_to_next_skill('attack');
-                    }
-                }
+            delay = ms_to_next_skill("attack");
+            return setTimeout(attackLoop, delay);
+        }
+
+        // Try to find boss first
+        let bossMonster = null;
+        for (const type of bosses) {
+            bossMonster = get_nearest_monster_v2({ type, max_distance: 250 });
+            if (bossMonster) break;
+        }
+
+        // If no boss, find regular target in priority order
+        let target = bossMonster;
+        if (!target) {
+            for (const name of targetNames) {
+                target = get_nearest_monster_v2({
+                    target: name,
+                    check_min_hp: true,
+                    max_distance: 50
+                });
+                if (target) break;
             }
         }
+
+        if (target && is_in_range(target)) {
+            await attack(target);
+            reduce_cooldown("attack", character.ping * 0.95)
+            delay = ms_to_next_skill("attack");
+        }
     } catch (e) {
-        //console.error(e);
+        // Optional: uncomment to debug errors
+        // console.error("attackLoop error:", e);
     }
+
     setTimeout(attackLoop, delay);
 }
 
 attackLoop();
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 async function SkillLoop() {
-    const X = locations[home][0].x;
-    const Y = locations[home][0].y;
-    const delay = 40;
-    const dead = character.rip;
-    const disabled = parent.is_disabled(character) === undefined;
-    const mapsToExclude = ["level2n", "level2w"];
-    const eventMaps = ["desertland", "halloween"];
-    const eventMobs = ["rgoo", "bgoo", "snowman", "icegolem", "franky", "grinch", "dragold", "wabbit", "mrgreen", "mrpumpkin"];
-    try {
-        if (character.ctype === "priest") {
-            handlePriestSkills(X, Y, dead, disabled, mapsToExclude, eventMobs, eventMaps);
+    const X = locations[home][0].x,
+        Y = locations[home][0].y,
+        delay = 40,
+        dead = character.rip,
+        mapsToExclude = ["level2n", "level2w"],
+        penalty = character.s?.penalty_cd?.ms;
+
+    if (character.ctype === "priest" && !is_disabled(character)) {
+        try {
+            await handleCursing(X, Y);
+        } catch (e) {
+            console.error("handleCursing failed:", e);
         }
-    } catch (e) {
-        console.error(e);
+
+        try {
+            if ((penalty < 500 || !penalty) && !is_on_cooldown("absorb")) {
+                await handleAbsorb(mapsToExclude);
+            }
+        } catch (e) {
+            //console.error("handleAbsorb failed:", e);
+        }
+
+        try {
+            await handlePartyHeal();
+        } catch (e) {
+            console.error("handlePartyHeal failed:", e);
+        }
+
+        try {
+            await handleDarkBlessing();
+        } catch (e) {
+            console.error("handleDarkBlessing failed:", e);
+        }
+        /*
+        try {
+            await handleZapSpam(zapperMobs);
+        } catch (e) {
+            console.error("handleZapSpam failed:", e);
+        }*/
     }
-    setTimeout(() => SkillLoop(), delay);
+
+    setTimeout(SkillLoop, delay);
 }
 
 SkillLoop();
 
-async function safeCall(fn, name) {
-    try {
-        await fn();
-    } catch (e) {
-        console.error(`Error in ${name}:`, e);
-    }
-}
-
-async function handlePriestSkills(X, Y, dead, disabled, mapsToExclude, eventMobs, eventMaps, zapperMobs) {
-	if (dead || !disabled) return;
-
-	safeCall(() => handleCursing(X, Y), "handleCursing");
-	safeCall(() => handleAbsorb(mapsToExclude, eventMobs, eventMaps), "handleAbsorb");
-	safeCall(() => handlePartyHeal(), "handlePartyHeal");
-	safeCall(() => handleDarkBlessing(), "handleDarkBlessing");
-	// await safeCall(() => handleZapSpam(zapperMobs), "handleZapSpam");
-}
-
 async function handleCursing(X, Y) {
-    const ctarget = get_nearest_monster_v2({
-        target: "CrownPriest",
-        check_max_hp: true,
-        max_distance: 75,
-        point_for_distance_check: [X, Y],
-    }) || get_targeted_monster();
-
-    if (ctarget && ctarget.hp >= ctarget.max_hp * 0.2 && !ctarget.immune) {
-        if (!is_on_cooldown("curse")) {
-            try {
+    try {
+        if (smart.moving) return;
+        const ctarget = get_nearest_monster_v2({
+            type: home,
+            check_max_hp: true,
+            max_distance: 75,
+            point_for_distance_check: [X, Y],
+        });
+        if (ctarget && ctarget.hp >= ctarget.max_hp * 0.2 && !ctarget.immune) {
+            if (!is_on_cooldown("curse") && is_in_range(ctarget, "curse")) {
                 await use_skill("curse", ctarget);
-            } catch (e) {
-                if (e?.reason !== "cooldown") throw e;
             }
         }
+    } catch (e) {
+        console.error("Curse Error:", e);
     }
 }
 
 async function handleAbsorb(mapsToExclude) {
-    if (!character.party) return;
-    if (mapsToExclude.includes(character.map)) return;
-    if (is_on_cooldown("absorb")) return;
+    if (
+        !character.party ||
+        is_on_cooldown("absorb") ||
+        mapsToExclude.includes(character.map)
+    ) return;
 
-    const partyNames = Object.keys(get_party()).filter(name => name !== character.name);
+    const allies = Object.keys(get_party()).filter(name => name !== character.name);
+    if (!allies.length) return;
 
-    const attackers = {};
-    for (const id in parent.entities) {
-        const monster = parent.entities[id];
-        if (monster.type !== "monster" || monster.dead || !monster.visible) continue;
-        if (partyNames.includes(monster.target)) attackers[monster.target] = true;
-    }
-
-    for (const name of partyNames) {
-        if (attackers[name]) {
-            try {
-                await use_skill("absorb", name);
-                game_log(`Absorbing ${name}`, "#FFA600");
-            } catch (e) {
-                if (e?.reason !== "cooldown") throw e;
-            }
-            return;
-        }
-    }
+    const attacker = get_nearest_monster_v2({ target: allies });
+    if (!attacker) return;
+    await use_skill("absorb", attacker.target);
+    game_log(`Absorbing ${attacker.target}`, "#FFA600");
+    await fixPromise(use_skill("absorb", attacker.target));
 }
 
 async function handlePartyHeal(healThreshold = 0.65, minMp = 2000) {
-    if (!character.party || character.mp <= minMp) return;
-    if (is_on_cooldown("partyheal")) return;
+    if (is_disabled(character)) return;
+    if (!character.party || character.mp <= minMp || is_on_cooldown("partyheal")) return;
 
     const partyNames = Object.keys(get_party());
+
     for (const name of partyNames) {
         const ally = get_player(name);
-        if (!ally || ally.rip) continue;
-        if (ally.hp >= ally.max_hp * healThreshold) continue;
+        if (!ally || ally.rip || ally.hp >= ally.max_hp * healThreshold) continue;
 
         try {
-            await use_skill("partyheal");
+            await use_skill("partyheal")
+            reduce_cooldown("partyheal", character.ping * 0.95);
         } catch (e) {
             if (e?.reason !== "cooldown") throw e;
         }
-        break;
+        break; // Stop after healing one ally
     }
 }
 
 async function handleDarkBlessing() {
-    const nearbyHome = get_nearest_monster({ type: "home" });
+    const nearbyHome = get_nearest_monster({ type: home });
     if (!nearbyHome) return;
 
     if (!is_on_cooldown("darkblessing")) {
@@ -620,24 +628,21 @@ async function handleDarkBlessing() {
     }
 }
 
-async function handleZapSpam(dead) {
-    let isHome = get_nearest_monster({ type: home });
-    if (!dead && isHome) {
-        if (!is_on_cooldown("zapperzap") && isHome.hp > 15000) {
-            if (character.mp > 3000) {
-                await use_skill("zapperzap", isHome);
-            }
-        }
-    }
-}
+let lastEquipTime = 0;
+const equipCooldown = 200; // ms between gear swaps
 
 async function handleZap() {
     const zapperMobs = [home, "rgoo", "bgoo", "sparkbot", "spider", "scorpion"];  // List of mobs to zap
-    const delay = 100;
+    let delay = 100;
     let zap = true;
     const dead = character.rip;
     try {
-		if (currentState === "looting") return;
+        if (is_disabled(character)) {
+            game_log("Character disabled, waiting...", "#999999");
+            delay = 250;
+            return setTimeout(handleZap, delay);
+        }
+        if (currentState === "looting") return;
         if (!dead && zap && !smart.moving) {
             // Scan all mobs that are in the zapperMobs list
             const entities = Object.values(parent.entities).filter(entity =>
@@ -648,14 +653,29 @@ async function handleZap() {
             );
             //console.log("Entities:", entities.length, entities.map(e => e.mtype));  // For debugging
             // Step 1: Equip the correct set based on mob presence
-            if (entities.length > 0 && character.cc < 175 && character.slots.ring2?.name !== "zapper") {
+            const now = Date.now();
+
+            if (
+                entities.length > 0 &&
+                character.cc < 175 &&
+                character.slots.ring2?.name !== "zapper" &&
+                character.mp > G?.skills?.zapperzap?.mp + 3250 &&
+                now - lastEquipTime > equipCooldown
+            ) {
                 // Equip the zapOn set if there are zapable mobs
                 equipSet("zapOn");
                 //console.log("Equipped zapper set.");
-            } else if (entities.length === 0 && character.cc < 175 && character.slots.ring2?.name !== "ringofluck") {
+                lastEquipTime = now;
+            } else if (
+                entities.length === 0 &&
+                character.cc < 175 &&
+                character.slots.ring2?.name !== "ringofluck" &&
+                now - lastEquipTime > equipCooldown
+            ) {
                 // Equip the zapOff set if all mobs are targeted, dead, or invisible
                 equipSet("zapOff");
                 //console.log("Equipped luck ring set.");
+                lastEquipTime = now;
             }
 
             // Step 2: Use zapper skill if conditions are met
@@ -1115,7 +1135,9 @@ function clearInventory() {
 
         // Check if the item is not in the exclusion list, and doesn't have locked or sealed properties
         if (item && !itemsToExclude.includes(item.name) && !item.l && !item.s) {
-            send_item(lootMule.id, i, item.q ?? 1);
+            if (is_in_range(lootMule, "zapperzap")) {
+                send_item(lootMule.id, i, item.q ?? 1);
+            }
         }
     }
 }
@@ -1131,7 +1153,7 @@ function mluckRefresh() {
         });
     }
 }
-setInterval(mluckRefresh, 5000);
+//setInterval(mluckRefresh, 5000);
 
 // Utility Function to Check if a Set Is Equipped
 function isSetEquipped(setName) {
@@ -1144,14 +1166,126 @@ function isSetEquipped(setName) {
     );
 }
 
-// Shared state to manage activities
-let currentState = "idle"; // Can be "idle", "looting", or "boss"
-let lastLoot = null;
+const CHEST_STORAGE_KEY = "loot_chest_ids";
+const chestThreshold = 12;
+
 let setSwapTime = 0;
 const swapCooldown = 500;
+let skinReady = false;
+let lootSwap = 0;
+const lootCooldown = 3000;
 
-// Constants
-const chestThreshold = 12;
+function loadChestMap() {
+    const data = get(CHEST_STORAGE_KEY);
+    return typeof data === "object" && data !== null ? data : {};
+}
+
+function saveChestMap(map) {
+    set(CHEST_STORAGE_KEY, map);
+}
+
+// Remove one ID after it’s been looted (no saving anymore)
+function removeChestId(id) {
+    const stored = loadChestMap();
+    if (stored[id]) {
+        delete stored[id];
+        saveChestMap(stored);
+    }
+}
+
+character.on("loot", (data) => {
+    if (data.id) {
+        console.log(`${data.opener} looted chest goldm: ${data.goldm}`);
+        // Delay removal so the chest has time to disappear from parent.chests
+        setTimeout(() => {
+            removeChestId(data.id);
+            //console.log(`Removed Chest ID after delay: ${data.id}`);
+        }, 2000); // 2 seconds
+    }
+});
+
+async function handleLooting() {
+    if (!skinReady || currentState === "looting") return;
+    lootSwap = Date.now();
+    currentState = "looting";
+
+    try {
+        if (!isSetEquipped("gold")) {
+            equipSet("gold");
+            swapBooster("luckbooster", "goldbooster");
+            await sleep(150);
+        }
+
+        // Loot visible chests in real time without loading/saving storage
+        let looted = 0;
+        for (const chest of Object.values(parent.chests)) {
+            if (looted++ >= chestThreshold * 5) break;
+            parent.open_chest(chest.id);
+            // removal will happen on loot event, no immediate removal here
+        }
+
+        await sleep(75);
+        swapBooster("goldbooster", "luckbooster");
+    } catch (err) {
+        console.error("Batch loot error:", err);
+    } finally {
+        currentState = "idle";
+    }
+}
+
+function lootInterval() {
+    const now = Date.now();
+    const penaltyMs = character.s?.penalty_cd?.ms || 0;
+    const onGround = Object.keys(parent.chests).length;
+    const targets = character.targets;
+    const cooldownPass = now - lootSwap > lootCooldown;
+    const notLooting = currentState !== "looting";
+    /*
+        console.log({
+          now,
+          penaltyMs,
+          onGround,
+          targets,
+          cooldownPass,
+          notLooting,
+          currentState,
+          skinReady,
+          lootSwap,
+          chestThreshold,
+          lootCooldown
+        });
+    */
+    const shouldLoot =
+        onGround >= chestThreshold &&
+        targets < 8 &&
+        cooldownPass &&
+        penaltyMs === 0 &&
+        notLooting &&
+        skinReady;
+
+    if (shouldLoot) {
+        //console.log("✅ shouldLoot is TRUE — running handleLooting");
+        handleLooting();
+    } else {
+        // console.log("❌ shouldLoot is FALSE — skipping looting");
+    }
+
+    if (currentState !== "looting") {
+        handleBosses();  // Keep your boss logic here if needed
+    }
+}
+setInterval(lootInterval, 250);
+
+// Helper sleep function
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Function to count the number of available chests
+function getNumChests() {
+    return Object.keys(get_chests()).length;
+}
+
 const setSettings = {
     bossHpThreshold: 50000,
     bosses: ["grinch"],
@@ -1162,7 +1296,7 @@ function handleBosses() {
     let bossMonster = null; // Declare bossMonster at the top to avoid implicit global variable
 
     // If the current state is not "idle", exit the function
-    if (currentState !== "idle") return;
+    if (!skinReady || currentState !== "idle") return;
 
     const now = Date.now(); // Get the current timestamp for cooldown checking
 
@@ -1182,71 +1316,33 @@ function handleBosses() {
         : "aHome";
 
     // If enough time has passed, equip the new set
-    if (now - setSwapTime > swapCooldown) {
-        equipSet(targetSet); // Equip the selected target set
+    if (targetSet && now - setSwapTime > swapCooldown) {
         setSwapTime = now;
+        equipSet(targetSet); // Equip the selected target set
     }
-}
-
-// Function to manage looting (async version)
-async function handleLooting() {
-    if (currentState !== "looting") return;
-
-    lastLoot = Date.now();
-    equipSet("gold");
-    swapBooster("luckbooster", "goldbooster");
-
-    // Add a Xms sleep to ensure the gold set and booster are equipped before looting
-    await sleep(250);
-
-    let looted = 0;
-    const chests = Object.keys(get_chests());
-
-    // Loot all chests until chestThreshold is reached
-    for (let id of chests) {
-        if (looted >= chestThreshold) break;
-        parent.open_chest(id);
-        console.log(`Looting chest with ${character.goldm} goldm`);
-        looted++;
-    }
-
-    // Add a brief Xms sleep before returning to idle state
-    await sleep(250);
-
-    // Return to idle state after looting
-    currentState = "idle";
-    equipSet(targetSet);
-    swapBooster("goldbooster", "luckbooster");
-}
-
-// Main loop to coordinate activities
-setInterval(() => {
-    // Check conditions and handle looting directly
-    if (getNumChests() >= chestThreshold && character.targets < 6) {
-        currentState = "looting";
-        handleLooting();
-    }
-
-    // Handle bosses only if not looting
-    if (currentState !== "looting") {
-        handleBosses();
-    }
-}, 250);
-
-// Helper sleep function that returns a promise resolving after a given time (in ms)
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Function to count the number of available chests
-function getNumChests() {
-    return Object.keys(get_chests()).length;
 }
 
 function swapBooster(current, target) {
     let slot = locate_item(current);
     if (slot !== -1) shift(slot, target);
 }
+
+async function handleNeck() {
+    let delay = 250;
+    let mpThresh = character.mp / character.max_mp;
+    let neck = character.slots.amulet?.name;
+    try {
+        if (mpThresh > 0.8 && currentState !== "looting") {
+            equipSet("int");
+        } else if (mpThresh < 0.7 && currentState !== "looting") {
+            equipSet("mpx");
+        }
+    } catch (err) {
+        console.error(err);
+    }
+    setTimeout(handleNeck, delay);
+}
+handleNeck();
 
 function on_cm(name, data) {
     if (name == "CrownsAnal") {
@@ -1313,23 +1409,17 @@ function inventorySorter() {
 }
 setInterval(inventorySorter, 250);
 
-let respawnCooldown = false;
-
 function suicide() {
     if (!character.rip && character.hp < 2000) {
         parent.socket.emit('harakiri');
         game_log("Harakiri");
     }
-    let tome = locate_item("xptome");
-    if (tome !== -1 && !respawnCooldown) {
-        respawnCooldown = true;
-        setTimeout(() => {
-            respawn();
-            respawnCooldown = false; // Reset cooldown after respawning
-        }, 5000); // 5-second delay before respawning
+
+    if (character.rip && locate_item("xptome") !== -1) {
+        respawn();
     }
 }
-setInterval(suicide, 100);
+setInterval(suicide, 50); // faster than 100ms for quicker reaction
 
 const skinConfigs = {
     ranger: { skin: "tm_yellow", skinRing: { name: "tristone", level: 2, locked: "l" }, normalRing: { name: "suckerpunch", level: 1, locked: "l" } },
@@ -1351,27 +1441,32 @@ function skinNeeded(ringName, ringLevel, slot = 'ring1', locked = "l", ccThresho
 
 // Main function for checking skin and equipping rings
 async function skinChanger() {
-    const delay = 500;
-    try {
-        const config = skinConfigs[character.ctype];
-
-        if (config) {
-            if (character.skin !== config.skin) {
-                // Equip skinRing if skin doesn't match
-                skinNeeded(config.skinRing.name, config.skinRing.level, 'ring1', config.skinRing.locked);
-            } else {
-                // Equip normalRing when skin matches
-                if (character.slots.ring1?.name !== config.normalRing.name || character.slots.ring1?.level !== config.normalRing.level) {
-                    equipIfNeeded(config.normalRing.name, 'ring1', config.normalRing.level, config.normalRing.locked);
-                }
-                return; // Exit if the normal ring is equipped
-            }
-        }
-    } catch (e) {
-        console.error(e);
+    const config = skinConfigs[character.ctype];
+    if (!config) {
+        console.warn(`No skin config for type: ${character.ctype}`);
+        return;
     }
 
-    setTimeout(skinChanger, delay);
+    // 1. Ensure correct skin
+    if (character.skin !== config.skin) {
+        console.log(`Applying skinRing: ${config.skinRing.name} lvl ${config.skinRing.level}`);
+        skinNeeded(config.skinRing.name, config.skinRing.level, 'ring1', config.skinRing.locked);
+        await sleep(500);     // wait for skin apply
+        return skinChanger();  // re-run
+    }
+
+    // 2. Ensure correct normal ring
+    const slot = character.slots.ring1;
+    if (slot?.name !== config.normalRing.name || slot?.level !== config.normalRing.level) {
+        console.log(`Equipping normalRing: ${config.normalRing.name} lvl ${config.normalRing.level}`);
+        equipIfNeeded(config.normalRing.name, 'ring1', config.normalRing.level, config.normalRing.locked);
+        await sleep(500);     // wait for ring equip
+        return skinChanger();  // re-run
+    }
+
+    // 3. All set: mark ready
+    skinReady = true;
+    console.log(`Skin ready! ${character.ctype} has skin ${character.skin} and ring ${slot.name}`);
 }
 
 skinChanger();
@@ -1547,58 +1642,42 @@ function elixirUsage() {
 // Run elixirUsage every 5 seconds
 setInterval(elixirUsage, 5000);
 
-let lastPotion = 0; // Track the time of the last potion usage
-let lastBuy = 0; // Track the time of the last purchase
-
 async function handle_potions() {
+    let delay = 100;
     const hpThreshold = character.max_hp - 400;
     const mpThreshold = character.max_mp - 500;
-    const potAmount = 100;
-    const tomeAmount = 1;
-    const potionCooldown = 1000; // Minimum time between potion usages
-    const buyCooldown = 1000; // Minimum time between purchases
-    let delay = null; // Shorter delay to handle frequent checks
 
     try {
-        const currentTime = Date.now();
-
-        // Use MP potion if needed
-        if (character.mp <= mpThreshold && !is_on_cooldown('use_mp') && item_quantity("mpot1") > 0 && currentTime - lastPotion > potionCooldown) {
-            await use('use_mp');
+        if (character.mp < mpThreshold && !is_on_cooldown('use_mp')) {
+            use_skill('use_mp');
+            reduce_cooldown("use_mp", character.ping * 0.95);
             delay = ms_to_next_skill('use_mp');
-            lastPotion = currentTime;
-        }
-
-        // Use HP potion if needed
-        if (character.hp <= hpThreshold && !is_on_cooldown('use_hp') && item_quantity("hpot1") > 0 && currentTime - lastPotion > potionCooldown) {
-            await use('use_hp');
+        } else if (character.hp < hpThreshold && !is_on_cooldown('use_hp')) {
+            use_skill('use_hp');
+            reduce_cooldown("use_hp", character.ping * 0.95);
             delay = ms_to_next_skill('use_hp');
-            lastPotion = currentTime;
-        }
-
-        // Buy potions if quantities are low
-        if (currentTime - lastBuy > buyCooldown) {
-            if (item_quantity("mpot1") < potAmount) {
-                buy("mpot1", potAmount);
-                lastBuy = currentTime;
-            }
-            if (item_quantity("hpot1") < potAmount) {
-                buy("hpot1", potAmount);
-                lastBuy = currentTime;
-            }
-            if (item_quantity("xptome") < tomeAmount) {
-                buy("xptome", tomeAmount - item_quantity("xptome"));
-                lastBuy = currentTime;
-            }
         }
     } catch (e) {
         console.error("Error in handle_potions function:", e);
     }
 
-    setTimeout(handle_potions, delay);
+    setTimeout(handle_potions, delay || 2000);
 }
-
 handle_potions();
+
+async function autoBuyPotions() {
+    let delay = 5000;
+    const potCount = 1000
+    try {
+        if (quantity("hpot1") < potCount) buy("hpot1", potCount);
+        if (quantity("mpot1") < potCount) buy("mpot1", potCount);
+        if (quantity("xptome") < 1) buy("xptome", 1);
+    } catch (e) {
+        console.error("autoBuyPotions error:", e);
+    }
+    setTimeout(autoBuyPotions, delay);
+}
+autoBuyPotions();
 
 async function fixPromise(promise) {
     const promises = [];
@@ -1631,7 +1710,7 @@ function partyMaker() {
         // If not in a party and the leader exists, send a party request
         if (!currentParty && partyLead) {
             console.log(`Requesting to join ${group[0]}'s party.`);
-            send_cm(group[0], "party");
+            //send_cm(group[0], "party");
             send_party_request(group[0]);
         }
     }

@@ -9,6 +9,10 @@ Note: Tracking too many types at once can make the meter very wide and may stret
 Appearance may vary across browsers and Steam.            
 <img width="394" height="252" alt="image" src="https://github.com/user-attachments/assets/1a5b025c-6ba5-4fae-b897-900ba4177ed1" />
 
+Boss Contribution:
+displays all nearby characters contribution towards co-op monsters
+<img width="322" height="242" alt="image" src="https://github.com/user-attachments/assets/5641d376-435e-459b-9186-91b34c801d53" />
+
 Game Log Filter:                                       
 Adds toggle buttons to the game log window, letting you easily hide or show different types of messages.
 <img width="426" height="34" alt="image" src="https://github.com/user-attachments/assets/d1893422-d958-4490-86e0-161f934f54ce" />

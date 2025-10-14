@@ -100,7 +100,7 @@ function updatescoopMeterUI() {
                 // Create the progress bar with styling and the scoop value inside the bar
                 let progressBar = `<div style="width: 100%; background-color: gray; border-radius: 5px; overflow: hidden; position: relative;">
                     <div style="width: ${percentBarWidth}%; background-color: ${nameColor}; height: 10px;"></div>
-                    <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: black; font-size: 16px; font-weight: bold;"> ${getFormattedscoop(entity.scoop)}
+                    <span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);  margin-top: -1px; color: black; font-size: 16px; font-weight: bold;"> ${getFormattedscoop(entity.scoop)}
 </span>
                 </div>`;
 

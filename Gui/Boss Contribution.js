@@ -15,7 +15,7 @@ function initscoopMeter() {
         overflow: 'hidden',
         marginBottom: '-3px',
         width: "100%",
-        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        backgroundColor: 'rgba(0, 0, 0, 1)',
     });
 
     // Create a div for the scoop meter content

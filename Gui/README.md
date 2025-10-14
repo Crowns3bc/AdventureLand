@@ -10,7 +10,7 @@ Appearance may vary across browsers and Steam.
 <img width="394" height="252" alt="image" src="https://github.com/user-attachments/assets/1a5b025c-6ba5-4fae-b897-900ba4177ed1" />
 
 Boss Contribution:
-displays all nearby characters contribution towards co-op monsters
+Displays all nearby characters contribution towards co-op monsters     .         
 <img width="322" height="242" alt="image" src="https://github.com/user-attachments/assets/5641d376-435e-459b-9186-91b34c801d53" />
 
 Game Log Filter:                                       

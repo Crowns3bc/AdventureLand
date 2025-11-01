@@ -17,6 +17,7 @@ let css = `
 parent.$('head').append(`<style id="style-party-frames">${css}</style>`);
 parent.party_style_prepared = true;
 
+const visibleStats = ['hp', 'mp', 'xp']; // This is what actually gets displayed
 const includeThese = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'name', 'xp', 'level', 'share', 'cc'];
 const partyFrameWidth = 80; // Set the desired width for the party frames
 
@@ -203,7 +204,7 @@ function updatePartyFrames() {
 				shareColor: 'teal',
 			};
 
-			for (let key of ['hp', 'mp', 'xp']) {
+			for (let key of visibleStats) {
 				const text = key.toUpperCase();
 				const value = data[key];
 				const width = data[key + 'Width'];

@@ -47,7 +47,7 @@ Displays your average XP gain over customizable time intervals—per second, min
 
 Discord Notifier:                        
 Acts as your own custom Game Events. Automatically gets the item sprite and sends a found an item message. Configurable with and without Discord Pings.         
-<img width="460" height="166" alt="image" src="https://github.com/user-attachments/assets/ca803a72-393d-4c1b-a841-17ec32178bfe" />
+<img width="442" height="160" alt="image" src="https://github.com/user-attachments/assets/bc7db955-1740-4893-b7b0-67fc756f2c4a" />
 <img width="422" height="144" alt="image" src="https://github.com/user-attachments/assets/80f59e9b-ebc6-4c1f-ae7c-99e0dc927445" />
 <img width="403" height="160" alt="image" src="https://github.com/user-attachments/assets/774aeec3-fb3a-41b4-8c52-a15f5d1419b2" />
 

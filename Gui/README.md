@@ -44,3 +44,10 @@ Enhances your XP bar by adding decimal values for more precise progress tracking
 XP Meter:                                         
 Displays your average XP gain over customizable time intervals—per second, minute, hour, or day.
 <img width="358" height="104" alt="image" src="https://github.com/user-attachments/assets/42a6ec9d-8a3c-46af-aaa9-4297ecc7c2ac" />
+
+Discord Notifier:
+Acts as your own custom Game Events. Automatically gets the item sprite and sends a found an item message. Configurable with and without Discord Pings.
+<img width="460" height="166" alt="image" src="https://github.com/user-attachments/assets/ca803a72-393d-4c1b-a841-17ec32178bfe" />
+<img width="422" height="144" alt="image" src="https://github.com/user-attachments/assets/80f59e9b-ebc6-4c1f-ae7c-99e0dc927445" />
+<img width="403" height="160" alt="image" src="https://github.com/user-attachments/assets/774aeec3-fb3a-41b4-8c52-a15f5d1419b2" />
+

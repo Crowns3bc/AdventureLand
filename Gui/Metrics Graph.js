@@ -13,14 +13,14 @@ const xpHistory = [];
 let playerDamageSums = {};
 const dpsStartTime = performance.now();
 const dpsHistory = {};
-let dpsMaxValueSmoothed = 100; // Smoothed max for stable Y-axis
+let dpsMaxValueSmoothed = 100;
 
 // Chart config
-const MAX_HISTORY = 300; // 5 minutes
-const HISTORY_INTERVAL = 1000; // 1 second
-let lastGoldUpdate = Date.now();
-let lastXpUpdate = Date.now();
-let lastDpsUpdate = Date.now();
+const MAX_HISTORY = 300;
+const HISTORY_INTERVAL = 1000;
+let lastGoldUpdate = 0;
+let lastXpUpdate = 0;
+let lastDpsUpdate = 0;
 
 const classColors = {
 	mage: '#3FC7EB', paladin: '#F48CBA', priest: '#FFFFFF',
@@ -46,15 +46,12 @@ setTimeout(() => {
 
 // ========== DPS TRACKING ==========
 function getPlayerEntry(id) {
-	if (!playerDamageSums[id]) {
-		playerDamageSums[id] = {
-			startTime: performance.now(), sumDamage: 0, sumBurnDamage: 0,
-			sumBlastDamage: 0, sumBaseDamage: 0, sumHeal: 0, sumLifesteal: 0,
-			sumManaSteal: 0, sumDamageReturn: 0, sumReflection: 0,
-			sumDamageTakenPhys: 0, sumDamageTakenMag: 0
-		};
-	}
-	return playerDamageSums[id];
+	return playerDamageSums[id] || (playerDamageSums[id] = {
+		startTime: performance.now(), sumDamage: 0, sumBurnDamage: 0,
+		sumBlastDamage: 0, sumBaseDamage: 0, sumHeal: 0, sumLifesteal: 0,
+		sumManaSteal: 0, sumDamageReturn: 0, sumReflection: 0,
+		sumDamageTakenPhys: 0, sumDamageTakenMag: 0
+	});
 }
 
 function calculateDPS(id) {
@@ -62,15 +59,15 @@ function calculateDPS(id) {
 	if (!entry) return 0;
 	const elapsed = performance.now() - entry.startTime;
 	if (elapsed <= 0) return 0;
-	const total = entry.sumDamage + entry.sumDamageReturn + entry.sumReflection;
-	return Math.floor(total * 1000 / elapsed);
+	return Math.floor((entry.sumDamage + entry.sumDamageReturn + entry.sumReflection) * 1000 / elapsed);
 }
 
 function calculateTotalDPS() {
 	let totalDmg = 0;
-	Object.values(playerDamageSums).forEach(e => {
+	for (const id in playerDamageSums) {
+		const e = playerDamageSums[id];
 		totalDmg += e.sumDamage + e.sumDamageReturn + e.sumReflection;
-	});
+	}
 	const elapsed = performance.now() - dpsStartTime;
 	return Math.floor(totalDmg * 1000 / Math.max(elapsed, 1));
 }
@@ -242,20 +239,12 @@ const attachEventHandlers = ($) => {
 	);
 };
 
-const toggleMetricsDashboard = () => {
-	const $ = parent.$;
-	let dashboard = $('#metricsDashboard');
-	if (dashboard.length === 0) {
-		createMetricsDashboard();
-		dashboard = $('#metricsDashboard');
-	}
-	dashboard.is(':visible') ? dashboard.hide() : (dashboard.show(), updateMetricsDashboard());
-};
+
 
 // ========== UPDATE LOGIC ==========
 const updateMetricsDashboard = () => {
 	const $ = parent.$;
-	const now = Date.now();
+	const now = performance.now();
 
 	// Gold
 	const avgGold = calculateAverageGold();
@@ -265,7 +254,7 @@ const updateMetricsDashboard = () => {
 	$('#goldMetrics .metric-label').first().text(`Gold/${goldInterval.charAt(0).toUpperCase() + goldInterval.slice(1)}`);
 
 	if (now - lastGoldUpdate >= HISTORY_INTERVAL) {
-		goldHistory.push({ time: new Date(), value: avgGold });
+		goldHistory.push({ time: now, value: avgGold });
 		if (goldHistory.length > MAX_HISTORY) goldHistory.shift();
 		lastGoldUpdate = now;
 	}
@@ -288,7 +277,7 @@ const updateMetricsDashboard = () => {
 	$('#xpMetrics .metric-label').first().text(`XP/${xpInterval.charAt(0).toUpperCase() + xpInterval.slice(1)}`);
 
 	if (now - lastXpUpdate >= HISTORY_INTERVAL) {
-		xpHistory.push({ time: new Date(), value: avgXP });
+		xpHistory.push({ time: now, value: avgXP });
 		if (xpHistory.length > MAX_HISTORY) xpHistory.shift();
 		lastXpUpdate = now;
 	}
@@ -299,7 +288,7 @@ const updateMetricsDashboard = () => {
 	$('#partyDPS').text(totalDPS.toLocaleString('en'));
 	$('#yourDPS').text(yourDPS.toLocaleString('en'));
 
-	const elapsedMs = performance.now() - dpsStartTime;
+	const elapsedMs = now - dpsStartTime;
 	const hours = Math.floor(elapsedMs / 3600000);
 	const minutes = Math.floor((elapsedMs % 3600000) / 60000);
 	$('#sessionTime').text(`${hours}h ${minutes}m`);
@@ -308,26 +297,59 @@ const updateMetricsDashboard = () => {
 		for (const id in playerDamageSums) {
 			if (!dpsHistory[id]) dpsHistory[id] = [];
 			const dps = calculateDPS(id);
-			dpsHistory[id].push({ time: new Date(), value: dps });
+			dpsHistory[id].push({ time: now, value: dps });
 			if (dpsHistory[id].length > MAX_HISTORY) dpsHistory[id].shift();
 		}
 		lastDpsUpdate = now;
 	}
 
-	drawChart('goldChart', goldHistory, sectionColors.gold.primary);
-	drawChart('xpChart', xpHistory, sectionColors.xp.primary);
-	drawDPSChart();
+	drawChart('goldChart', [{ history: goldHistory, color: sectionColors.gold.primary }], sectionColors.gold.primary);
+	drawChart('xpChart', [{ history: xpHistory, color: sectionColors.xp.primary }], sectionColors.xp.primary);
+	drawChart('dpsChart', getDPSLines(), sectionColors.dps.primary);
 };
 
 // ========== CHART DRAWING ==========
-const drawChart = (canvasId, history, color) => {
+const getDPSLines = () => {
+	const lines = [];
+	const playerIds = Object.keys(dpsHistory);
+
+	// Calculate smoothed max for stable scaling
+	let currentMax = 1;
+	for (let i = 0; i < playerIds.length; i++) {
+		const hist = dpsHistory[playerIds[i]];
+		if (hist) {
+			for (let j = 0; j < hist.length; j++) {
+				if (hist[j].value > currentMax) currentMax = hist[j].value;
+			}
+		}
+	}
+	dpsMaxValueSmoothed = dpsMaxValueSmoothed * 0.95 + currentMax * 0.05;
+
+	for (let i = 0; i < playerIds.length; i++) {
+		const id = playerIds[i];
+		const player = get_player(id);
+		const history = dpsHistory[id];
+
+		if (player && history && history.length >= 2) {
+			lines.push({
+				history: history,
+				color: classColors[player.ctype.toLowerCase()] || '#FFFFFF',
+				label: player.name,
+				smoothedMax: Math.max(dpsMaxValueSmoothed, currentMax)
+			});
+		}
+	}
+
+	return lines;
+};
+
+const drawChart = (canvasId, lines, sectionColor) => {
 	const canvas = parent.document.getElementById(canvasId);
 	if (!canvas || !parent.$('#metricsDashboard').is(':visible')) return;
 
 	const ctx = canvas.getContext('2d');
 	const rect = canvas.getBoundingClientRect();
 
-	// Only resize canvas if dimensions actually changed
 	if (canvas.width !== rect.width || canvas.height !== rect.height) {
 		canvas.width = rect.width;
 		canvas.height = rect.height;
@@ -335,7 +357,16 @@ const drawChart = (canvasId, history, color) => {
 
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-	if (history.length < 2) {
+	// Check if we have data
+	let hasData = false;
+	for (let i = 0; i < lines.length; i++) {
+		if (lines[i].history.length >= 2) {
+			hasData = true;
+			break;
+		}
+	}
+
+	if (!hasData) {
 		ctx.fillStyle = '#999';
 		ctx.font = '24px pixel, monospace';
 		ctx.textAlign = 'center';
@@ -343,122 +374,23 @@ const drawChart = (canvasId, history, color) => {
 		return;
 	}
 
-	const values = history.map(d => d.value);
-	const maxValue = Math.max(...values, 1) * 1.2;
-	const minValue = 0;
+	// Calculate max value across all lines
+	let maxValue = 1;
+	for (let i = 0; i < lines.length; i++) {
+		const lineMax = lines[i].smoothedMax || Math.max(...lines[i].history.map(d => d.value), 1);
+		if (lineMax > maxValue) maxValue = lineMax;
+	}
+	maxValue *= 1.2;
 	const range = maxValue || 1;
 
+	// Calculate padding
 	ctx.font = '18px pixel, monospace';
 	const padding = ctx.measureText(maxValue.toLocaleString()).width + 15;
-	const gw = canvas.width - 2 * padding;
-	const gh = canvas.height - 2 * padding;
-
-	// Grid & axes
-	ctx.strokeStyle = 'rgba(255, 215, 0, 0.1)';
-	ctx.lineWidth = 1;
-	for (let i = 0; i <= 5; i++) {
-		const y = padding + gh * i / 5;
-		ctx.beginPath();
-		ctx.moveTo(padding, y);
-		ctx.lineTo(canvas.width - padding, y);
-		ctx.stroke();
-	}
-
-	ctx.strokeStyle = 'rgba(255, 215, 0, 0.3)';
-	ctx.lineWidth = 2;
-	ctx.beginPath();
-	ctx.moveTo(padding, padding);
-	ctx.lineTo(padding, canvas.height - padding);
-	ctx.lineTo(canvas.width - padding, canvas.height - padding);
-	ctx.stroke();
-
-	// Gradient fill
-	const gradient = ctx.createLinearGradient(0, padding, 0, canvas.height - padding);
-	gradient.addColorStop(0, color + '4D');
-	gradient.addColorStop(1, color + '0D');
-	ctx.fillStyle = gradient;
-	ctx.beginPath();
-	ctx.moveTo(padding, canvas.height - padding);
-	history.forEach((p, i) => {
-		const x = padding + gw * i / (history.length - 1);
-		const y = canvas.height - padding - gh * p.value / range;
-		ctx.lineTo(x, y);
-	});
-	ctx.lineTo(padding + gw, canvas.height - padding);
-	ctx.closePath();
-	ctx.fill();
-
-	// Line & points
-	ctx.strokeStyle = color;
-	ctx.lineWidth = 2;
-	ctx.beginPath();
-	history.forEach((p, i) => {
-		const x = padding + gw * i / (history.length - 1);
-		const y = canvas.height - padding - gh * p.value / range;
-		if (i === 0) ctx.moveTo(x, y);
-		else ctx.lineTo(x, y);
-	});
-	ctx.stroke();
-
-	ctx.fillStyle = color;
-	history.forEach((p, i) => {
-		const x = padding + gw * i / (history.length - 1);
-		const y = canvas.height - padding - gh * p.value / range;
-		ctx.beginPath();
-		ctx.arc(x, y, 3, 0, 2 * Math.PI);
-		ctx.fill();
-	});
-
-	// Y-axis labels
-	ctx.fillStyle = color;
-	ctx.font = '18px pixel, monospace';
-	ctx.textAlign = 'right';
-	for (let i = 0; i <= 5; i++) {
-		const value = Math.round(range * i / 5);
-		const y = canvas.height - padding - (gh * i / 5);
-		ctx.fillText(value.toLocaleString(), padding - 6, y + 4);
-	}
-	ctx.textAlign = 'center';
-	ctx.fillText('Last 5 minutes', canvas.width / 2, canvas.height - 10);
-};
-
-const drawDPSChart = () => {
-	const canvas = parent.document.getElementById('dpsChart');
-	if (!canvas || !parent.$('#metricsDashboard').is(':visible')) return;
-
-	const ctx = canvas.getContext('2d');
-	const rect = canvas.getBoundingClientRect();
-
-	// Only resize canvas if dimensions actually changed
-	if (canvas.width !== rect.width || canvas.height !== rect.height) {
-		canvas.width = rect.width;
-		canvas.height = rect.height;
-	}
-
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-	const playerIds = Object.keys(dpsHistory);
-	if (playerIds.length === 0 || !dpsHistory[playerIds[0]] || dpsHistory[playerIds[0]].length < 2) {
-		ctx.fillStyle = '#999';
-		ctx.font = '24px pixel, monospace';
-		ctx.textAlign = 'center';
-		ctx.fillText('Collecting data...', canvas.width / 2, canvas.height / 2);
-		return;
-	}
-
-	// Smooth max value to prevent jumpy scaling
-	const currentMax = Math.max(...playerIds.flatMap(id => dpsHistory[id]?.map(p => p.value) || []), 1);
-	dpsMaxValueSmoothed = dpsMaxValueSmoothed * 0.95 + currentMax * 0.05;
-	const maxValue = Math.max(dpsMaxValueSmoothed, currentMax) * 1.2;
-	const range = maxValue || 1;
-
-	ctx.font = '18px pixel, monospace';
-	const padding = ctx.measureText(maxValue.toLocaleString()).width + 15;
-	const labelSpace = 90;
+	const labelSpace = lines[0].label ? 90 : 0; // Extra space for DPS labels
 	const gw = canvas.width - 2 * padding - labelSpace;
 	const gh = canvas.height - 2 * padding;
 
-	// Grid & axes
+	// Draw grid
 	ctx.strokeStyle = 'rgba(255, 215, 0, 0.1)';
 	ctx.lineWidth = 1;
 	for (let i = 0; i <= 5; i++) {
@@ -469,6 +401,7 @@ const drawDPSChart = () => {
 		ctx.stroke();
 	}
 
+	// Draw axes
 	ctx.strokeStyle = 'rgba(255, 215, 0, 0.3)';
 	ctx.lineWidth = 2;
 	ctx.beginPath();
@@ -477,44 +410,65 @@ const drawDPSChart = () => {
 	ctx.lineTo(canvas.width - padding, canvas.height - padding);
 	ctx.stroke();
 
-	// Draw lines per player
-	playerIds.forEach(id => {
-		const player = get_player(id);
-		if (!player || !dpsHistory[id] || dpsHistory[id].length < 2) return;
+	// Draw each line
+	for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+		const line = lines[lineIdx];
+		const history = line.history;
+		const color = line.color;
+		const histLen = history.length - 1;
 
-		const color = classColors[player.ctype.toLowerCase()] || '#FFFFFF';
-		const history = dpsHistory[id];
+		// Gradient fill (only for single-line charts)
+		if (lines.length === 1) {
+			const gradient = ctx.createLinearGradient(0, padding, 0, canvas.height - padding);
+			gradient.addColorStop(0, color + '4D');
+			gradient.addColorStop(1, color + '0D');
+			ctx.fillStyle = gradient;
+			ctx.beginPath();
+			ctx.moveTo(padding, canvas.height - padding);
+			for (let i = 0; i < history.length; i++) {
+				const x = padding + gw * i / histLen;
+				const y = canvas.height - padding - gh * history[i].value / range;
+				ctx.lineTo(x, y);
+			}
+			ctx.lineTo(padding + gw, canvas.height - padding);
+			ctx.closePath();
+			ctx.fill();
+		}
 
+		// Draw line
 		ctx.strokeStyle = color;
 		ctx.lineWidth = 2;
 		ctx.beginPath();
-		history.forEach((p, i) => {
-			const x = padding + gw * i / (history.length - 1);
-			const y = canvas.height - padding - gh * p.value / range;
+		for (let i = 0; i < history.length; i++) {
+			const x = padding + gw * i / histLen;
+			const y = canvas.height - padding - gh * history[i].value / range;
 			if (i === 0) ctx.moveTo(x, y);
 			else ctx.lineTo(x, y);
-		});
+		}
 		ctx.stroke();
 
+		// Draw points
 		ctx.fillStyle = color;
-		history.forEach((p, i) => {
-			const x = padding + gw * i / (history.length - 1);
-			const y = canvas.height - padding - gh * p.value / range;
+		for (let i = 0; i < history.length; i++) {
+			const x = padding + gw * i / histLen;
+			const y = canvas.height - padding - gh * history[i].value / range;
 			ctx.beginPath();
 			ctx.arc(x, y, 3, 0, 2 * Math.PI);
 			ctx.fill();
-		});
+		}
 
-		// Player name
-		const last = history[history.length - 1];
-		const lastY = canvas.height - padding - gh * last.value / range;
-		ctx.font = '16px pixel, monospace';
-		ctx.textAlign = 'left';
-		ctx.fillText(player.name, padding + gw + 6, lastY + 4);
-	});
+		// Draw label (for DPS chart)
+		if (line.label) {
+			const last = history[histLen];
+			const lastY = canvas.height - padding - gh * last.value / range;
+			ctx.font = '16px pixel, monospace';
+			ctx.textAlign = 'left';
+			ctx.fillText(line.label, padding + gw + 6, lastY + 4);
+		}
+	}
 
 	// Y-axis labels
-	ctx.fillStyle = sectionColors.dps.primary;
+	ctx.fillStyle = sectionColor;
 	ctx.font = '18px pixel, monospace';
 	ctx.textAlign = 'right';
 	for (let i = 0; i <= 5; i++) {
@@ -547,22 +501,38 @@ const formatTime = (seconds) => {
 	return `${d}d ${h}h ${m}m`;
 };
 
-function countMyPartyCharacters() {
-	let count = 0;
-	for (const name in parent.party) {
-		if (name === character.name || (parent.entities[name]?.owner === character.owner)) count++;
-	}
-	return count;
-}
-
 // ========== EVENT LISTENERS ==========
-setInterval(() => {
-	if (parent.$('#metricsDashboard').is(':visible')) updateMetricsDashboard();
-}, 500);
+let updateInterval;
+
+const toggleMetricsDashboard = () => {
+	const $ = parent.$;
+	let dashboard = $('#metricsDashboard');
+	if (dashboard.length === 0) {
+		createMetricsDashboard();
+		dashboard = $('#metricsDashboard');
+	}
+
+	if (dashboard.is(':visible')) {
+		dashboard.hide();
+		if (updateInterval) {
+			clearInterval(updateInterval);
+			updateInterval = null;
+		}
+	} else {
+		dashboard.show();
+		updateMetricsDashboard();
+		if (!updateInterval) {
+			updateInterval = setInterval(updateMetricsDashboard, 500);
+		}
+	}
+};
 
 character.on("loot", (data) => {
 	if (data.gold && typeof data.gold === 'number' && !Number.isNaN(data.gold)) {
-		const myGold = Math.round(data.gold * countMyPartyCharacters());
+		const count = Object.keys(parent.party).filter(name =>
+			name === character.name || parent.entities[name]?.owner === character.owner
+		).length;
+		const myGold = Math.round(data.gold * count);
 		sumGold += myGold;
 		if (myGold > largestGoldDrop) largestGoldDrop = myGold;
 	}

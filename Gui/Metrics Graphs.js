@@ -28,9 +28,9 @@ const classColors = {
 };
 
 const sectionColors = {
-  gold: { primary: '#FFD700', rgba: 'rgba(255, 215, 0, 0.3)', axis: 'rgba(255, 215, 0, 0.1)' },
-  xp:   { primary: '#87CEEB', rgba: 'rgba(135, 206, 235, 0.3)', axis: 'rgba(135, 206, 235, 0.2)' },
-  dps:  { primary: '#FF6B6B', rgba: 'rgba(255, 107, 107, 0.3)', axis: 'rgba(255, 107, 107, 0.2)' }
+	gold: { primary: '#FFD700', rgba: 'rgba(255, 215, 0, 0.3)', axis: 'rgba(255, 215, 0, 0.1)' },
+	xp: { primary: '#87CEEB', rgba: 'rgba(135, 206, 235, 0.3)', axis: 'rgba(135, 206, 235, 0.2)' },
+	dps: { primary: '#FF6B6B', rgba: 'rgba(255, 107, 107, 0.3)', axis: 'rgba(255, 107, 107, 0.2)' }
 };
 
 // ========== INITIALIZATION ==========
@@ -403,6 +403,14 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		return;
 	}
 
+	let lastMinutes = 0;
+	if (lines.length && lines[0].history.length > 1) {
+		const hist = lines[0].history;
+		const firstTime = hist[0].time;
+		const lastTime = hist[hist.length - 1].time;
+		lastMinutes = Math.round((lastTime - firstTime) / 60000);
+	}
+
 	let maxValue = 1;
 	for (let i = 0; i < lines.length; i++) {
 		const lineMax = lines[i].smoothedMax || Math.max(...lines[i].history.map(d => d.value), 1);
@@ -416,7 +424,7 @@ const drawChart = (canvasId, lines, sectionColor) => {
 	const labelSpace = lines[0].label ? 60 : 0;
 	const gw = canvas.width - 2 * padding - labelSpace;
 	const gh = canvas.height - 2 * padding;
-	const axisColor = sectionColors[canvasId.replace('Chart','').toLowerCase()]?.axis || 'rgba(255,255,255,0.1)';
+	const axisColor = sectionColors[canvasId.replace('Chart', '').toLowerCase()]?.axis || 'rgba(255,255,255,0.1)';
 
 	ctx.strokeStyle = axisColor;
 	ctx.lineWidth = 1;
@@ -497,7 +505,7 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		ctx.fillText(value.toLocaleString(), padding - 6, y + 4);
 	}
 	ctx.textAlign = 'center';
-	ctx.fillText(`Last ${MAX_HISTORY / 60} minutes`, canvas.width / 2, canvas.height - 10);
+	ctx.fillText(`Last ${lastMinutes} min${lastMinutes !== 1 ? 's' : ''}`, canvas.width / 2, canvas.height - 10);
 };
 
 // ========== HELPER FUNCTIONS ==========

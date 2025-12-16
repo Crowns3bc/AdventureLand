@@ -1,11 +1,11 @@
 // ========== TRACKING STATE ==========
 let sumGold = 0, largestGoldDrop = 0;
-const goldStartTime = new Date();
+const goldStartTime = performance.now();
 let goldInterval = 'hour';
 const goldHistory = [];
 
 let sumXP = 0, largestXPGain = 0;
-const xpStartTime = new Date();
+const xpStartTime = performance.now();
 const startXP = character.xp;
 let xpInterval = 'second';
 const xpHistory = [];
@@ -16,8 +16,8 @@ const dpsHistory = {};
 let dpsMaxValueSmoothed = 100;
 
 // Chart config
-const MAX_HISTORY = 300;
-const HISTORY_INTERVAL = 1000;
+const MAX_HISTORY = 60;
+const HISTORY_INTERVAL = 5000;
 let lastGoldUpdate = 0;
 let lastXpUpdate = 0;
 let lastDpsUpdate = 0;
@@ -54,10 +54,10 @@ function getPlayerEntry(id) {
 	});
 }
 
-function calculateDPS(id) {
+function calculateDPS(id, now) {
 	const entry = playerDamageSums[id];
 	if (!entry) return 0;
-	const elapsed = performance.now() - entry.startTime;
+	const elapsed = now - entry.startTime;
 	if (elapsed <= 0) return 0;
 	return Math.floor((entry.sumDamage + entry.sumDamageReturn + entry.sumReflection) * 1000 / elapsed);
 }
@@ -206,7 +206,6 @@ const applyStyles = ($) => {
 
 	Object.entries(styles).forEach(([sel, style]) => $(sel).css(style));
 
-	// Section-specific colors
 	Object.entries(sectionColors).forEach(([section, colors]) => {
 		$(`[data-section="${section}"] h3`).css('color', colors.primary);
 		$(`[data-section="${section}"] .metric-card`).css('border', `1px solid ${colors.rgba}`);
@@ -225,10 +224,21 @@ const attachEventHandlers = ($) => {
 		const color = sectionColors[type].primary;
 
 		$(`[data-type="${type}"]`).removeClass('active').css('background', 'rgba(255, 255, 255, 0.1)');
-		$(this).addClass('active').css('background', color.replace('#', 'rgba(') + ', 0.2)'.replace(')', ''));
+		const hexToRgba = (hex, a) =>
+			`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+		$(this).css('background', hexToRgba(color, 0.2));
 
-		if (type === 'gold') goldInterval = interval;
-		else if (type === 'xp') xpInterval = interval;
+		if (type === 'gold') {
+			if (goldInterval !== interval) {
+				goldInterval = interval;
+				resetGoldHistory();
+			}
+		} else if (type === 'xp') {
+			if (xpInterval !== interval) {
+				xpInterval = interval;
+				resetXpHistory();
+			}
+		}
 
 		updateMetricsDashboard();
 	});
@@ -240,18 +250,36 @@ const attachEventHandlers = ($) => {
 };
 
 
-
 // ========== UPDATE LOGIC ==========
+let $goldRate, $jackpotValue, $totalGold, $goldLabel;
+let $xpRate, $totalXP, $timeToLevel, $xpLabel;
+let $partyDPS, $yourDPS, $sessionTime;
+
 const updateMetricsDashboard = () => {
 	const $ = parent.$;
 	const now = performance.now();
 
-	// Gold
+	if (!$goldRate) {
+		$goldRate = $('#goldRate');
+		$jackpotValue = $('#jackpotValue');
+		$totalGold = $('#totalGold');
+		$goldLabel = $('[data-section="gold"] .metric-label').first();
+
+		$xpRate = $('#xpRate');
+		$totalXP = $('#totalXP');
+		$timeToLevel = $('#timeToLevel');
+		$xpLabel = $('[data-section="xp"] .metric-label').first();
+
+		$partyDPS = $('#partyDPS');
+		$yourDPS = $('#yourDPS');
+		$sessionTime = $('#sessionTime');
+	}
+
 	const avgGold = calculateAverageGold();
-	$('#goldRate').text(avgGold.toLocaleString('en'));
-	$('#jackpotValue').text(largestGoldDrop.toLocaleString('en'));
-	$('#totalGold').text(sumGold.toLocaleString('en'));
-	$('#goldMetrics .metric-label').first().text(`Gold/${goldInterval.charAt(0).toUpperCase() + goldInterval.slice(1)}`);
+	$goldRate.text(avgGold.toLocaleString('en'));
+	$jackpotValue.text(largestGoldDrop.toLocaleString('en'));
+	$totalGold.text(sumGold.toLocaleString('en'));
+	$goldLabel.text(`Gold/${goldInterval.charAt(0).toUpperCase() + goldInterval.slice(1)}`);
 
 	if (now - lastGoldUpdate >= HISTORY_INTERVAL) {
 		goldHistory.push({ time: now, value: avgGold });
@@ -259,22 +287,22 @@ const updateMetricsDashboard = () => {
 		lastGoldUpdate = now;
 	}
 
-	// XP
 	const xpGained = character.xp - startXP;
 	const avgXP = calculateAverageXP();
-	$('#xpRate').text(avgXP.toLocaleString('en'));
-	$('#totalXP').text(xpGained.toLocaleString('en'));
+	$xpRate.text(avgXP.toLocaleString('en'));
+	$totalXP.text(xpGained.toLocaleString('en'));
 
 	const xpMissing = parent.G.levels[character.level] - character.xp;
-	const elapsedSec = Math.round((new Date() - xpStartTime) / 1000);
+	const elapsedSec = Math.round((now - xpStartTime) / 1000);
+
 	if (elapsedSec > 0 && xpGained > 0) {
 		const secondsToLevel = Math.round(xpMissing / (xpGained / elapsedSec));
-		$('#timeToLevel').text(formatTime(secondsToLevel)).css('fontSize', '24px');
+		$timeToLevel.css('fontSize', '24px').text(elapsedSec > 0 && xpGained > 0 ? formatTime(secondsToLevel) : '--');
 	} else {
-		$('#timeToLevel').text('--');
+		$timeToLevel.text('--');
 	}
 
-	$('#xpMetrics .metric-label').first().text(`XP/${xpInterval.charAt(0).toUpperCase() + xpInterval.slice(1)}`);
+	$xpLabel.text(`XP/${xpInterval.charAt(0).toUpperCase() + xpInterval.slice(1)}`);
 
 	if (now - lastXpUpdate >= HISTORY_INTERVAL) {
 		xpHistory.push({ time: now, value: avgXP });
@@ -282,21 +310,20 @@ const updateMetricsDashboard = () => {
 		lastXpUpdate = now;
 	}
 
-	// DPS
 	const totalDPS = calculateTotalDPS();
-	const yourDPS = calculateDPS(character.id);
-	$('#partyDPS').text(totalDPS.toLocaleString('en'));
-	$('#yourDPS').text(yourDPS.toLocaleString('en'));
+	const yourDPS = calculateDPS(character.id, now);
+	$partyDPS.text(totalDPS.toLocaleString('en'));
+	$yourDPS.text(yourDPS.toLocaleString('en'));
 
 	const elapsedMs = now - dpsStartTime;
 	const hours = Math.floor(elapsedMs / 3600000);
 	const minutes = Math.floor((elapsedMs % 3600000) / 60000);
-	$('#sessionTime').text(`${hours}h ${minutes}m`);
+	$sessionTime.text(hours ? `${hours}h ${minutes}m` : `${minutes}m`);
 
 	if (now - lastDpsUpdate >= HISTORY_INTERVAL) {
 		for (const id in playerDamageSums) {
 			if (!dpsHistory[id]) dpsHistory[id] = [];
-			const dps = calculateDPS(id);
+			const dps = calculateDPS(id, now);
 			dpsHistory[id].push({ time: now, value: dps });
 			if (dpsHistory[id].length > MAX_HISTORY) dpsHistory[id].shift();
 		}
@@ -308,12 +335,11 @@ const updateMetricsDashboard = () => {
 	drawChart('dpsChart', getDPSLines(), sectionColors.dps.primary);
 };
 
+
 // ========== CHART DRAWING ==========
 const getDPSLines = () => {
 	const lines = [];
 	const playerIds = Object.keys(dpsHistory);
-
-	// Calculate smoothed max for stable scaling
 	let currentMax = 1;
 	for (let i = 0; i < playerIds.length; i++) {
 		const hist = dpsHistory[playerIds[i]];
@@ -357,7 +383,6 @@ const drawChart = (canvasId, lines, sectionColor) => {
 
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-	// Check if we have data
 	let hasData = false;
 	for (let i = 0; i < lines.length; i++) {
 		if (lines[i].history.length >= 2) {
@@ -374,7 +399,6 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		return;
 	}
 
-	// Calculate max value across all lines
 	let maxValue = 1;
 	for (let i = 0; i < lines.length; i++) {
 		const lineMax = lines[i].smoothedMax || Math.max(...lines[i].history.map(d => d.value), 1);
@@ -383,14 +407,12 @@ const drawChart = (canvasId, lines, sectionColor) => {
 	maxValue *= 1.2;
 	const range = maxValue || 1;
 
-	// Calculate padding
 	ctx.font = '18px pixel, monospace';
 	const padding = ctx.measureText(maxValue.toLocaleString()).width + 15;
-	const labelSpace = lines[0].label ? 90 : 0; // Extra space for DPS labels
+	const labelSpace = lines[0].label ? 60 : 0;
 	const gw = canvas.width - 2 * padding - labelSpace;
 	const gh = canvas.height - 2 * padding;
 
-	// Draw grid
 	ctx.strokeStyle = 'rgba(255, 215, 0, 0.1)';
 	ctx.lineWidth = 1;
 	for (let i = 0; i <= 5; i++) {
@@ -401,7 +423,6 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		ctx.stroke();
 	}
 
-	// Draw axes
 	ctx.strokeStyle = 'rgba(255, 215, 0, 0.3)';
 	ctx.lineWidth = 2;
 	ctx.beginPath();
@@ -410,14 +431,12 @@ const drawChart = (canvasId, lines, sectionColor) => {
 	ctx.lineTo(canvas.width - padding, canvas.height - padding);
 	ctx.stroke();
 
-	// Draw each line
 	for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
 		const line = lines[lineIdx];
 		const history = line.history;
 		const color = line.color;
 		const histLen = history.length - 1;
 
-		// Gradient fill (only for single-line charts)
 		if (lines.length === 1) {
 			const gradient = ctx.createLinearGradient(0, padding, 0, canvas.height - padding);
 			gradient.addColorStop(0, color + '4D');
@@ -435,7 +454,6 @@ const drawChart = (canvasId, lines, sectionColor) => {
 			ctx.fill();
 		}
 
-		// Draw line
 		ctx.strokeStyle = color;
 		ctx.lineWidth = 2;
 		ctx.beginPath();
@@ -447,7 +465,6 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		}
 		ctx.stroke();
 
-		// Draw points
 		ctx.fillStyle = color;
 		for (let i = 0; i < history.length; i++) {
 			const x = padding + gw * i / histLen;
@@ -457,7 +474,6 @@ const drawChart = (canvasId, lines, sectionColor) => {
 			ctx.fill();
 		}
 
-		// Draw label (for DPS chart)
 		if (line.label) {
 			const last = history[histLen];
 			const lastY = canvas.height - padding - gh * last.value / range;
@@ -467,7 +483,6 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		}
 	}
 
-	// Y-axis labels
 	ctx.fillStyle = sectionColor;
 	ctx.font = '18px pixel, monospace';
 	ctx.textAlign = 'right';
@@ -477,18 +492,18 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		ctx.fillText(value.toLocaleString(), padding - 6, y + 4);
 	}
 	ctx.textAlign = 'center';
-	ctx.fillText('Last 5 minutes', canvas.width / 2, canvas.height - 10);
+	ctx.fillText(`Last ${MAX_HISTORY / 60} minutes`, canvas.width / 2, canvas.height - 10);
 };
 
 // ========== HELPER FUNCTIONS ==========
 const calculateAverageGold = () => {
-	const elapsed = (new Date() - goldStartTime) / 1000;
+	const elapsed = (performance.now() - goldStartTime) / 1000;
 	const divisor = elapsed / (goldInterval === 'minute' ? 60 : goldInterval === 'hour' ? 3600 : 86400);
 	return divisor > 0 ? Math.round(sumGold / divisor) : 0;
 };
 
 const calculateAverageXP = () => {
-	const elapsed = (new Date() - xpStartTime) / 1000;
+	const elapsed = (performance.now() - xpStartTime) / 1000;
 	const xpGained = character.xp - startXP;
 	const divisor = elapsed / (xpInterval === 'second' ? 1 : xpInterval === 'minute' ? 60 : xpInterval === 'hour' ? 3600 : 86400);
 	return divisor > 0 ? Math.round(xpGained / divisor) : 0;
@@ -499,6 +514,16 @@ const formatTime = (seconds) => {
 	const h = Math.floor((seconds % 86400) / 3600);
 	const m = Math.floor((seconds % 3600) / 60);
 	return `${d}d ${h}h ${m}m`;
+};
+
+const resetGoldHistory = () => {
+	goldHistory.length = 0;
+	lastGoldUpdate = 0;
+};
+
+const resetXpHistory = () => {
+	xpHistory.length = 0;
+	lastXpUpdate = 0;
 };
 
 // ========== EVENT LISTENERS ==========
@@ -522,7 +547,7 @@ const toggleMetricsDashboard = () => {
 		dashboard.show();
 		updateMetricsDashboard();
 		if (!updateInterval) {
-			updateInterval = setInterval(updateMetricsDashboard, 500);
+			updateInterval = setInterval(updateMetricsDashboard, 1000);
 		}
 	}
 };

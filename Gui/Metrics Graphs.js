@@ -28,9 +28,9 @@ const classColors = {
 };
 
 const sectionColors = {
-	gold: { primary: '#FFD700', rgba: 'rgba(255, 215, 0, 0.3)' },
-	xp: { primary: '#87CEEB', rgba: 'rgba(135, 206, 235, 0.3)' },
-	dps: { primary: '#FF6B6B', rgba: 'rgba(255, 107, 107, 0.3)' }
+  gold: { primary: '#FFD700', rgba: 'rgba(255, 215, 0, 0.3)', axis: 'rgba(255, 215, 0, 0.1)' },
+  xp:   { primary: '#87CEEB', rgba: 'rgba(135, 206, 235, 0.3)', axis: 'rgba(135, 206, 235, 0.2)' },
+  dps:  { primary: '#FF6B6B', rgba: 'rgba(255, 107, 107, 0.3)', axis: 'rgba(255, 107, 107, 0.2)' }
 };
 
 // ========== INITIALIZATION ==========
@@ -184,16 +184,17 @@ const createMetricsDashboard = () => {
 };
 
 const applyStyles = ($) => {
+	// Base styles
 	const styles = {
 		'#metricsHeader': {
 			background: 'linear-gradient(to right, #1a1a2e, #16213e)', padding: '12px 15px',
-			borderBottom: '2px solid #6366F1', display: 'flex', justifyContent: 'space-between',
+			borderBottom: '2px solid #3436a0ff', display: 'flex', justifyContent: 'space-between',
 			alignItems: 'center', borderRadius: '7px 7px 0 0', userSelect: 'none'
 		},
-		'#metricsTitle': { color: '#6366F1', fontSize: '24px', fontWeight: 'bold', textShadow: '0 0 10px rgba(99, 102, 241, 0.5)' },
+		'#metricsTitle': { color: '#3436a0ff', fontSize: '24px', fontWeight: 'bold', textShadow: '0 0 10px rgba(99, 102, 241, 0.5)' },
 		'#closeBtn': { background: 'rgba(255, 255, 255, 0.1)', border: '1px solid #6366F1', color: '#6366F1', fontSize: '20px', width: '30px', height: '30px', cursor: 'pointer', borderRadius: '3px', transition: 'all 0.2s' },
 		'#metricsContent': { padding: '15px', color: 'white', height: 'calc(90vh - 70px)', overflowY: 'auto', overflowX: 'hidden' },
-		'.metrics-section': { marginBottom: '20px', padding: '15px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', border: '1px solid rgba(255, 215, 0, 0.2)' },
+		'.metrics-section': { marginBottom: '20px', padding: '15px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px' },
 		'.metrics-section h3': { marginTop: '0', marginBottom: '15px', fontSize: '28px', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '1px' },
 		'.metrics-grid': { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '15px' },
 		'.metric-card': { background: 'rgba(0, 0, 0, 0.4)', padding: '15px', borderRadius: '8px', textAlign: 'center' },
@@ -204,14 +205,24 @@ const applyStyles = ($) => {
 		'.metric-chart': { width: '100%', height: '550px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', display: 'block' }
 	};
 
+	// Apply base styles
 	Object.entries(styles).forEach(([sel, style]) => $(sel).css(style));
 
+	// Section-specific border colors
+	$('.metrics-section').each(function () {
+		const section = $(this).data('section'); // gold, xp, dps
+		const color = sectionColors[section]?.rgba || 'rgba(255,255,255,0.2)';
+		$(this).css('border', `2px solid ${color}`); // slightly thicker for visibility
+		// Optionally adjust h3 title color
+		$(this).find('h3').css('color', sectionColors[section]?.primary || '#FFF');
+	});
+
+	// Chart-specific styling
 	Object.entries(sectionColors).forEach(([section, colors]) => {
-		$(`[data-section="${section}"] h3`).css('color', colors.primary);
 		$(`[data-section="${section}"] .metric-card`).css('border', `1px solid ${colors.rgba}`);
 		$(`[data-section="${section}"] .metric-value`).css('color', colors.primary);
-		$(`[data-section="${section}"] .metric-chart`).css('border', `1px solid ${colors.rgba}`);
 		$(`[data-section="${section}"] .interval-btn`).css('border', `1px solid ${colors.primary}`);
+		$(`[data-section="${section}"] .metric-chart`).css('border', `1px solid ${colors.rgba}`);
 	});
 };
 
@@ -405,8 +416,9 @@ const drawChart = (canvasId, lines, sectionColor) => {
 	const labelSpace = lines[0].label ? 60 : 0;
 	const gw = canvas.width - 2 * padding - labelSpace;
 	const gh = canvas.height - 2 * padding;
+	const axisColor = sectionColors[canvasId.replace('Chart','').toLowerCase()]?.axis || 'rgba(255,255,255,0.1)';
 
-	ctx.strokeStyle = 'rgba(255, 215, 0, 0.1)';
+	ctx.strokeStyle = axisColor;
 	ctx.lineWidth = 1;
 	for (let i = 0; i <= 5; i++) {
 		const y = padding + gh * i / 5;
@@ -416,7 +428,7 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		ctx.stroke();
 	}
 
-	ctx.strokeStyle = 'rgba(255, 215, 0, 0.3)';
+	ctx.strokeStyle = axisColor;
 	ctx.lineWidth = 2;
 	ctx.beginPath();
 	ctx.moveTo(padding, padding);

@@ -57,3 +57,8 @@ A combined version of my gold, XP, and DPS meters that is displayed as a popout 
 <img width="1590" height="1035" alt="image" src="https://github.com/user-attachments/assets/a0aeca4f-a1f0-4d3d-95e0-f8e5ae98a3c8" />                 
 <img width="1583" height="1032" alt="image" src="https://github.com/user-attachments/assets/ad48a440-4923-4a1f-a0a8-432b8cacdb75" />              
 <img width="1586" height="970" alt="image" src="https://github.com/user-attachments/assets/fc108ce4-3519-4fa5-987c-84a59758cf3f" />           
+
+Upgrade & Compound Cost Calculator:
+With just simple calls like `upgradeCost("bataxe", 1000000, 10)` youll get a show_json() call of an item upgrade/compound path                 
+<img width="682" height="1130" alt="image" src="https://github.com/user-attachments/assets/69eddfc6-9c6a-4920-8aeb-7954d28fc839" />             
+<img width="752" height="1214" alt="image" src="https://github.com/user-attachments/assets/d6e23396-7058-4dcf-80f4-047f4349d739" />

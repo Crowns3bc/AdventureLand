@@ -118,59 +118,59 @@ const createMetricsDashboard = () => {
 		buttons.map(b => `<button class="interval-btn ${b.active ? 'active' : ''}" data-interval="${b.interval}" data-type="${type}">${b.label}</button>`).join('');
 
 	const dashboard = $(`
-        <div id="metricsDashboard">
-            <div id="metricsHeader">
-                <span id="metricsTitle">Performance Metrics</span>
-                <button id="closeBtn">×</button>
-            </div>
-            <div id="metricsContent">
-                <div class="metrics-section" data-section="gold">
-                    <h3>Gold Tracking</h3>
-                    <div class="metrics-grid">
-                        ${metricCard('Gold/Hour', 'goldRate')}
-                        ${metricCard('Largest Drop', 'jackpotValue')}
-                        ${metricCard('Total Gold', 'totalGold')}
-                    </div>
-                    <div class="interval-selector">
-                        ${intervalButtons('gold', [
+		<div id="metricsDashboard">
+			<div id="metricsHeader">
+				<span id="metricsTitle">Performance Metrics</span>
+				<button id="closeBtn">×</button>
+			</div>
+			<div id="metricsContent">
+				<div class="metrics-section" data-section="gold">
+					<h3>Gold Tracking</h3>
+					<div class="metrics-grid">
+						${metricCard('Gold/Hour', 'goldRate')}
+						${metricCard('Largest Drop', 'jackpotValue')}
+						${metricCard('Total Gold', 'totalGold')}
+					</div>
+					<div class="interval-selector">
+						${intervalButtons('gold', [
 		{ interval: 'minute', label: 'Minute' },
 		{ interval: 'hour', label: 'Hour', active: true },
 		{ interval: 'day', label: 'Day' }
 	])}
-                    </div>
-                    <canvas id="goldChart" class="metric-chart"></canvas>
-                </div>
-                
-                <div class="metrics-section" data-section="xp">
-                    <h3>XP Tracking</h3>
-                    <div class="metrics-grid">
-                        ${metricCard('XP/Second', 'xpRate')}
-                        ${metricCard('Time to Level', 'timeToLevel')}
-                        ${metricCard('Total XP Gained', 'totalXP')}
-                    </div>
-                    <div class="interval-selector">
-                        ${intervalButtons('xp', [
+					</div>
+					<canvas id="goldChart" class="metric-chart"></canvas>
+				</div>
+				
+				<div class="metrics-section" data-section="xp">
+					<h3>XP Tracking</h3>
+					<div class="metrics-grid">
+						${metricCard('XP/Second', 'xpRate')}
+						${metricCard('Time to Level', 'timeToLevel')}
+						${metricCard('Total XP Gained', 'totalXP')}
+					</div>
+					<div class="interval-selector">
+						${intervalButtons('xp', [
 		{ interval: 'second', label: 'Second', active: true },
 		{ interval: 'minute', label: 'Minute' },
 		{ interval: 'hour', label: 'Hour' },
 		{ interval: 'day', label: 'Day' }
 	])}
-                    </div>
-                    <canvas id="xpChart" class="metric-chart"></canvas>
-                </div>
+					</div>
+					<canvas id="xpChart" class="metric-chart"></canvas>
+				</div>
 
-                <div class="metrics-section" data-section="dps">
-                    <h3>DPS Tracking</h3>
-                    <div class="metrics-grid">
-                        ${metricCard('Party DPS', 'partyDPS')}
-                        ${metricCard('Your DPS', 'yourDPS')}
-                        ${metricCard('Session Time', 'sessionTime')}
-                    </div>
-                    <canvas id="dpsChart" class="metric-chart"></canvas>
-                </div>
-            </div>
-        </div>
-    `).css({
+				<div class="metrics-section" data-section="dps">
+					<h3>DPS Tracking</h3>
+					<div class="metrics-grid">
+						${metricCard('Party DPS', 'partyDPS')}
+						${metricCard('Your DPS', 'yourDPS')}
+						${metricCard('Session Time', 'sessionTime')}
+					</div>
+					<canvas id="dpsChart" class="metric-chart"></canvas>
+				</div>
+			</div>
+		</div>
+	`).css({
 		position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
 		width: '1250px', maxHeight: '120vh', background: 'rgba(20, 20, 30, 0.98)',
 		border: '3px solid #6366F1', borderRadius: '10px', zIndex: 9999, display: 'none',
@@ -228,16 +228,15 @@ const attachEventHandlers = ($) => {
 			`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
 		$(this).css('background', hexToRgba(color, 0.2));
 
-		if (type === 'gold') {
-			if (goldInterval !== interval) {
-				goldInterval = interval;
-				resetGoldHistory();
-			}
-		} else if (type === 'xp') {
-			if (xpInterval !== interval) {
-				xpInterval = interval;
-				resetXpHistory();
-			}
+		const intervalState = {
+			gold: { get: () => goldInterval, set: v => goldInterval = v, reset: resetGoldHistory },
+			xp: { get: () => xpInterval, set: v => xpInterval = v, reset: resetXpHistory }
+		};
+
+		const s = intervalState[type];
+		if (s && s.get() !== interval) {
+			s.set(interval);
+			s.reset();
 		}
 
 		updateMetricsDashboard();
@@ -338,33 +337,27 @@ const updateMetricsDashboard = () => {
 
 // ========== CHART DRAWING ==========
 const getDPSLines = () => {
-	const lines = [];
-	const playerIds = Object.keys(dpsHistory);
 	let currentMax = 1;
-	for (let i = 0; i < playerIds.length; i++) {
-		const hist = dpsHistory[playerIds[i]];
-		if (hist) {
-			for (let j = 0; j < hist.length; j++) {
-				if (hist[j].value > currentMax) currentMax = hist[j].value;
-			}
-		}
-	}
-	dpsMaxValueSmoothed = dpsMaxValueSmoothed * 0.95 + currentMax * 0.05;
+	const lines = [];
 
-	for (let i = 0; i < playerIds.length; i++) {
-		const id = playerIds[i];
-		const player = get_player(id);
+	for (const id in dpsHistory) {
 		const history = dpsHistory[id];
+		if (!history?.length) continue;
 
-		if (player && history && history.length >= 2) {
+		for (const p of history) currentMax = Math.max(currentMax, p.value);
+
+		const player = get_player(id);
+		if (player && history.length >= 2) {
 			lines.push({
-				history: history,
-				color: classColors[player.ctype.toLowerCase()] || '#FFFFFF',
-				label: player.name,
-				smoothedMax: Math.max(dpsMaxValueSmoothed, currentMax)
+				history,
+				color: classColors[player.ctype] || '#FFF',
+				label: player.name
 			});
 		}
 	}
+
+	dpsMaxValueSmoothed = dpsMaxValueSmoothed * 0.95 + currentMax * 0.05;
+	lines.forEach(l => l.smoothedMax = Math.max(dpsMaxValueSmoothed, currentMax));
 
 	return lines;
 };
@@ -496,17 +489,23 @@ const drawChart = (canvasId, lines, sectionColor) => {
 };
 
 // ========== HELPER FUNCTIONS ==========
+const intervalSeconds = {
+	second: 1,
+	minute: 60,
+	hour: 3600,
+	day: 86400
+};
+
 const calculateAverageGold = () => {
 	const elapsed = (performance.now() - goldStartTime) / 1000;
-	const divisor = elapsed / (goldInterval === 'minute' ? 60 : goldInterval === 'hour' ? 3600 : 86400);
+	const divisor = elapsed / intervalSeconds[goldInterval];
 	return divisor > 0 ? Math.round(sumGold / divisor) : 0;
 };
 
 const calculateAverageXP = () => {
 	const elapsed = (performance.now() - xpStartTime) / 1000;
-	const xpGained = character.xp - startXP;
-	const divisor = elapsed / (xpInterval === 'second' ? 1 : xpInterval === 'minute' ? 60 : xpInterval === 'hour' ? 3600 : 86400);
-	return divisor > 0 ? Math.round(xpGained / divisor) : 0;
+	const divisor = elapsed / intervalSeconds[xpInterval];
+	return divisor > 0 ? Math.round((character.xp - startXP) / divisor) : 0;
 };
 
 const formatTime = (seconds) => {

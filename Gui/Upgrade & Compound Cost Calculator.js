@@ -40,6 +40,10 @@ const COSTS = {
 	offering: [0, 2500000, G.items.offering.g, 500000000] // Can change the price of offering[1] (offeringp) depending on the current market price
 }
 
+const MANUAL_IGRADE = {
+	lostearring: 2,
+};
+
 const UPGRADE_SCROLLS = [
 	G.items.scroll0, G.items.scroll1, G.items.scroll2, G.items.scroll3, G.items.scroll4
 ]
@@ -163,10 +167,10 @@ function getCompoundChance(item, scroll_def, offering_def) {
 	let high = 0
 	let grace_bonus = 0
 	const new_level = (item.level || 0) + 1
-	let igrade = zero_grade
+	let igrade = MANUAL_IGRADE[item.name] ?? zero_grade;
 
-	if (item.level >= 3) {
-		igrade = item_grade({ name: item.name, level: item.level - 2 })
+	if (item.level >= 3 && !(item.name in MANUAL_IGRADE)) {
+		igrade = calculate_item_grade({ ...item }, { name: item.name, level: item.level - 2 });
 	}
 
 	oprobability = probability = COMPOUNDS[igrade][new_level]

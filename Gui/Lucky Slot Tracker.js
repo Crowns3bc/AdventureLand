@@ -1,6 +1,8 @@
+// Load existing data from storage or initialize empty
 let slotData = get("slot_roll_data") || {};
 let lastLoggedRoll = null;
 
+// Initialize slot data structure
 function initSlotData(slot) {
 	if (!slotData[slot]) {
 		slotData[slot] = {
@@ -14,11 +16,13 @@ function initSlotData(slot) {
 
 async function q_data_handler(event) {
 	if (event.p.nums.length === 4) {
+		// Calculate the rolled value
 		const rolled = parseFloat(
 			`0.${event.p.nums[3]}${event.p.nums[2]}${event.p.nums[1]}${event.p.nums[0]}`
 		);
 		const slot = event.num;
 
+		// Prevent duplicate logging (same slot + roll within 100ms)
 		if (lastLoggedRoll &&
 			lastLoggedRoll.slot === slot &&
 			lastLoggedRoll.rolled === rolled &&
@@ -26,6 +30,7 @@ async function q_data_handler(event) {
 			return;
 		}
 
+		// Log the roll
 		initSlotData(slot);
 		slotData[slot].totalRolls++;
 		slotData[slot].sumRolls += rolled;
@@ -36,25 +41,28 @@ async function q_data_handler(event) {
 			slotData[slot].perfectRolls++;
 		}
 
+		// Save to storage
 		set("slot_roll_data", slotData);
 
+		// Update duplicate tracker
 		lastLoggedRoll = { slot: slot, rolled: rolled, timestamp: Date.now() };
 
 		console.log(`Logged roll ${rolled.toFixed(4)} for slot ${slot}`);
 	}
 }
 
+// Analysis function
 function analyzeSlots() {
 	const slots = Object.keys(slotData).sort((a, b) => parseInt(a) - parseInt(b));
 
 	if (slots.length === 0) {
-		console.log("No data collected yet.");
+		show_json("No data collected yet.");
 		return;
 	}
 
-	console.log("\n" + "=".repeat(50));
-	console.log("SLOT ANALYSIS");
-	console.log("=".repeat(50));
+	let output = "=".repeat(50) + "\n";
+	output += "SLOT ANALYSIS\n";
+	output += "=".repeat(50) + "\n\n";
 
 	let bestSlot = null;
 	let bestAvg = 1;
@@ -64,7 +72,7 @@ function analyzeSlots() {
 		const avgRoll = data.sumRolls / data.totalRolls;
 		const highRollPercent = (data.rollsAbove96_3 / data.totalRolls) * 100;
 
-		console.log(`Slot ${slot}: ${data.totalRolls} rolls | Avg: ${avgRoll.toFixed(4)} | >0.963: ${data.rollsAbove96_3} (${highRollPercent.toFixed(1)}%) | Perfect 0s: ${data.perfectRolls}`);
+		output += `Slot ${slot}: ${data.totalRolls} rolls | Avg: ${avgRoll.toFixed(4)} | >0.963: ${data.rollsAbove96_3} (${highRollPercent.toFixed(1)}%) | Perfect 0s: ${data.perfectRolls}\n`;
 
 		if (avgRoll < bestAvg) {
 			bestAvg = avgRoll;
@@ -72,11 +80,14 @@ function analyzeSlots() {
 		}
 	}
 
-	console.log("=".repeat(50));
-	console.log(`Best Slot: ${bestSlot} (Avg: ${bestAvg.toFixed(4)})`);
-	console.log("=".repeat(50) + "\n");
+	output += "=".repeat(50) + "\n";
+	output += `Best Slot: ${bestSlot} (Avg: ${bestAvg.toFixed(4)})\n`;
+	output += "=".repeat(50);
+
+	show_json(output);
 }
 
+// Export compact data
 function exportSlotData() {
 	const compactData = {};
 
@@ -90,7 +101,7 @@ function exportSlotData() {
 		};
 	}
 
-	console.log(JSON.stringify(compactData, null, 2));
+	show_json(compactData);
 	return compactData;
 }
 
@@ -99,6 +110,7 @@ parent.socket.on("q_data", q_data_handler);
 window.analyzeSlots = analyzeSlots;
 window.exportSlotData = exportSlotData;
 
+// ========== UI CREATION ==========
 setTimeout(() => {
 	const $ = parent.$;
 	$('#slotAnalysisDashboard').remove();
@@ -236,6 +248,7 @@ const drawSlotChart = () => {
 		return;
 	}
 
+	// Calculate averages and find min/max for scaling
 	const slotAvgs = {};
 	let minAvg = 1;
 	let maxAvg = 0;
@@ -255,6 +268,7 @@ const drawSlotChart = () => {
 	const barWidth = Math.max(15, chartWidth / slots.length - 5);
 	const barSpacing = (chartWidth - barWidth * slots.length) / (slots.length - 1 || 1);
 
+	// Draw grid lines
 	ctx.strokeStyle = 'rgba(255, 215, 0, 0.1)';
 	ctx.lineWidth = 1;
 	for (let i = 0; i <= 5; i++) {
@@ -265,6 +279,7 @@ const drawSlotChart = () => {
 		ctx.stroke();
 	}
 
+	// Draw axes
 	ctx.strokeStyle = 'rgba(255, 215, 0, 0.3)';
 	ctx.lineWidth = 2;
 	ctx.beginPath();
@@ -273,12 +288,14 @@ const drawSlotChart = () => {
 	ctx.lineTo(canvas.width - padding, canvas.height - bottomPadding);
 	ctx.stroke();
 
+	// Draw bars
 	slots.forEach((slot, idx) => {
 		const avg = slotAvgs[slot];
 		const x = padding + idx * (barWidth + barSpacing);
 		const barHeight = chartHeight * (avg / maxAvg);
 		const y = canvas.height - bottomPadding - barHeight;
 
+		// Color based on performance (green = good/low, red = bad/high)
 		const normalized = (avg - minAvg) / (maxAvg - minAvg || 1);
 		const r = Math.floor(normalized * 255);
 		const g = Math.floor((1 - normalized) * 255);
@@ -286,14 +303,30 @@ const drawSlotChart = () => {
 
 		ctx.fillRect(x, y, barWidth, barHeight);
 
+		// Draw perfect rolls count inside the bar at the bottom (always show, even if 0)
+		const perfectRolls = slotData[slot].perfectRolls || 0;
+		ctx.font = 'bold 16px pixel, monospace';
+		ctx.textAlign = 'center';
+
+		// Draw black outline
+		ctx.strokeStyle = '#000000';
+		ctx.lineWidth = 3;
+		ctx.strokeText(perfectRolls.toString(), x + barWidth / 2, canvas.height - bottomPadding - 8);
+
+		// Draw white text on top
+		ctx.fillStyle = '#FFFFFF';
+		ctx.fillText(perfectRolls.toString(), x + barWidth / 2, canvas.height - bottomPadding - 8);
+
+		// Draw slot number below each bar
 		ctx.fillStyle = '#FFD700';
-		ctx.font = '12px pixel, monospace';
+		ctx.font = '14px pixel, monospace';
 		ctx.textAlign = 'center';
 		ctx.fillText(slot.toString(), x + barWidth / 2, canvas.height - bottomPadding + 20);
 	});
 
+	// Draw Y-axis labels
 	ctx.fillStyle = '#FFD700';
-	ctx.font = '14px pixel, monospace';
+	ctx.font = '16px pixel, monospace';
 	ctx.textAlign = 'right';
 	for (let i = 0; i <= 5; i++) {
 		const value = (maxAvg * i / 5).toFixed(3);
@@ -301,7 +334,8 @@ const drawSlotChart = () => {
 		ctx.fillText(value, padding - 10, y + 4);
 	}
 
-	ctx.font = '16px pixel, monospace';
+	// Draw title
+	ctx.font = '20px pixel, monospace';
 	ctx.textAlign = 'center';
 	ctx.fillText('Average Roll by Slot (Lower = Better)', canvas.width / 2, 30);
 };

@@ -62,3 +62,7 @@ Upgrade & Compound Cost Calculator:
 With just simple calls like `upgradeCost("bataxe", 1000000, 10)` youll get a show_json() call of an item upgrade/compound path                 
 <img width="682" height="1130" alt="image" src="https://github.com/user-attachments/assets/69eddfc6-9c6a-4920-8aeb-7954d28fc839" />             
 <img width="752" height="1214" alt="image" src="https://github.com/user-attachments/assets/d6e23396-7058-4dcf-80f4-047f4349d739" />
+
+Lucky Slot Tracker:
+Upgrade roll tracker for finding your "lucky slot". Includes tracking each upgrade roll and a visual chart of the average roll          
+<img width="1829" height="1044" alt="image" src="https://github.com/user-attachments/assets/d7834782-77e4-4859-88ec-2a77081078dd" />

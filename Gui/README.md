@@ -61,3 +61,9 @@ A combined version of my gold, XP, and DPS meters that is displayed as a popout 
 Lucky Slot Tracker:                        
 Upgrade roll tracker for finding your "lucky slot". Includes tracking each upgrade roll and a visual chart of the average roll          
 <img width="1829" height="1044" alt="image" src="https://github.com/user-attachments/assets/d7834782-77e4-4859-88ec-2a77081078dd" />
+
+Tracktrix Modifier:                      
+Creates another tab within the tracktrix to more easily display your achievements. Simply click on the stat you want to see and it will display every achievement for that stat and your current progress towards it      
+<img width="727" height="1132" alt="image" src="https://github.com/user-attachments/assets/b3324fc5-559d-46fc-a0f8-1082ca4f9b1c" />                    
+<img width="760" height="490" alt="image" src="https://github.com/user-attachments/assets/9f7cee82-aa22-4f6a-9eab-c58695ea42fc" />                    
+

@@ -1,155 +1,170 @@
-var ui_gamelog = function() {
-    var gamelog_data = {
-      kills: {
-        show: true,
-        regex: /killed/,
-        tab_name: 'Kills'
-      },
-      gold: {
-        show: true,
-        regex: /gold/,
-        tab_name: 'Gold'
-      },
-      party: {
-        show: true,
-        regex: /party/,
-        tab_name: 'Party'
-      },
-      items: {
-        show: true,
-        regex: /found/,
-        tab_name: 'Items'
-      },
-      upgrade_and_compound: {
-        show: true,
-        regex: /(upgrade|combination)/,
-        tab_name: 'Upgr.'
-      },
-      errors: {
-        show: true,
-        regex: /(error|line|column)/i,
-        tab_name: 'Errors'
-      }
-    };
-    // filter buttons are alternating lighter and darker for aesthetic effect
-    // colours in order are: dark blue, light blue, white, dark gray, light gray, lighter gray
-    var filter_colours = {
-      on_dark: '#151342',
-      on_light: '#1D1A5C',
-      on_text: '#FFF',
-      off_dark: '#222',
-      off_light: '#333',
-      off_text: '#999'
-    };
-    var $ = parent.$;
-    init_timestamps();
-    init_gamelog_filter();
-    function init_gamelog_filter() {
-      //$('#bottomrightcorner').find('#goldui')[0].style.lineHeight = '30px';
-      $('#bottomrightcorner').find('#gamelog-tab-bar').remove();
-      let gamelog_tab_bar = $('<div id="gamelog-tab-bar" class="enableclicks" />').css({
-        border: '5px solid gray',
-        height: '24px',
-        background: 'black',
-        margin: '-5px 0',
-        display: 'flex',
-        fontSize: '20px',
-        fontFamily: 'pixel'
-      });
-      let gamelog_tab = $('<div class="gamelog-tab enableclicks" />').css({
-        height: '100%',
-        width: 'calc(100% / 6)',
-        textAlign: 'center',
-        lineHeight: '24px',
-        cursor: 'default'
-      });
-      for (let key in gamelog_data) {
-        if (!gamelog_data.hasOwnProperty(key)) continue;
-        let filter = gamelog_data[key];
-        gamelog_tab_bar.append(
-          gamelog_tab
-          .clone()
-          .attr('id', `gamelog-tab-${key}`)
-          .css({
-            background: gamelog_tab_bar.children().length % 2 == 0 ? filter_colours.on_dark : filter_colours.on_light
-          })
-          .text(filter.tab_name)
-          .click(function() {
-            toggle_gamelog_filter(key);
-          })
-        );
-      }
-      $('#gamelog').before(gamelog_tab_bar);
-    }
-    function filter_gamelog() {
-      $('.gameentry').each(function() {
-        for (let filter of Object.values(gamelog_data)) {
-          if (filter.regex.test(this.innerHTML)) {
-            this.style.display = filter.show ? 'block' : 'none';
-            return;
-          }
-        }
-      });
-    }
-    function toggle_gamelog_filter(filter) {
-      gamelog_data[filter].show = !gamelog_data[filter].show;
-      console.log(JSON.stringify(gamelog_data));
-      let tab = $(`#gamelog-tab-${filter}`);
-      if (gamelog_data[filter].show) {
-        tab.css({
-          background: $('.gamelog-tab').index(tab) % 2 == 0 ? filter_colours.on_dark : filter_colours.on_light,
-          color: filter_colours.on_text
-        });
-      } else {
-        tab.css({
-          background: $('.gamelog-tab').index(tab) % 2 == 0 ? filter_colours.off_dark : filter_colours.off_dark,
-          color: filter_colours.off_text
-        });
-      }
-      filter_gamelog();
-      $("#gamelog").scrollTop($("#gamelog")[0].scrollHeight);
-    }
-    function pad(num, pad_amount_) {
-      pad_amount = pad_amount_ || 2;
-      return ("0".repeat(pad_amount) + num).substr(-pad_amount, pad_amount);
-    }
-    function add_log_filtered(c, a) {
-      if (parent.mode.dom_tests || parent.inside == "payments") {
-        return;
-      }
-      if (parent.game_logs.length > 1000) {
-        var b = "<div class='gameentry' style='color: gray'>- Truncated -</div>";
-        parent.game_logs = parent.game_logs.slice(-720);
-        parent.game_logs.forEach(function(d) {
-          b += "<div class='gameentry' style='color: " + (d[1] || "white") + "'>" + d[0] + "</div>"
-        });
-        $("#gamelog").html(b)
-      }
-      parent.game_logs.push([c, a]);
-      let display_mode = 'block';
-      for (let filter of Object.values(gamelog_data)) {
-        if (filter.regex.test(c)) {
-          display_mode = filter.show ? 'block' : 'none';
-          break;
-        }
-      }
-      $("#gamelog").append(`<div class='gameentry' style='color: ${a || "white"}; display: ${display_mode};'>${c}</div>`);
-      $("#gamelog").scrollTop($("#gamelog")[0].scrollHeight);
-    }
-    function init_timestamps() {
-      if (parent.socket.hasListeners("game_log")) {
-        parent.socket.removeListener("game_log");
-        parent.socket.on("game_log", data => {
-          parent.draw_trigger(function() {
-            let now = new Date();
-            if (is_string(data)) {
-  add_log_filtered(`${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} | ${data}`, "gray");
-            } else {
-              if (data.sound) sfx(data.sound);
-  add_log_filtered(`${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} | ${data.message}`, data.color);
-            }
-          })
-        });
-      }
-    }
-  }();
+/**
+ * Enhanced game log with filtering and timestamps
+ * Creates a tabbed filter UI above the game log to show/hide different message types
+ */
+(function () {
+	const FILTERS = {
+		kills: { show: false, regex: /killed/, label: 'Kills' },
+		gold: { show: true, regex: /gold/, label: 'Gold' },
+		party: { show: true, regex: /party/, label: 'Party' },
+		items: { show: true, regex: /found/, label: 'Items' },
+		upgrade: { show: true, regex: /(upgrade|combination)/, label: 'Upgr.' },
+		errors: { show: true, regex: /(error|line|column)/i, label: 'Errors' }
+	};
+
+	const COLORS = {
+		active: ['#151342', '#1D1A5C'],
+		inactive: ['#222', '#333'],
+		activeText: '#FFF',
+		inactiveText: '#999'
+	};
+
+	const TRUNCATE_AT = 1000;
+	const TRUNCATE_TO = 720;
+
+	function padZero(num, length = 2) {
+		return num.toString().padStart(length, '0');
+	}
+
+	function getTimestamp() {
+		const now = new Date();
+		return `${padZero(now.getHours())}:${padZero(now.getMinutes())}:${padZero(now.getSeconds())}`;
+	}
+
+	function createFilterBar() {
+		const existingBar = parent.document.getElementById('gamelog-tab-bar');
+		if (existingBar) existingBar.remove();
+
+		const bar = parent.document.createElement('div');
+		bar.id = 'gamelog-tab-bar';
+		bar.className = 'enableclicks';
+		Object.assign(bar.style, {
+			border: '5px solid gray',
+			height: '24px',
+			background: 'black',
+			margin: '-5px 0',
+			display: 'flex',
+			fontSize: '20px',
+			fontFamily: 'pixel'
+		});
+
+		Object.entries(FILTERS).forEach(([key, filter], index) => {
+			const tab = parent.document.createElement('div');
+			tab.id = `gamelog-tab-${key}`;
+			tab.className = 'gamelog-tab enableclicks';
+			tab.textContent = filter.label;
+
+			const colors = filter.show ? COLORS.active : COLORS.inactive;
+			const textColor = filter.show ? COLORS.activeText : COLORS.inactiveText;
+
+			Object.assign(tab.style, {
+				height: '100%',
+				width: `${100 / Object.keys(FILTERS).length}%`,
+				textAlign: 'center',
+				lineHeight: '24px',
+				cursor: 'default',
+				background: colors[index % 2],
+				color: textColor
+			});
+
+			tab.addEventListener('click', () => toggleFilter(key));
+			bar.appendChild(tab);
+		});
+
+		const gamelog = parent.document.getElementById('gamelog');
+		gamelog.parentElement.insertBefore(bar, gamelog);
+	}
+
+	function toggleFilter(key) {
+		FILTERS[key].show = !FILTERS[key].show;
+
+		const tab = parent.document.getElementById(`gamelog-tab-${key}`);
+		const index = Array.from(tab.parentElement.children).indexOf(tab);
+		const colors = FILTERS[key].show ? COLORS.active : COLORS.inactive;
+		const textColor = FILTERS[key].show ? COLORS.activeText : COLORS.inactiveText;
+
+		tab.style.background = colors[index % 2];
+		tab.style.color = textColor;
+
+		filterGamelog();
+		scrollGamelogToBottom();
+	}
+
+	function filterGamelog() {
+		const entries = parent.document.querySelectorAll('.gameentry');
+		entries.forEach(entry => {
+			let shouldShow = true;
+			for (const filter of Object.values(FILTERS)) {
+				if (filter.regex.test(entry.innerHTML)) {
+					shouldShow = filter.show;
+					break;
+				}
+			}
+			entry.style.display = shouldShow ? 'block' : 'none';
+		});
+	}
+
+	function scrollGamelogToBottom() {
+		const gamelog = parent.document.getElementById('gamelog');
+		gamelog.scrollTop = gamelog.scrollHeight;
+	}
+
+	function addLogEntry(message, color = 'white') {
+		if (parent.mode?.dom_tests || parent.inside === 'payments') return;
+
+		const gamelog = parent.document.getElementById('gamelog');
+
+		if (parent.game_logs.length > TRUNCATE_AT) {
+			parent.game_logs = parent.game_logs.slice(-TRUNCATE_TO);
+
+			const truncateMsg = "<div class='gameentry' style='color: gray'>- Truncated -</div>";
+			const entries = parent.game_logs.map(([msg, clr]) =>
+				`<div class='gameentry' style='color: ${clr || 'white'}'>${msg}</div>`
+			).join('');
+
+			gamelog.innerHTML = truncateMsg + entries;
+		}
+
+		parent.game_logs.push([message, color]);
+
+		let display = 'block';
+		for (const filter of Object.values(FILTERS)) {
+			if (filter.regex.test(message)) {
+				display = filter.show ? 'block' : 'none';
+				break;
+			}
+		}
+
+		const entry = parent.document.createElement('div');
+		entry.className = 'gameentry';
+		entry.style.color = color;
+		entry.style.display = display;
+		entry.innerHTML = message;
+
+		gamelog.appendChild(entry);
+		scrollGamelogToBottom();
+	}
+
+	function initTimestamps() {
+		if (parent.socket.hasListeners('game_log')) {
+			parent.socket.removeListener('game_log');
+		}
+
+		parent.socket.on('game_log', data => {
+			parent.draw_trigger(() => {
+				const timestamp = getTimestamp();
+
+				if (typeof data === 'string') {
+					addLogEntry(`${timestamp} | ${data}`, 'gray');
+				} else {
+					if (data.sound) sfx(data.sound);
+					addLogEntry(`${timestamp} | ${data.message}`, data.color);
+				}
+			});
+		});
+	}
+
+	createFilterBar();
+	filterGamelog();
+	initTimestamps();
+})();

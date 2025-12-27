@@ -51,13 +51,13 @@ Acts as your own custom Game Events. Automatically gets the item sprite and send
 <img width="422" height="144" alt="image" src="https://github.com/user-attachments/assets/80f59e9b-ebc6-4c1f-ae7c-99e0dc927445" />
 <img width="403" height="160" alt="image" src="https://github.com/user-attachments/assets/774aeec3-fb3a-41b4-8c52-a15f5d1419b2" />
 
-Metrics Graphs:
+Metrics Graphs:                           
 A combined version of my gold, XP, and DPS meters that is displayed as a popout window rather than always being on screen              
 <img width="625" height="1199" alt="image" src="https://github.com/user-attachments/assets/087283f1-9dd0-49b0-9021-9afdf00db019" />               
 <img width="1590" height="1035" alt="image" src="https://github.com/user-attachments/assets/a0aeca4f-a1f0-4d3d-95e0-f8e5ae98a3c8" />                 
 <img width="1583" height="1032" alt="image" src="https://github.com/user-attachments/assets/ad48a440-4923-4a1f-a0a8-432b8cacdb75" />              
 <img width="1586" height="970" alt="image" src="https://github.com/user-attachments/assets/fc108ce4-3519-4fa5-987c-84a59758cf3f" />           
 
-Lucky Slot Tracker:
+Lucky Slot Tracker:                        
 Upgrade roll tracker for finding your "lucky slot". Includes tracking each upgrade roll and a visual chart of the average roll          
 <img width="1829" height="1044" alt="image" src="https://github.com/user-attachments/assets/d7834782-77e4-4859-88ec-2a77081078dd" />

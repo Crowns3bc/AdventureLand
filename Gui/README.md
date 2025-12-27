@@ -58,11 +58,6 @@ A combined version of my gold, XP, and DPS meters that is displayed as a popout 
 <img width="1583" height="1032" alt="image" src="https://github.com/user-attachments/assets/ad48a440-4923-4a1f-a0a8-432b8cacdb75" />              
 <img width="1586" height="970" alt="image" src="https://github.com/user-attachments/assets/fc108ce4-3519-4fa5-987c-84a59758cf3f" />           
 
-Upgrade & Compound Cost Calculator:
-With just simple calls like `upgradeCost("bataxe", 1000000, 10)` youll get a show_json() call of an item upgrade/compound path                 
-<img width="682" height="1130" alt="image" src="https://github.com/user-attachments/assets/69eddfc6-9c6a-4920-8aeb-7954d28fc839" />             
-<img width="752" height="1214" alt="image" src="https://github.com/user-attachments/assets/d6e23396-7058-4dcf-80f4-047f4349d739" />
-
 Lucky Slot Tracker:
 Upgrade roll tracker for finding your "lucky slot". Includes tracking each upgrade roll and a visual chart of the average roll          
 <img width="1829" height="1044" alt="image" src="https://github.com/user-attachments/assets/d7834782-77e4-4859-88ec-2a77081078dd" />

@@ -321,7 +321,7 @@ async function mainLoop() {
 // ACTION LOOP - Combat and healing only
 // ============================================================================
 async function actionLoop() {
-	let delay = 1;
+	let delay = 10;
 
 	try {
 		if (is_disabled(character)) {
@@ -330,21 +330,25 @@ async function actionLoop() {
 
 		updateCache();
 
-		// Healing priority
-		if (await tryHeal()) {
-			delay = ms_to_next_skill('attack');
-			return setTimeout(actionLoop, delay);
+		const msUntilAttack = ms_to_next_skill('attack');
+
+		if (msUntilAttack === 0) {
+			const healed = await tryHeal();
+
+			if (!healed) {
+				const target = cache.target;
+				if (target && is_in_range(target) && !smart.moving) {
+					await attack(target);
+				}
+			}
 		}
 
-		// Attack
-		const target = cache.target;
-		if (target && is_in_range(target) && !smart.moving) {
-			await attack(target);
-			delay = ms_to_next_skill('attack');
-		}
+		if (msUntilAttack > 200) delay = 40;
+		else if (msUntilAttack > 60) delay = 20;
+		else delay = 5;
 
 	} catch (e) {
-		console.error('actionLoop error:', e);
+		console.error('priest actionLoop error:', e);
 		delay = 25;
 	}
 

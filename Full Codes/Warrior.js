@@ -223,13 +223,14 @@ const equipmentSets = {
 // CORE UTILITIES
 // ============================================================================
 function updateCache() {
-	if (cache.isValid()) return;
+	if (!cache.isValid()) {
+		cache.target = findBestTarget();
+		cache.partyMembers = getPartyMembers();
+		cache.lastUpdate = performance.now();
+	}
 
-	cache.target = findBestTarget();
-	cache.partyMembers = getPartyMembers();
 	cache.tankEntity = get_entity('CrownPriest') || get_entity('Hierophant');
 	cache.monstersInCleaveRange = findMonstersInCleaveRange();
-	cache.lastUpdate = performance.now();
 }
 
 function findBestTarget() {
@@ -252,7 +253,7 @@ function findBestTarget() {
 		if (target) return target;
 	}
 
-	// Priority 3: Named targets with max HP
+	// Priority 3: Targets with max HP
 	for (const name of CONFIG.combat.targetPriority) {
 		const target = get_nearest_monster_v2({
 			target: name,
@@ -297,11 +298,10 @@ async function mainLoop() {
 
 		updateCache();
 
-		// Handle events
 		if (shouldHandleEvents()) {
 			handleEvents();
 		}
-		// Normal hunting
+
 		else if (CONFIG.movement.enabled) {
 			if (!get_nearest_monster({ type: home })) {
 				handleReturnHome();
@@ -341,11 +341,7 @@ async function actionLoop() {
 			!smart.moving
 		) {
 			await attack(target);
-
-			// Short delay after attack to re-sync cooldown
-			delay = 5;
 		} else {
-			// Adaptive polling like your old loop
 			if (msUntilAttack > 200) delay = 40;
 			else if (msUntilAttack > 60) delay = 20;
 			else delay = 5;
@@ -379,7 +375,7 @@ async function skillLoop() {
 			await use_skill('warcry');
 		}
 
-		// Stomp - highest priority
+		// Stomp
 		if (CONFIG.skills.stompEnabled && tank?.hp < tank?.max_hp * 0.3) {
 			await handleStomp();
 		}
@@ -427,7 +423,7 @@ async function handleStomp() {
 	if (needsSwap && now - state.lastBasherSwap > COOLDOWNS.weaponSwap) {
 		state.lastBasherSwap = now;
 		unequip('offhand');
-		equipBatch(equipmentSets.basher); // fire-and-forget
+		equipBatch(equipmentSets.basher);
 	}
 
 	await use_skill('stomp');
@@ -1042,7 +1038,8 @@ function get_nearest_monster_v2(args = {}) {
 function ms_to_next_skill(skill) {
 	const next_skill = parent.next_skill[skill];
 	if (next_skill === undefined) return 0;
-	const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings);
+	const ping = parent.pings?.length ? Math.min(...parent.pings) : 0;
+	const ms = next_skill.getTime() - Date.now() - ping;
 	return ms < 0 ? 0 : ms;
 }
 

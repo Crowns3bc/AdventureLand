@@ -105,7 +105,7 @@ const cache = {
 	lastUpdate: 0,
 
 	isValid() {
-		return Date.now() - this.lastUpdate < CACHE_TTL;
+		return performance.now() - this.lastUpdate < CACHE_TTL;
 	},
 
 	invalidate() {
@@ -199,14 +199,15 @@ const equipmentSets = {
 // CORE UTILITIES
 // ============================================================================
 function updateCache() {
-	if (cache.isValid()) return;
+	if (!cache.isValid()) {
+		cache.target = findBestTarget();
+		cache.zapTargets = findZapTargets();
+		cache.nearestBoss = findNearestBoss();
+		cache.partyMembers = getPartyMembers();
+		cache.lastUpdate = performance.now();
+	}
 
-	cache.target = findBestTarget();
 	cache.healTarget = findHealTarget();
-	cache.zapTargets = findZapTargets();
-	cache.partyMembers = getPartyMembers();
-	cache.nearestBoss = findNearestBoss();
-	cache.lastUpdate = Date.now();
 }
 
 function findBestTarget() {
@@ -288,15 +289,12 @@ async function mainLoop() {
 
 		updateCache();
 
-		// Handle events (bosses, holiday)
 		if (shouldHandleEvents()) {
 			handleEvents();
 		}
-		// Handle looting
 		else if (shouldLoot()) {
 			await handleLooting();
 		}
-		// Normal hunting behavior
 		else if (CONFIG.movement.enabled) {
 			if (!get_nearest_monster({ type: home })) {
 				handleReturnHome();
@@ -305,7 +303,6 @@ async function mainLoop() {
 			}
 		}
 
-		// Equipment management
 		if (CONFIG.equipment.autoSwapSets && state.skinReady) {
 			handleEquipmentSwap();
 		}
@@ -332,7 +329,7 @@ async function actionLoop() {
 
 		const msUntilAttack = ms_to_next_skill('attack');
 
-		if (msUntilAttack === 0) {
+		if (msUntilAttack < character.ping / 10) {
 			const healed = await tryHeal();
 
 			if (!healed) {
@@ -349,7 +346,7 @@ async function actionLoop() {
 
 	} catch (e) {
 		console.error('priest actionLoop error:', e);
-		delay = 25;
+		delay = 1;
 	}
 
 	setTimeout(actionLoop, delay);
@@ -375,7 +372,7 @@ async function skillLoop() {
 			await handleCurse();
 		}
 
-		// Absorb - high priority, frequent checks
+		// Absorb 
 		if (CONFIG.healing.absorbEnabled && penalty < 500) {
 			await handleAbsorb();
 		}
@@ -472,8 +469,6 @@ async function handleAbsorb() {
 	const allies = partyNames.filter(n => n !== character.name);
 	if (!allies.length) return;
 
-	// Find ANY monster targeting party members
-	// This ensures we catch all threats, not just one
 	for (let id in parent.entities) {
 		const entity = parent.entities[id];
 		if (!entity || entity.type !== 'monster' || entity.dead) continue;
@@ -507,7 +502,7 @@ async function handlePartyHeal() {
 
 async function handleZapper() {
 	const targets = findZapTargets();
-	const now = Date.now();
+	const now = performance.now();
 	const hasZapper = character.slots.ring2?.name === 'zapper';
 	const canSwap = now - state.lastEquipTime > COOLDOWNS.zapperSwap;
 	const hasEnoughMp = character.mp > (G?.skills?.zapperzap?.mp || 0) + 1250;
@@ -533,7 +528,7 @@ async function handleZapper() {
 			try {
 				await use_skill('zapperzap', entity);
 			} catch (e) {
-				// Silently continue on skill errors
+				console.error('handleZapper error:', e);
 			}
 		}
 	}
@@ -694,7 +689,7 @@ async function walkInCircle() {
 function shouldLoot() {
 	if (!CONFIG.looting.enabled || !state.skinReady || character.cc > COOLDOWNS.cc) return false;
 
-	const now = Date.now();
+	const now = performance.now();
 	const storedChestCount = Object.keys(loadChestMap()).length;
 	const penalty = character.s?.penalty_cd?.ms || 0;
 	const cooldownPass = now - state.lastLootTime > CONFIG.looting.lootCooldown;
@@ -709,7 +704,7 @@ function shouldLoot() {
 }
 
 async function handleLooting() {
-	state.lastLootTime = Date.now();
+	state.lastLootTime = performance.now();
 	state.current = 'looting';
 
 	try {
@@ -722,7 +717,6 @@ async function handleLooting() {
 		let looted = 0;
 		const maxLoots = CONFIG.looting.chestThreshold * 5;
 
-		// Loot stored chest IDs from localStorage
 		const storedChests = loadChestMap();
 		for (const chestId in storedChests) {
 			if (looted >= maxLoots) break;
@@ -765,7 +759,7 @@ function saveChestMap(map) {
 function handleEquipmentSwap() {
 	if (!CONFIG.equipment.autoSwapSets || character.cc > COOLDOWNS.cc) return;
 
-	const now = Date.now();
+	const now = performance.now();
 	if (now - state.lastEquipTime < COOLDOWNS.equipSwap) return;
 
 	let targetSet = 'luck';
@@ -979,7 +973,8 @@ function get_nearest_monster_v2(args = {}) {
 function ms_to_next_skill(skill) {
 	const next_skill = parent.next_skill[skill];
 	if (next_skill === undefined) return 0;
-	const ms = parent.next_skill[skill].getTime() - Date.now() - Math.min(...parent.pings);
+	const ping = parent.pings?.length ? Math.min(...parent.pings) : 0;
+	const ms = next_skill.getTime() - Date.now() - ping;
 	return ms < 0 ? 0 : ms;
 }
 
@@ -1001,7 +996,6 @@ async function equipBatch(data) {
 
 		if (!itemName) continue;
 
-		// Check if already equipped
 		let found = false;
 		if (parent.character.slots[slot]) {
 			let slotItem = parent.character.items[parent.character.slots[slot]];
@@ -1012,7 +1006,6 @@ async function equipBatch(data) {
 
 		if (found) continue;
 
-		// Find item in inventory
 		for (let j = 0; j < parent.character.items.length; j++) {
 			const item = parent.character.items[j];
 			if (item && item.name === itemName && item.level === level && item.l === l) {

@@ -229,7 +229,7 @@ function updateCache() {
 		cache.lastUpdate = performance.now();
 	}
 
-	cache.tankEntity = get_entity('CrownPriest') || get_entity('Hierophant');
+	cache.tankEntity = get_entity('CrownPriest')
 	cache.monstersInCleaveRange = findMonstersInCleaveRange();
 }
 
@@ -279,10 +279,13 @@ function findMonstersInCleaveRange() {
 	);
 }
 
-function countHomeMobs() {
+function countTankTargetingMobs() {
+	const tankName = cache.tankEntity?.name;
+	if (!tankName) return 0;
+
 	return Object.values(parent.entities).filter(e =>
 		e?.type === 'monster' &&
-		e.mtype === home &&
+		e.target === tankName &&
 		!e.dead
 	).length;
 }

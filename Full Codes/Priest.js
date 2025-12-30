@@ -20,10 +20,10 @@ const CONFIG = {
 		circleWalk: true,
 		circleSpeed: 1.8,
 		circleRadius: 25,
-		avoidMobs: true //to be implemented
+		avoidMobs: true
 	},
 
-	support: {
+	healing: {
 		partyHealThreshold: 0.65,
 		partyHealMinMp: 2000,
 		absorbEnabled: true,
@@ -179,7 +179,7 @@ const equipmentSets = {
 		{ itemName: "ringofluck", slot: "ring2", level: 2, l: "l" },
 		{ itemName: "rabbitsfoot", slot: "orb", level: 3, l: "l" },
 		{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
-		{ itemName: "gcape", slot: "cape", level: 9, l: "l" },
+		{ itemName: "bcape", slot: "cape", level: 7, l: "l" },
 		{ itemName: "mearring", slot: "earring1", level: 1, l: "l" },
 		{ itemName: "mearring", slot: "earring2", level: 1, l: "u" }
 	],
@@ -372,7 +372,7 @@ async function skillLoop() {
 		}
 
 		// Absorb - high priority, frequent checks
-		if (CONFIG.support.absorbEnabled && penalty < 500) {
+		if (CONFIG.healing.absorbEnabled && penalty < 500) {
 			await handleAbsorb();
 		}
 
@@ -382,7 +382,7 @@ async function skillLoop() {
 		}
 
 		// Dark Blessing
-		if (CONFIG.support.darkBlessingEnabled && !is_on_cooldown('darkblessing')) {
+		if (CONFIG.healing.darkBlessingEnabled && !is_on_cooldown('darkblessing')) {
 			await use_skill('darkblessing');
 		}
 
@@ -484,13 +484,13 @@ async function handleAbsorb() {
 }
 
 async function handlePartyHeal() {
-	let threshold = CONFIG.support.partyHealThreshold;
+	let threshold = CONFIG.healing.partyHealThreshold;
 
 	if (character.map !== mobMap) {
 		threshold = 0.99;
 	}
 
-	if (character.mp <= CONFIG.support.partyHealMinMp || is_on_cooldown('partyheal')) return;
+	if (character.mp <= CONFIG.healing.partyHealMinMp || is_on_cooldown('partyheal')) return;
 
 	for (const name of cache.partyMembers) {
 		const ally = get_player(name);
@@ -1110,6 +1110,22 @@ skinChanger();
 // ============================================================================
 // EVENT HANDLERS
 // ============================================================================
+
+function on_cm(name, data) {
+	if (name == "CrownsAnal") {
+		if (data.message == "location") {
+			respawn();
+			smart_move({ x: data.x, y: data.y, map: data.map });
+			game_log("Repsawning & Moving");
+		}
+	}
+	if (name == "CrownMerch") {
+		if (data.message == "Heal Merch") {
+			use_skill("partyheal");
+			game_log("Party Healing CrownMerch");
+		}
+	}
+}
 
 function on_party_request(name) {
 	if (CONFIG.party.groupMembers.includes(name)) {

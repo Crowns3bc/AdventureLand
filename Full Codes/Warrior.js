@@ -279,7 +279,7 @@ function findMonstersInCleaveRange() {
 	);
 }
 
-function countTankTargetingMobs() {
+function mobCount() {
 	const tankName = cache.tankEntity?.name;
 	if (!tankName) return 0;
 
@@ -432,7 +432,7 @@ async function handleStomp() {
 	await use_skill('stomp');
 
 	if (needsSwap) {
-		const targetSet = countHomeMobs() === 1 ? 'single' : 'aoe';
+		const targetSet = mobCount() === 1 ? 'single' : 'aoe';
 		equipBatch(equipmentSets[targetSet]);
 	}
 }
@@ -455,7 +455,7 @@ async function handleCleave() {
 	await use_skill('cleave');
 
 	if (needsSwap) {
-		const targetSet = countHomeMobs() === 1 ? 'single' : 'aoe';
+		const targetSet = mobCount() === 1 ? 'single' : 'aoe';
 		equipBatch(equipmentSets[targetSet]);
 	}
 }
@@ -700,7 +700,7 @@ async function equipmentLoop() {
 
 				// Weapon swap based on mob count/map
 				if (CONFIG.equipment.weaponSwapEnabled) {
-					const homeCount = countHomeMobs();
+					const homeCount = mobCount();
 					if (homeCount === 1) {
 						if (!isSetEquipped('single')) {
 							equipSet('single');

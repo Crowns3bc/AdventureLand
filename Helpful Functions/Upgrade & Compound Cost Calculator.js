@@ -335,7 +335,7 @@ function calculate_upgrade_path(item_value, item_name, start_level, target_level
 	const path = []
 	let current_item = { name: item_name, level: start_level, grace: 0 }
 	let current_cost = item_value
-	let total_expected_cost = 0
+	let cumulative_expected_cost = item_value
 	let cumulative_success_chance = 1
 
 	for (let level = start_level; level < target_level; level++) {
@@ -343,8 +343,9 @@ function calculate_upgrade_path(item_value, item_name, start_level, target_level
 		if (!step) break
 
 		const expected_attempts = 1 / step.chance
-		const step_expected_cost = step.expected_cost
 		cumulative_success_chance *= step.chance
+
+		cumulative_expected_cost += step.expected_cost
 
 		path.push({
 			from_level: level,
@@ -355,29 +356,29 @@ function calculate_upgrade_path(item_value, item_name, start_level, target_level
 			chance: step.chance,
 			expected_attempts,
 			step_cost: step.actual_cost,
-			expected_cost: step_expected_cost,
+			expected_cost: cumulative_expected_cost,
 			grace_after: step.grace
 		})
 
-		total_expected_cost += step_expected_cost
 		current_item = { name: item_name, level: level + 1, grace: step.grace }
 		current_cost = step.expected_cost
 	}
 
 	return {
 		path,
-		total_expected_cost,
+		total_expected_cost: cumulative_expected_cost,
 		total_items_needed: 1 / cumulative_success_chance,
 		final_level: current_item.level,
 		final_grace: current_item.grace
 	}
 }
 
+
 function calculate_compound_path(item_value, item_name, start_level, target_level, optimize_item) {
 	const path = []
 	let current_item = { name: item_name, level: start_level, grace: 0 }
+	let cumulative_expected_cost = item_value
 	let current_cost = item_value
-	let total_expected_cost = 0
 	let expected_items_needed = 1
 
 	for (let level = start_level; level < target_level; level++) {
@@ -386,7 +387,8 @@ function calculate_compound_path(item_value, item_name, start_level, target_leve
 
 		const expected_attempts = 1 / step.chance
 		expected_items_needed *= 3 / step.chance
-		total_expected_cost += step.expected_cost
+
+		cumulative_expected_cost += step.expected_cost
 
 		path.push({
 			from_level: level,
@@ -396,7 +398,7 @@ function calculate_compound_path(item_value, item_name, start_level, target_leve
 			chance: step.chance,
 			expected_attempts,
 			step_cost: step.actual_cost,
-			expected_cost: step.expected_cost,
+			expected_cost: cumulative_expected_cost,
 			grace_after: step.grace
 		})
 
@@ -406,7 +408,7 @@ function calculate_compound_path(item_value, item_name, start_level, target_leve
 
 	return {
 		path,
-		total_expected_cost,
+		total_expected_cost: cumulative_expected_cost,
 		total_items_needed: expected_items_needed,
 		final_level: current_item.level,
 		final_grace: current_item.grace

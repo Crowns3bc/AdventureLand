@@ -19,7 +19,7 @@ const CONFIG = {
 	movement: {
 		enabled: true,
 		circleWalk: true,
-		circleSpeed: 1.8,
+		circleSpeed: 0.95,
 		circleRadius: 75,
 	},
 
@@ -38,7 +38,8 @@ const CONFIG = {
 		bossSetSwapEnabled: true,
 		xpSetSwapEnabled: true,
 		xpMonsters: [home, 'sparkbot'],
-		xpMobHpThreshold: 25000
+		xpMobHpThreshold: 25000,
+		useLicence: false,
 	},
 
 	potions: {
@@ -85,7 +86,8 @@ const CONFIG = {
 		characters: {
 			MERCHANT: { name: 'CrownMerch', codeSlot: 95 },
 			PRIEST: { name: 'CrownPriest', codeSlot: 3 },
-			WARRIOR1: { name: 'CrownTown', codeSlot: 2 }
+			WARRIOR: { name: 'CrownTown', codeSlot: 2 },
+			//MAGE: { name: 'CrownMage', codeSlot: 8 }
 		}
 	},
 
@@ -207,7 +209,7 @@ const equipmentSets = {
 		{ itemName: "cupid", slot: "mainhand", level: 9, l: "l" },
 	],
 	dps: [
-		{ itemName: "amuletofm", slot: "amulet", level: 6, l: "l" },
+		//{ itemName: "dexamulet", slot: "amulet", level: 6, l: "l" },
 		{ itemName: "dexearring", slot: "earring2", level: 5, l: "l" },
 		{ itemName: "dexearring", slot: "earring1", level: 5, l: "l" },
 		{ itemName: "suckerpunch", slot: "ring1", level: 2, l: "l" },
@@ -254,14 +256,13 @@ function updateTargetCache() {
 	const X = locations[home][0].x;
 	const Y = locations[home][0].y;
 	const rangeThreshold = 65;
-
 	const sortedByHP = [];
 
 	for (const id in parent.entities) {
 		const e = parent.entities[id];
 		if (
 			e.type === 'monster' &&
-			(CONFIG.combat.targetPriority.includes(e.target)) &&
+			CONFIG.combat.targetPriority.includes(e.target) &&
 			!e.dead
 		) {
 			sortedByHP.push(e);
@@ -315,6 +316,24 @@ async function mainLoop() {
 		}
 
 		updateCache();
+
+		if (CONFIG.equipment.useLicence) {
+			let licenceSlot = locate_item("licence");
+			if (licenceSlot === -1 && (character?.s?.licenced?.ms ?? 0) < 5000) {
+				await buy("licence");
+				// refresh the slot after buying
+				licenceSlot = locate_item("licence");
+			}
+
+			//console.log("Licence slot:", licenceSlot, "licenced.ms:", character?.s?.licenced?.ms);
+
+			// Consume as soon as the item exists and the buff is not near max
+			if ((character?.s?.licenced?.ms ?? 0) < 250 && licenceSlot !== -1) {
+				console.log("Attempting to consume licence");
+				await consume(licenceSlot);
+				console.log("Consume command sent for slot", licenceSlot);
+			}
+		}
 
 		if (shouldHandleEvents()) {
 			handleEvents();
@@ -744,8 +763,8 @@ function clearInventory() {
 	const lootMule = get_player('CrownMerch');
 	if (!lootMule) return;
 
-	if (character.gold > 11000000) {
-		send_gold(lootMule, character.gold - 10000000);
+	if (character.gold > 51000000) {
+		send_gold(lootMule, character.gold - 50000000);
 	}
 
 	const itemsToExclude = ['hpot1', 'mpot1', 'luckbooster', 'goldbooster', 'xpbooster', 'pumpkinspice', 'xptome'];
@@ -1407,7 +1426,7 @@ setInterval(updateMonsterButton, 250);
 
 // ============= CONFIGURATION =============
 const DISCORD_WEBHOOK_URL = DISCORD_WEBHOOK_URL_HERE;
-const MENTION_USER_ID = "******************";  // Set to null or "" to disable pings
+const MENTION_USER_ID = "*****************";  // Set to null or "" to disable pings
 const BOT_USERNAME = "Lootbot";
 const OUTPUT_SIZE = 50; // Scale image size
 // =========================================
@@ -2355,7 +2374,7 @@ const partyFrameWidth = 80; // Set the desired width for the party frames
 
 function updatePartyData() {
 	let myInfo = Object.fromEntries(Object.entries(character).filter(current => { return character.read_only.includes(current[0]) || includeThese.includes(current[0]); }));
-	myInfo.lastSeen = Date.now();
+	myInfo.lastSeen = performance.now();
 	set(character.name + '_newparty_info', myInfo);
 }
 
@@ -2453,7 +2472,7 @@ function updatePartyFrames() {
 		for (let x = 0; x < partyFrame.children().length; x++) {
 			let party_member_name = Object.keys(parent.party)[x];
 			let info = get(party_member_name + '_newparty_info');
-			if (!info || Date.now() - info.lastSeen > 1000) {
+			if (!info || performance.now() - info.lastSeen > 1000) {
 				let iframed_party_member = getIFramedCharacter(party_member_name);
 				if (iframed_party_member) {
 					info = Object.fromEntries(Object.entries(iframed_party_member).filter(current => { return character.read_only.includes(current[0]) || includeThese.includes(current[0]); }));
@@ -2560,7 +2579,7 @@ parent.$('#party-props-toggles').remove();
 
 setInterval(updatePartyFrames, 500);
 ///////////////////////////////////////////////////////////////////////////////////////
-const ALDATA_KEY = "*************************";
+const ALDATA_KEY = "*************";
 
 function updateTrackerData() {
 	parent.socket.once("tracker", (data) => {
@@ -2582,92 +2601,96 @@ setTimeout(hideTracker, 1000);
 // Run the updateTrackerData function every minute (60000 milliseconds)
 setInterval(updateTrackerData, 1000 * 60 * 10);
 
-function modify_parent_function() {
-	const change_parent_function = function () {
+/**
+ * Adds a Stats tab to the default tracker window
+ * Shows achievement progress for stat bonuses earned from monster kills
+ */
+function modify_tracker() {
+	const tracker_function = function () {
 		this.render_tracker = function () {
-			var a = "";
-			a += "<div style='font-size: 32px'>";
-			a += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackerm\").show();'>Monsters</div>";
-			a += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackere\").show();'>Exchanges and Quests</div>";
-			a += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackerx\").show();'>Stats</div>";
-			a += "</div>";
+			let html = "";
 
-			// Render monsters
-			a += "<div class='trackers trackerm'>";
-			object_sort(G.monsters, "hpsort").forEach(function (b) {
-				if ((!b[1].cute || b[1].achievements) && !b[1].unlist) {
-					var c = (tracker.monsters[b[0]] || 0) + (tracker.monsters_diff[b[0]] || 0), d = "#50ADDD";
-					let borderColor = "#9F9FB0";
+			// Tab buttons
+			html += "<div style='font-size: 32px'>";
+			html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackerm\").show();'>Monsters</div>";
+			html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackere\").show();'>Exchanges and Quests</div>";
+			html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackerx\").show();'>Stats</div>";
+			html += "</div>";
 
-					tracker.max.monsters[b[0]] && tracker.max.monsters[b[0]][0] > c && (c = tracker.max.monsters[b[0]][0], d = "#DCC343");
-					if ((tracker.max.monsters[b[0]] && tracker.max.monsters[b[0]][0] && tracker.max.monsters[b[0]][0]) && (b[1] && b[1].achievements)) {
-						if (tracker.max.monsters[b[0]][0] >= b[1].achievements[b[1].achievements.length - 1][0]) {
-							//borderColor = "#22c725";
+			// Monsters tab (default game code)
+			html += "<div class='trackers trackerm'>";
+			object_sort(G.monsters, "hpsort").forEach(function (e) {
+				if (e[1].cute && !e[1].achievements || e[1].unlist) return;
+				let count = (tracker.monsters[e[0]] || 0) + (tracker.monsters_diff[e[0]] || 0);
+				let color = "#50ADDD";
+				if (tracker.max.monsters[e[0]] && tracker.max.monsters[e[0]][0] > count) {
+					count = tracker.max.monsters[e[0]][0];
+					color = "#DCC343";
+				}
+				html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; position: relative; display: inline-block; margin: 2px;' class='clickable' onclick='pcs(event); render_monster_info(\"" + e[0] + "\")'>";
+				html += sprite(e[0], { scale: 1.5 });
+				if (count) {
+					html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:" + color + "; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(count) + "</div>";
+				}
+				if (tracker.drops && tracker.drops[e[0]] && tracker.drops[e[0]].length) {
+					html += "<div style='background-color:#FD79B0; border: 2px solid #9F9FB0; position: absolute; bottom: -2px; right: -2px; display: inline-block; padding: 1px 1px 1px 1px; height: 2px; width: 2px'></div>";
+				}
+				html += "</div>";
+			});
+			html += "</div>";
+
+			// Exchanges tab (default game code)
+			html += "<div class='trackers trackere hidden' style='margin-top: 3px'>";
+			object_sort(G.items).forEach(function (e) {
+				if (e[1].e && !e[1].ignore) {
+					let list = [[e[0], e[0], undefined]];
+					if (e[1].upgrade || e[1].compound) {
+						list = [];
+						for (let i = 0; i < 13; i++) {
+							if (G.drops[e[0] + i]) list.push([e[0], e[0] + i, i]);
 						}
 					}
-
-					a += "<div style='background-color:#575983; border: 2px solid" + borderColor + ";position: relative; display: inline-block; margin: 2px;'" +
-						"class='clickable' onclick='pcs(event); render_monster_info(\"" + b[0] + "\")'>";
-
-					a = 1 > (G.monsters[b[0]].size || 1) ? a + sprite(b[1].skin || b[0], { scale: 1 }) : a + sprite(b[1].skin || b[0], { scale: 1.5 });
-					c && (a += "<div style='background-color:#575983; border: 2px solid " + borderColor + "; position: absolute; top: -2px; left: -2px; color:" + d + "; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(c) + "</div>");
-					tracker.drops && tracker.drops[b[0]] && tracker.drops[b[0]].length && (a += "<div style='background-color:#FD79B0; border: 2px solid " + borderColor + "; position: absolute; bottom: -2px; right: -2px; display: inline-block; padding: 1px 1px 1px 1px; height: 2px; width: 2px'></div>");
-					a += "</div>";
-				}
-			});
-			a += "</div>";
-
-			// Render exchanges and quests
-			a += "<div class='trackers trackere hidden' style='margin-top: 3px'>";
-			object_sort(G.items).forEach(function (b) {
-				if (b[1].e && !b[1].ignore) {
-					var c = [[b[0], b[0], void 0]];
-					if (b[1].upgrade || b[1].compound) {
-						c = [];
-						for (var d = 0; 13 > d; d++)
-							G.drops[b[0] + d] && c.push([b[0], b[0] + d, d]);
-					}
-
-					c.forEach(function (b) {
-						a += "<div style='margin-right: 3px; margin-bottom: 3px; display: inline-block; position: relative;'";
-						a = G.drops[b[1]] ? a + (" class='clickable' onclick='pcs(event); render_exchange_info(\"" + b[1] + '",' + (tracker.exchanges[b[1]] || 0) + ")'>") : a + ">";
-						a += item_container({ skin: G.items[b[0]].skin }, { name: b[0], level: b[2] });
-						tracker.exchanges[b[1]] && (a += "<div style='background-color:#575983; border: 2px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:#ED901C; font-size: 16px; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(tracker.exchanges[b[1]]) + "</div>");
-						a += "</div>";
+					list.forEach(function (d) {
+						html += "<div style='margin-right: 3px; margin-bottom: 3px; display: inline-block; position: relative;'";
+						if (G.drops[d[1]]) {
+							html += " class='clickable' onclick='pcs(event); render_exchange_info(\"" + d[1] + "\"," + (tracker.exchanges[d[1]] || 0) + ")'>";
+						} else {
+							html += ">";
+						}
+						html += item_container({ skin: G.items[d[0]].skin }, { name: d[0], level: d[2] });
+						if (tracker.exchanges[d[1]]) {
+							html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:#ED901C; font-size: 16px; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(tracker.exchanges[d[1]]) + "</div>";
+						}
+						html += "</div>";
 					});
 				}
 			});
-			a += "</div>";
+			html += "</div>";
 
-			// Render achievements
+			// Stats tab (your custom addition)
+			html += "<div class='trackers trackerx hidden' style='margin-top: 3px; padding: 10px;'>";
 			const kills = parent.tracker.max.monsters;
 			const achievements = {};
 
 			for (const mtype in kills) {
 				if (!(mtype in G.monsters) || !G.monsters[mtype].achievements) continue;
-
-				const kill_count = kills[mtype][0];
+				const killCount = kills[mtype][0];
 
 				for (const achievement of G.monsters[mtype].achievements) {
-					const needed = achievement[0];
-					const type = achievement[1];
-					const reward = achievement[2];
-					const amount = achievement[3];
-					if (kill_count < needed) {
-						if (type !== "stat") continue;
+					const [needed, type, reward, amount] = achievement;
+					if (type !== "stat") continue;
 
-						if (!achievements[reward]) achievements[reward] = { value: 0, maxvalue: 0, monsters: [] };
-						achievements[reward].value += 0;
-						achievements[reward].maxvalue += amount;
-						achievements[reward].monsters.push({ mtype, needed, amount });
+					if (!achievements[reward]) {
+						achievements[reward] = { value: 0, maxvalue: 0, monsters: [] };
 					}
-					else {
-						if (type !== "stat") continue;
-						if (!achievements[reward]) achievements[reward] = { value: 0, maxvalue: 0, monsters: [] };
+
+					if (killCount >= needed) {
 						achievements[reward].value += amount;
-						achievements[reward].maxvalue += amount;
-						achievements[reward].monsters.push({ mtype, needed, amount });
+					} else {
+						achievements[reward].value += 0;
 					}
+					achievements[reward].maxvalue += amount;
+					achievements[reward].monsters.push({ mtype, needed, amount });
 				}
 			}
 
@@ -2679,76 +2702,59 @@ function modify_parent_function() {
 					return obj;
 				}, {});
 
-			a += "<div class='trackers trackerx hidden' style='margin-top: 3px'>";
-			a += "<div style='font-size: 28px; display: flex; flex-wrap: wrap; justify-content: space-evenly;'>";
+			html += "<div style='font-size: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px;'>";
 
 			for (const ac in sortedAchievements) {
 				const achievement = sortedAchievements[ac];
-				const isCompleted = achievement.value >= achievement.maxvalue;
+				const percentage = ((achievement.value / achievement.maxvalue) * 100).toFixed(1);
+				const borderColor = achievement.value >= achievement.maxvalue ? '#22c725' : '#9F9FB0';
 
-				a += "<div style='background-color:#575983; border: 2px solid #9F9FB0; width: 250px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin: 2px; padding: 10px; text-align: center; position: relative;' onclick='toggleDropdown(\"" + ac + "\")'>";
-				a += `${ac}: ${achievement.value.toLocaleString()} of ${achievement.maxvalue.toLocaleString()}`;
-				a += "<div id='dropdown-" + ac + "' class='dropdown-content' style='display: none; background-color:#000000; border: 2px solid #9F9FB0; width: 550px; margin-top: 5px; padding: 5px; position: absolute; z-index: 9999; max-height: 500px; overflow-y: auto;'>";
+				html += "<div style='background-color:#575983; border: 2px solid " + borderColor + "; padding: 5px; text-align: center; cursor: pointer; position: relative;' onclick='toggleDropdown(\"" + ac + "\")'>";
+				html += "<div style='font-weight: bold; font-size: 28px; margin-bottom: 3px;'>" + ac + "</div>";
+				html += "<div style='font-size: 25px; margin-bottom: 1px;'>" + achievement.value.toFixed(2) + " / " + achievement.maxvalue.toFixed(2) + "</div>";
+				html += "<div style='font-size: 22px; color: #DCC343;'>(" + percentage + "%)</div>";
 
-				// Sort monsters by needed value, then alphabetically by monster name
+				html += "<div id='dropdown-" + ac + "' class='dropdown-content' style='display: none; background-color:#1a1a1a; border: 2px solid #9F9FB0; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; max-height: 70vh; overflow-y: auto; padding: 15px; z-index: 10000; box-shadow: 0 0 20px rgba(0,0,0,0.8);'>";
+				html += "<div style='position: sticky; top: 0; background-color:#1a1a1a; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 2px solid #9F9FB0; font-size: 22px; font-weight: bold;'>" + ac + " Progress</div>";
+
+				// Sort monsters by needed value, then alphabetically
 				achievement.monsters.sort((a, b) => {
-					if (a.needed !== b.needed) {
-						return a.needed - b.needed;
-					}
+					if (a.needed !== b.needed) return a.needed - b.needed;
 					return a.mtype.localeCompare(b.mtype);
 				}).forEach(monster => {
-					const isCompleted = tracker.max.monsters[monster.mtype] && tracker.max.monsters[monster.mtype][0] >= monster.needed;
-					const fontColor = isCompleted ? 'green' : 'white'; // Font color based on completion status
+					const currentKills = tracker.max.monsters[monster.mtype] ? Math.floor(tracker.max.monsters[monster.mtype][0]) : 0;
+					const isCompleted = currentKills >= monster.needed;
+					const bgColor = isCompleted ? '#1a3d1a' : '#2a2a3a';
+					const fontColor = isCompleted ? '#22c725' : 'white';
 
-					a += `<div style='color: ${fontColor};'>Monster: ${monster.mtype} | Needed: ${monster.needed.toLocaleString()} | Amount: ${monster.amount.toLocaleString()}</div>`;
+					html += "<div style='background-color: " + bgColor + "; margin: 5px 0; padding: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;'>";
+					html += "<div style='color: " + fontColor + "; flex: 1;'>" + monster.mtype + "</div>";
+					html += "<div style='color: " + fontColor + "; font-size: 19px;'>" + currentKills.toLocaleString() + " / " + monster.needed.toLocaleString() + " (+" + monster.amount.toLocaleString() + ")</div>";
+					html += "</div>";
 				});
 
-				a += "</div>";
-				a += "</div>";
+				html += "</div>";
+				html += "</div>";
 			}
 
-			a += "</div>";
-			a += "</div>";
+			html += "</div></div>";
 
-			show_modal(a, {
-				wwidth: 578,
-				hideinbackground: !0
-			});
+			show_modal(html, { wwidth: 578, hideinbackground: true });
 
 			// Function to toggle dropdown visibility
 			window.toggleDropdown = function (achievement) {
 				const dropdown = document.getElementById('dropdown-' + achievement);
 				dropdown.style.display = (dropdown.style.display === 'none' || dropdown.style.display === '') ? 'block' : 'none';
-			}
-		}
+			};
+		};
+	};
 
-		this.render_drop = function (a, b, c) {
-			var d = "";
-			if ("open" == a[1]) {
-				var e = 0;
-				G.drops[a[2]].forEach(function (a) {
-					e += a[0];
-				});
-				G.drops[a[2]].forEach(function (g) {
-					d += render_drop(g, b * a[0] / e, c);
-				});
-				return d;
-			}
-			d += "<div style='position: relative; white-space: nowrap;'>";
-			var f = "", g = void 0;
-			G.items[a[1]] ? (f = G.items[a[1]].skin, g = { name: a[1], q: a[2], data: a[3] }) : "empty" == a[1] ? d += "<div style='z-index: 1; background-color:#575983; border: 200px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:#C5C7E0; font-size: 16px; display: inline-block; padding: 1px 1px 1px 3px;'>ZILCH</div>" : "shells" == a[1] ? (d += "<div style='z-index: 1; background-color:#575983; border: 2px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:#8DE33B; font-size: 16px; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(a[2]) + "</div>", f = "shells") : "gold" == a[1] && (d += "<div style='z-index: 1; background-color:#575983; border: 2px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:gold; font-size: 16px; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(a[2]) + "</div>", f = "gold");
-			"cx" == a[1] ? d += cx_sprite(a[2], { mright: 4 }) : "cxbundle" == a[1] ? G.cosmetics.bundle[a[2]].forEach(function (a) {
-				d += cx_sprite(a, { mright: 4 });
-			}) : d += "<span class='clickable' onclick='pcs(event); render_item_info(\"" + a[1] + '",0,"' + (g && g.data || "") + "\")'>" + item_container({ skin: f }, g) + "</span>";
-			d = 1 <= round(a[0] * b) ? d + ("<div style='vertical-align: middle; display: inline-block; font-size: 24px; line-height: 50px; height: 50px; margin-left: 5px; margin-right: 8px'>" + to_pretty_num(round(a[0] * b)) + " / 1</div>") : 1.1 <= 1 / (a[0] * b) && 10 > 1 / (a[0] * b) && 10 * parseInt(1 / (a[0] * b)) != parseInt(10 / (a[0] * b)) ? d + ("<div style='vertical-align: middle; display: inline-block; font-size: 24px; line-height: 50px; height: 50px; margin-left: 5px; margin-right: 8px'>10 / " + to_pretty_num(round(10 / (a[0] * b))) + "</div>") : d + ("<div style='vertical-align: middle; display: inline-block; font-size: 24px; line-height: 50px; height: 50px; margin-left: 5px; margin-right: 8px'>1 / " + to_pretty_num(round(1 / (a[0] * b))) + "</div>");
-			return d += "</div>";
-		}
-	}
-	// Eval the function string to have to defined in parent scope
-	const full_function_text = change_parent_function.toString();
-	parent.smart_eval(full_function_text.slice(full_function_text.indexOf("{") + 1, full_function_text.lastIndexOf("}")));
+	// Eval the function in parent scope
+	const full_text = tracker_function.toString();
+	parent.smart_eval(full_text.slice(full_text.indexOf("{") + 1, full_text.lastIndexOf("}")));
 }
-modify_parent_function();
+
+modify_tracker();
 
 // ========== TRACKING STATE ==========
 let sumGold = 0, largestGoldDrop = 0;

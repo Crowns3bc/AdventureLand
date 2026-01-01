@@ -15,6 +15,13 @@ const dpsStartTime = performance.now();
 const dpsHistory = {};
 let dpsMaxValueSmoothed = 100;
 
+// Multi-select damage types. Always default to DPS only
+let selectedDamageTypes = ['DPS'];
+
+// Toggle variables for overheal and over-manasteal
+let includeOverheal = false;
+let includeOverMana = false;
+
 // Chart config
 const MAX_HISTORY = 60;
 const HISTORY_INTERVAL = 5000;
@@ -33,6 +40,30 @@ const sectionColors = {
 	dps: { primary: '#FF6B6B', rgba: 'rgba(255, 107, 107, 0.3)', axis: 'rgba(255, 107, 107, 0.2)' }
 };
 
+const damageTypeLabels = {
+	DPS: 'Total DPS',
+	Base: 'Base Damage',
+	Cleave: 'Cleave Damage',
+	Blast: 'Blast Damage',
+	Burn: 'Burn Damage',
+	HPS: 'Healing',
+	MPS: 'Mana Steal',
+	DR: 'Damage Return',
+	Reflect: 'Reflection'
+};
+
+const damageTypeColors = {
+	DPS: '#FF6B6B',
+	Base: '#A92000',
+	Cleave: '#D4A574',
+	Blast: '#782D33',
+	Burn: '#FF7F27',
+	HPS: '#9A1D27',
+	MPS: '#353C9C',
+	DR: '#E94959',
+	Reflect: '#B8860B'
+};
+
 // ========== INITIALIZATION ==========
 setTimeout(() => {
 	const $ = parent.$;
@@ -48,8 +79,9 @@ setTimeout(() => {
 function getPlayerEntry(id) {
 	return playerDamageSums[id] || (playerDamageSums[id] = {
 		startTime: performance.now(), sumDamage: 0, sumBurnDamage: 0,
-		sumBlastDamage: 0, sumBaseDamage: 0, sumHeal: 0, sumLifesteal: 0,
-		sumManaSteal: 0, sumDamageReturn: 0, sumReflection: 0,
+		sumBlastDamage: 0, sumBaseDamage: 0, sumCleaveDamage: 0,
+		sumHeal: 0, sumManaSteal: 0,
+		sumDamageReturn: 0, sumReflection: 0,
 		sumDamageTakenPhys: 0, sumDamageTakenMag: 0
 	});
 }
@@ -62,6 +94,36 @@ function calculateDPS(id, now) {
 	return Math.floor((entry.sumDamage + entry.sumDamageReturn + entry.sumReflection) * 1000 / elapsed);
 }
 
+function calculateDamageTypeValue(id, now, damageType) {
+	const entry = playerDamageSums[id];
+	if (!entry) return 0;
+	const elapsed = now - entry.startTime;
+	if (elapsed <= 0) return 0;
+
+	switch (damageType) {
+		case 'DPS':
+			return Math.floor((entry.sumDamage + entry.sumDamageReturn + entry.sumReflection) * 1000 / elapsed);
+		case 'Base':
+			return Math.floor(entry.sumBaseDamage * 1000 / elapsed);
+		case 'Cleave':
+			return Math.floor(entry.sumCleaveDamage * 1000 / elapsed);
+		case 'Blast':
+			return Math.floor(entry.sumBlastDamage * 1000 / elapsed);
+		case 'Burn':
+			return Math.floor(entry.sumBurnDamage * 1000 / elapsed);
+		case 'HPS':
+			return Math.floor(entry.sumHeal * 1000 / elapsed);
+		case 'MPS':
+			return Math.floor(entry.sumManaSteal * 1000 / elapsed);
+		case 'DR':
+			return Math.floor(entry.sumDamageReturn * 1000 / elapsed);
+		case 'Reflect':
+			return Math.floor(entry.sumReflection * 1000 / elapsed);
+		default:
+			return 0;
+	}
+}
+
 function calculateTotalDPS() {
 	let totalDmg = 0;
 	for (const id in playerDamageSums) {
@@ -70,6 +132,14 @@ function calculateTotalDPS() {
 	}
 	const elapsed = performance.now() - dpsStartTime;
 	return Math.floor(totalDmg * 1000 / Math.max(elapsed, 1));
+}
+
+function calculateTotalDamageType(damageType, now) {
+	let total = 0;
+	for (const id in playerDamageSums) {
+		total += calculateDamageTypeValue(id, now, damageType);
+	}
+	return total;
 }
 
 parent.socket.on('hit', data => {
@@ -89,17 +159,45 @@ parent.socket.on('hit', data => {
 			else e.sumDamageTakenMag += data.damage;
 		}
 		if (get_player(data.hid) && (data.heal || data.lifesteal)) {
-			getPlayerEntry(data.hid).sumHeal += (data.heal || 0) + (data.lifesteal || 0);
+			const e = getPlayerEntry(data.hid);
+			const healer = get_player(data.hid);
+			const target = get_player(data.id);
+
+			const totalHeal = (data.heal ?? 0) + (data.lifesteal ?? 0);
+			if (includeOverheal) {
+				e.sumHeal += totalHeal;
+			} else {
+				const actualHeal = (data.heal
+					? Math.min(data.heal, (target?.max_hp ?? 0) - (target?.hp ?? 0))
+					: 0
+				) + (data.lifesteal
+					? Math.min(data.lifesteal, healer.max_hp - healer.hp)
+					: 0
+					);
+				e.sumHeal += actualHeal;
+			}
 		}
 		if (get_player(data.hid) && data.manasteal) {
-			getPlayerEntry(data.hid).sumManaSteal += data.manasteal;
+			const e = getPlayerEntry(data.hid);
+			const p = get_entity(data.hid);
+			if (includeOverMana) {
+				e.sumManaSteal += data.manasteal;
+			} else {
+				e.sumManaSteal += Math.min(data.manasteal, p.max_mp - p.mp);
+			}
 		}
 		if (data.damage && get_player(data.hid)) {
 			const e = getPlayerEntry(data.hid);
 			e.sumDamage += data.damage;
-			if (data.source === 'burn') e.sumBurnDamage += data.damage;
-			else if (data.splash) e.sumBlastDamage += data.damage;
-			else e.sumBaseDamage += data.damage;
+			if (data.source === 'burn') {
+				e.sumBurnDamage += data.damage;
+			} else if (data.splash) {
+				e.sumBlastDamage += data.damage;
+			} else if (data.source === 'cleave') {
+				e.sumCleaveDamage += data.damage;
+			} else {
+				e.sumBaseDamage += data.damage;
+			}
 		}
 	} catch (err) {
 		console.error('hit handler error', err);
@@ -116,6 +214,9 @@ const createMetricsDashboard = () => {
 
 	const intervalButtons = (type, buttons) =>
 		buttons.map(b => `<button class="interval-btn ${b.active ? 'active' : ''}" data-interval="${b.interval}" data-type="${type}">${b.label}</button>`).join('');
+
+	const damageButtons = (buttons) =>
+		buttons.map(b => `<button class="damage-type-btn ${b.active ? 'active' : ''}" data-damage-type="${b.type}" data-color="${b.color}">${b.label}</button>`).join('');
 
 	const dashboard = $(`
 		<div id="metricsDashboard">
@@ -162,9 +263,22 @@ const createMetricsDashboard = () => {
 				<div class="metrics-section" data-section="dps">
 					<h3>DPS Tracking</h3>
 					<div class="metrics-grid">
-						${metricCard('Party DPS', 'partyDPS')}
-						${metricCard('Your DPS', 'yourDPS')}
+						${metricCard('Party Total', 'partyDPS')}
+						${metricCard('Your Total', 'yourDPS')}
 						${metricCard('Session Time', 'sessionTime')}
+					</div>
+					<div class="damage-type-selector">
+						${damageButtons([
+		{ type: 'DPS', label: 'Total', color: damageTypeColors.DPS, active: true },
+		{ type: 'Base', label: 'Base', color: damageTypeColors.Base },
+		{ type: 'Cleave', label: 'Cleave', color: damageTypeColors.Cleave },
+		{ type: 'Blast', label: 'Blast', color: damageTypeColors.Blast },
+		{ type: 'Burn', label: 'Burn', color: damageTypeColors.Burn },
+		{ type: 'HPS', label: 'Heal', color: damageTypeColors.HPS },
+		{ type: 'MPS', label: 'Mana', color: damageTypeColors.MPS },
+		{ type: 'DR', label: 'Return', color: damageTypeColors.DR },
+		{ type: 'Reflect', label: 'Reflect', color: damageTypeColors.Reflect }
+	])}
 					</div>
 					<canvas id="dpsChart" class="metric-chart"></canvas>
 				</div>
@@ -184,7 +298,6 @@ const createMetricsDashboard = () => {
 };
 
 const applyStyles = ($) => {
-	// Base styles
 	const styles = {
 		'#metricsHeader': {
 			background: 'linear-gradient(to right, #1a1a2e, #16213e)', padding: '12px 15px',
@@ -200,29 +313,40 @@ const applyStyles = ($) => {
 		'.metric-card': { background: 'rgba(0, 0, 0, 0.4)', padding: '15px', borderRadius: '8px', textAlign: 'center' },
 		'.metric-label': { fontSize: '20px', color: '#aaa', marginBottom: '8px', textTransform: 'uppercase' },
 		'.metric-value': { fontSize: '24px', fontWeight: 'bold' },
-		'.interval-selector': { display: 'flex', gap: '5px', marginBottom: '15px', justifyContent: 'center' },
+		'.interval-selector': { display: 'flex', gap: '5px', marginBottom: '15px', justifyContent: 'center', flexWrap: 'wrap' },
 		'.interval-btn': { padding: '8px 15px', background: 'rgba(255, 255, 255, 0.1)', color: 'white', cursor: 'pointer', borderRadius: '5px', transition: 'all 0.2s', fontSize: '12px' },
+		'.damage-type-selector': { display: 'flex', gap: '5px', marginBottom: '10px', justifyContent: 'center', flexWrap: 'wrap' },
+		'.damage-type-btn': { padding: '8px 15px', background: 'rgba(255, 255, 255, 0.1)', color: 'white', cursor: 'pointer', borderRadius: '5px', transition: 'all 0.2s', fontSize: '12px', border: '2px solid rgba(255, 255, 255, 0.3)' },
+		'.damage-type-btn.active': { boxShadow: '0 0 10px rgba(255, 255, 255, 0.3)' },
 		'.metric-chart': { width: '100%', height: '550px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', display: 'block' }
 	};
 
-	// Apply base styles
 	Object.entries(styles).forEach(([sel, style]) => $(sel).css(style));
 
-	// Section-specific border colors
 	$('.metrics-section').each(function () {
-		const section = $(this).data('section'); // gold, xp, dps
+		const section = $(this).data('section');
 		const color = sectionColors[section]?.rgba || 'rgba(255,255,255,0.2)';
-		$(this).css('border', `2px solid ${color}`); // slightly thicker for visibility
-		// Optionally adjust h3 title color
+		$(this).css('border', `2px solid ${color}`);
 		$(this).find('h3').css('color', sectionColors[section]?.primary || '#FFF');
 	});
 
-	// Chart-specific styling
 	Object.entries(sectionColors).forEach(([section, colors]) => {
 		$(`[data-section="${section}"] .metric-card`).css('border', `1px solid ${colors.rgba}`);
 		$(`[data-section="${section}"] .metric-value`).css('color', colors.primary);
 		$(`[data-section="${section}"] .interval-btn`).css('border', `1px solid ${colors.primary}`);
 		$(`[data-section="${section}"] .metric-chart`).css('border', `1px solid ${colors.rgba}`);
+	});
+
+	$('.damage-type-btn').each(function () {
+		const color = $(this).data('color');
+		if (color) {
+			$(this).css('border-color', color);
+			if ($(this).hasClass('active')) {
+				const hexToRgba = (hex, a) =>
+					`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+				$(this).css('background', hexToRgba(color, 0.3));
+			}
+		}
 	});
 };
 
@@ -237,7 +361,7 @@ const attachEventHandlers = ($) => {
 		$(`[data-type="${type}"]`).removeClass('active').css('background', 'rgba(255, 255, 255, 0.1)');
 		const hexToRgba = (hex, a) =>
 			`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
-		$(this).css('background', hexToRgba(color, 0.2));
+		$(this).addClass('active').css('background', hexToRgba(color, 0.2));
 
 		const intervalState = {
 			gold: { get: () => goldInterval, set: v => goldInterval = v, reset: resetGoldHistory },
@@ -253,14 +377,35 @@ const attachEventHandlers = ($) => {
 		updateMetricsDashboard();
 	});
 
+	$('.damage-type-btn').on('click', function () {
+		const $ = parent.$;
+		const damageType = $(this).data('damage-type');
+		const color = $(this).data('color');
+
+		if ($(this).hasClass('active')) {
+			if (selectedDamageTypes.length > 1) {
+				$(this).removeClass('active').css('background', 'rgba(255, 255, 255, 0.1)');
+				selectedDamageTypes = selectedDamageTypes.filter(t => t !== damageType);
+			}
+		} else {
+			$(this).addClass('active');
+			const hexToRgba = (hex, a) =>
+				`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+			$(this).css('background', hexToRgba(color, 0.3));
+			if (!selectedDamageTypes.includes(damageType)) {
+				selectedDamageTypes.push(damageType);
+			}
+		}
+
+		updateMetricsDashboard();
+	});
+
 	$('#closeBtn').hover(
 		function () { $(this).css('background', 'rgba(99, 102, 241, 0.3)'); },
 		function () { $(this).css('background', 'rgba(255, 255, 255, 0.1)'); }
 	);
 };
 
-
-// ========== UPDATE LOGIC ==========
 let $goldRate, $jackpotValue, $totalGold, $goldLabel;
 let $xpRate, $totalXP, $timeToLevel, $xpLabel;
 let $partyDPS, $yourDPS, $sessionTime;
@@ -320,10 +465,11 @@ const updateMetricsDashboard = () => {
 		lastXpUpdate = now;
 	}
 
-	const totalDPS = calculateTotalDPS();
-	const yourDPS = calculateDPS(character.id, now);
-	$partyDPS.text(totalDPS.toLocaleString('en'));
-	$yourDPS.text(yourDPS.toLocaleString('en'));
+	const totalPartyDPS = calculateTotalDamageType('DPS', now);
+	const totalYourDPS = calculateDamageTypeValue(character.id, now, 'DPS');
+
+	$partyDPS.text(totalPartyDPS.toLocaleString('en'));
+	$yourDPS.text(totalYourDPS.toLocaleString('en'));
 
 	const elapsedMs = now - dpsStartTime;
 	const hours = Math.floor(elapsedMs / 3600000);
@@ -332,45 +478,160 @@ const updateMetricsDashboard = () => {
 
 	if (now - lastDpsUpdate >= HISTORY_INTERVAL) {
 		for (const id in playerDamageSums) {
-			if (!dpsHistory[id]) dpsHistory[id] = [];
-			const dps = calculateDPS(id, now);
-			dpsHistory[id].push({ time: now, value: dps });
-			if (dpsHistory[id].length > MAX_HISTORY) dpsHistory[id].shift();
+			if (!dpsHistory[id]) dpsHistory[id] = {};
+
+			for (const damageType of Object.keys(damageTypeLabels)) {
+				if (!dpsHistory[id][damageType]) dpsHistory[id][damageType] = [];
+
+				const value = calculateDamageTypeValue(id, now, damageType);
+				dpsHistory[id][damageType].push({ time: now, value });
+
+				if (dpsHistory[id][damageType].length > MAX_HISTORY) {
+					dpsHistory[id][damageType].shift();
+				}
+			}
 		}
 		lastDpsUpdate = now;
 	}
 
 	drawChart('goldChart', [{ history: goldHistory, color: sectionColors.gold.primary }], sectionColors.gold.primary);
 	drawChart('xpChart', [{ history: xpHistory, color: sectionColors.xp.primary }], sectionColors.xp.primary);
-	drawChart('dpsChart', getDPSLines(), sectionColors.dps.primary);
+	drawDPSBarChart();
 };
 
+const drawDPSBarChart = () => {
+	const $ = parent.$;
+	const canvas = parent.document.getElementById('dpsChart');
+	if (!canvas || !$('#metricsDashboard').is(':visible')) return;
 
-// ========== CHART DRAWING ==========
-const getDPSLines = () => {
-	let currentMax = 1;
-	const lines = [];
+	const ctx = canvas.getContext('2d');
+	const rect = canvas.getBoundingClientRect();
 
-	for (const id in dpsHistory) {
-		const history = dpsHistory[id];
-		if (!history?.length) continue;
-
-		for (const p of history) currentMax = Math.max(currentMax, p.value);
-
-		const player = get_player(id);
-		if (player && history.length >= 2) {
-			lines.push({
-				history,
-				color: classColors[player.ctype] || '#FFF',
-				label: player.name
-			});
-		}
+	if (canvas.width !== rect.width || canvas.height !== rect.height) {
+		canvas.width = rect.width;
+		canvas.height = rect.height;
 	}
 
-	dpsMaxValueSmoothed = dpsMaxValueSmoothed * 0.95 + currentMax * 0.05;
-	lines.forEach(l => l.smoothedMax = Math.max(dpsMaxValueSmoothed, currentMax));
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-	return lines;
+	const now = performance.now();
+	const players = [];
+
+	for (const id in playerDamageSums) {
+		const player = get_player(id);
+		if (!player) continue;
+
+		const values = {};
+		for (const type of selectedDamageTypes) {
+			values[type] = calculateDamageTypeValue(id, now, type);
+		}
+
+		players.push({ id, name: player.name, ctype: player.ctype, values });
+	}
+
+	if (players.length === 0) {
+		ctx.fillStyle = '#999';
+		ctx.font = '24px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText('No data available', canvas.width / 2, canvas.height / 2);
+		return;
+	}
+
+	players.sort((a, b) => {
+		const sumA = Object.values(a.values).reduce((s, v) => s + v, 0);
+		const sumB = Object.values(b.values).reduce((s, v) => s + v, 0);
+		return sumB - sumA;
+	});
+
+	const padding = 60;
+	const labelHeight = 40;
+	const chartHeight = canvas.height - padding - labelHeight;
+	const chartWidth = canvas.width - 2 * padding;
+
+	let maxValue = 1;
+	for (const player of players) {
+		const sum = Object.values(player.values).reduce((s, v) => s + v, 0);
+		if (sum > maxValue) maxValue = sum;
+	}
+	maxValue *= 1.1;
+
+	ctx.strokeStyle = sectionColors.dps.axis;
+	ctx.lineWidth = 1;
+	for (let i = 0; i <= 5; i++) {
+		const y = padding + chartHeight * (1 - i / 5);
+		ctx.beginPath();
+		ctx.moveTo(padding, y);
+		ctx.lineTo(canvas.width - padding, y);
+		ctx.stroke();
+
+		ctx.fillStyle = sectionColors.dps.primary;
+		ctx.font = '16px pixel, monospace';
+		ctx.textAlign = 'right';
+		const value = Math.round(maxValue * i / 5);
+		ctx.fillText(value.toLocaleString(), padding - 10, y + 5);
+	}
+
+	const groupWidth = chartWidth / players.length;
+	const barWidth = Math.min(groupWidth / selectedDamageTypes.length - 10, 60);
+	const groupPadding = (groupWidth - barWidth * selectedDamageTypes.length) / 2;
+
+	for (let i = 0; i < players.length; i++) {
+		const player = players[i];
+		const groupX = padding + i * groupWidth;
+
+		for (let j = 0; j < selectedDamageTypes.length; j++) {
+			const type = selectedDamageTypes[j];
+			const value = player.values[type];
+			const barHeight = (value / maxValue) * chartHeight;
+			const barX = groupX + groupPadding + j * barWidth;
+			const barY = padding + chartHeight - barHeight;
+
+			ctx.fillStyle = damageTypeColors[type];
+			ctx.fillRect(barX, barY, barWidth, barHeight);
+
+			ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+			ctx.lineWidth = 1;
+			ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+			if (barHeight > 30) {
+				ctx.font = '16px pixel, monospace';
+				ctx.textAlign = 'center';
+
+				const text = value.toLocaleString();
+				const x = barX + barWidth / 2;
+				const y = barY + 15;
+
+				ctx.lineWidth = 3;
+				ctx.strokeStyle = 'black';
+				ctx.strokeText(text, x, y);
+
+				ctx.fillStyle = 'white';
+				ctx.fillText(text, x, y);
+			}
+		}
+
+		ctx.fillStyle = classColors[player.ctype] || '#FFF';
+		ctx.font = '16px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText(player.name, groupX + groupWidth / 2, canvas.height - 20);
+	}
+
+	if (selectedDamageTypes.length > 1) {
+		const legendY = 10;
+		let legendX = padding;
+
+		for (const type of selectedDamageTypes) {
+			ctx.fillStyle = damageTypeColors[type];
+			ctx.fillRect(legendX, legendY, 15, 15);
+
+			ctx.fillStyle = 'white';
+			ctx.font = '16px pixel, monospace';
+			ctx.textAlign = 'left';
+			ctx.fillText(damageTypeLabels[type], legendX + 20, legendY + 12);
+
+			legendX += ctx.measureText(damageTypeLabels[type]).width + 40;
+		}
+	}
 };
 
 const drawChart = (canvasId, lines, sectionColor) => {
@@ -508,7 +769,6 @@ const drawChart = (canvasId, lines, sectionColor) => {
 	ctx.fillText(`Last ${lastMinutes} min${lastMinutes !== 1 ? 's' : ''}`, canvas.width / 2, canvas.height - 10);
 };
 
-// ========== HELPER FUNCTIONS ==========
 const intervalSeconds = {
 	second: 1,
 	minute: 60,
@@ -545,7 +805,6 @@ const resetXpHistory = () => {
 	lastXpUpdate = 0;
 };
 
-// ========== EVENT LISTENERS ==========
 let updateInterval;
 
 const toggleMetricsDashboard = () => {

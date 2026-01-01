@@ -53,7 +53,7 @@ Acts as your own custom Game Events. Automatically gets the item sprite and send
 
 Metrics Graphs:                           
 A combined version of my gold, XP, and DPS meters that is displayed as a popout window rather than always being on screen              
-<img width="625" height="1199" alt="image" src="https://github.com/user-attachments/assets/087283f1-9dd0-49b0-9021-9afdf00db019" />               
+<img width="501" height="997" alt="image" src="https://github.com/user-attachments/assets/e8034d0b-5464-40ee-a3b9-c56edfc7da87" />
 <img width="1590" height="1035" alt="image" src="https://github.com/user-attachments/assets/a0aeca4f-a1f0-4d3d-95e0-f8e5ae98a3c8" />                 
 <img width="1583" height="1032" alt="image" src="https://github.com/user-attachments/assets/ad48a440-4923-4a1f-a0a8-432b8cacdb75" />              
 <img width="1589" height="1026" alt="image" src="https://github.com/user-attachments/assets/aac0d7a4-afdb-4823-8ba9-3aeae525bd1a" />                     

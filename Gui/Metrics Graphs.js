@@ -4,7 +4,6 @@ const goldStartTime = performance.now();
 let goldInterval = 'hour';
 const goldHistory = [];
 
-let sumXP = 0, largestXPGain = 0;
 const xpStartTime = performance.now();
 const startXP = character.xp;
 let xpInterval = 'second';
@@ -13,9 +12,14 @@ const xpHistory = [];
 let playerDamageSums = {};
 const dpsStartTime = performance.now();
 const dpsHistory = {};
-let dpsMaxValueSmoothed = 100;
 
-// Multi-select damage types. Always default to DPS only
+const killStartTime = performance.now();
+let totalKills = 0;
+let mobKills = {};
+let killInterval = 'day';
+const killHistory = {};
+
+// Multi-select damage types - default to DPS only
 let selectedDamageTypes = ['DPS'];
 
 // Toggle variables for overheal and over-manasteal
@@ -28,6 +32,7 @@ const HISTORY_INTERVAL = 5000;
 let lastGoldUpdate = 0;
 let lastXpUpdate = 0;
 let lastDpsUpdate = 0;
+let lastKillUpdate = 0;
 
 const classColors = {
 	mage: '#3FC7EB', paladin: '#F48CBA', priest: '#FFFFFF',
@@ -37,8 +42,16 @@ const classColors = {
 const sectionColors = {
 	gold: { primary: '#FFD700', rgba: 'rgba(255, 215, 0, 0.3)', axis: 'rgba(255, 215, 0, 0.1)' },
 	xp: { primary: '#87CEEB', rgba: 'rgba(135, 206, 235, 0.3)', axis: 'rgba(135, 206, 235, 0.2)' },
-	dps: { primary: '#FF6B6B', rgba: 'rgba(255, 107, 107, 0.3)', axis: 'rgba(255, 107, 107, 0.2)' }
+	dps: { primary: '#FF6B6B', rgba: 'rgba(255, 107, 107, 0.3)', axis: 'rgba(255, 107, 107, 0.2)' },
+	kills: { primary: '#9D4EDD', rgba: 'rgba(157, 78, 221, 0.3)', axis: 'rgba(157, 78, 221, 0.1)' }
 };
+
+// Mob type colors
+const mobColors = [
+	'#FF6B9D', '#4ECDC4', '#FFE66D', '#95E1D3', '#FF8B94',
+	'#A8E6CF', '#FFD3B6', '#FFAAA5', '#AA96DA', '#FCBAD3'
+];
+let mobColorMap = {};
 
 const damageTypeLabels = {
 	DPS: 'Total DPS',
@@ -53,15 +66,15 @@ const damageTypeLabels = {
 };
 
 const damageTypeColors = {
-	DPS: '#FF6B6B',
-	Base: '#A92000',
-	Cleave: '#D4A574',
-	Blast: '#782D33',
-	Burn: '#FF7F27',
-	HPS: '#9A1D27',
-	MPS: '#353C9C',
-	DR: '#E94959',
-	Reflect: '#B8860B'
+	DPS: '#E53935',
+	Base: '#6D1B7B',
+	Cleave: '#8D6E63',
+	Blast: '#FB8C00',
+	Burn: '#FDD835',
+	HPS: '#43A047',
+	MPS: '#1E88E5',
+	DR: '#546E7A',
+	Reflect: '#D880F0'
 };
 
 // ========== INITIALIZATION ==========
@@ -82,16 +95,7 @@ function getPlayerEntry(id) {
 		sumBlastDamage: 0, sumBaseDamage: 0, sumCleaveDamage: 0,
 		sumHeal: 0, sumManaSteal: 0,
 		sumDamageReturn: 0, sumReflection: 0,
-		sumDamageTakenPhys: 0, sumDamageTakenMag: 0
 	});
-}
-
-function calculateDPS(id, now) {
-	const entry = playerDamageSums[id];
-	if (!entry) return 0;
-	const elapsed = now - entry.startTime;
-	if (elapsed <= 0) return 0;
-	return Math.floor((entry.sumDamage + entry.sumDamageReturn + entry.sumReflection) * 1000 / elapsed);
 }
 
 function calculateDamageTypeValue(id, now, damageType) {
@@ -124,16 +128,6 @@ function calculateDamageTypeValue(id, now, damageType) {
 	}
 }
 
-function calculateTotalDPS() {
-	let totalDmg = 0;
-	for (const id in playerDamageSums) {
-		const e = playerDamageSums[id];
-		totalDmg += e.sumDamage + e.sumDamageReturn + e.sumReflection;
-	}
-	const elapsed = performance.now() - dpsStartTime;
-	return Math.floor(totalDmg * 1000 / Math.max(elapsed, 1));
-}
-
 function calculateTotalDamageType(damageType, now) {
 	let total = 0;
 	for (const id in playerDamageSums) {
@@ -152,11 +146,6 @@ parent.socket.on('hit', data => {
 		}
 		if (data.reflect && get_player(data.id) && !get_player(data.hid)) {
 			getPlayerEntry(data.id).sumReflection += data.reflect;
-		}
-		if (data.damage && get_player(data.id)) {
-			const e = getPlayerEntry(data.id);
-			if (data.damage_type === 'physical') e.sumDamageTakenPhys += data.damage;
-			else e.sumDamageTakenMag += data.damage;
 		}
 		if (get_player(data.hid) && (data.heal || data.lifesteal)) {
 			const e = getPlayerEntry(data.hid);
@@ -201,6 +190,32 @@ parent.socket.on('hit', data => {
 		}
 	} catch (err) {
 		console.error('hit handler error', err);
+	}
+});
+
+// ========== KILL TRACKING ==========
+function getMobColor(mobType) {
+	if (!mobColorMap[mobType]) {
+		const colorIndex = Object.keys(mobColorMap).length % mobColors.length;
+		mobColorMap[mobType] = mobColors[colorIndex];
+	}
+	return mobColorMap[mobType];
+}
+
+game.on('death', function (data) {
+	if (!parent.entities[data.id]) return;
+
+	const mob = parent.entities[data.id];
+	if (mob.type !== 'monster') return;
+
+	const party = get_party();
+	const partyMembers = party ? Object.keys(party) : [];
+
+	if (mob.target === character.name || partyMembers.includes(mob.target)) {
+		totalKills++;
+		const mobType = mob.mtype || 'unknown';
+		mobKills[mobType] = (mobKills[mobType] || 0) + 1;
+		getMobColor(mobType);
 	}
 });
 
@@ -282,6 +297,23 @@ const createMetricsDashboard = () => {
 					</div>
 					<canvas id="dpsChart" class="metric-chart"></canvas>
 				</div>
+
+				<div class="metrics-section" data-section="kills">
+					<h3>Kill Tracking</h3>
+					<div class="metrics-grid">
+						${metricCard('Kills/Day', 'killRate')}
+						${metricCard('Total Kills', 'totalKillCount')}
+					</div>
+					<div class="interval-selector" id="killIntervalSelector">
+						${intervalButtons('kills', [
+		{ interval: 'minute', label: 'Minute' },
+		{ interval: 'hour', label: 'Hour' },
+		{ interval: 'day', label: 'Day', active: true }
+	])}
+					</div>
+					<canvas id="killChart" class="metric-chart"></canvas>
+					<div id="mobBreakdown"></div>
+				</div>
 			</div>
 		</div>
 	`).css({
@@ -304,21 +336,27 @@ const applyStyles = ($) => {
 			borderBottom: '2px solid #3436a0ff', display: 'flex', justifyContent: 'space-between',
 			alignItems: 'center', borderRadius: '7px 7px 0 0', userSelect: 'none'
 		},
-		'#metricsTitle': { color: '#3436a0ff', fontSize: '24px', fontWeight: 'bold', textShadow: '0 0 10px rgba(99, 102, 241, 0.5)' },
-		'#closeBtn': { background: 'rgba(255, 255, 255, 0.1)', border: '1px solid #6366F1', color: '#6366F1', fontSize: '20px', width: '30px', height: '30px', cursor: 'pointer', borderRadius: '3px', transition: 'all 0.2s' },
+		'#metricsTitle': { color: '#3436a0ff', fontSize: '34px', fontWeight: 'bold', textShadow: '0 0 10px rgba(99, 102, 241, 0.5)' },
+		'#closeBtn': { background: 'rgba(255, 255, 255, 0.1)', border: '1px solid #6366F1', color: '#6366F1', fontSize: '25px', width: '30px', height: '30px', cursor: 'pointer', borderRadius: '3px', transition: 'all 0.2s', fontFamily: 'inherit' },
 		'#metricsContent': { padding: '15px', color: 'white', height: 'calc(90vh - 70px)', overflowY: 'auto', overflowX: 'hidden' },
 		'.metrics-section': { marginBottom: '20px', padding: '15px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px' },
 		'.metrics-section h3': { marginTop: '0', marginBottom: '15px', fontSize: '28px', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '1px' },
-		'.metrics-grid': { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '15px' },
+		'.metrics-grid': { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '15px' },
 		'.metric-card': { background: 'rgba(0, 0, 0, 0.4)', padding: '15px', borderRadius: '8px', textAlign: 'center' },
 		'.metric-label': { fontSize: '20px', color: '#aaa', marginBottom: '8px', textTransform: 'uppercase' },
 		'.metric-value': { fontSize: '24px', fontWeight: 'bold' },
 		'.interval-selector': { display: 'flex', gap: '5px', marginBottom: '15px', justifyContent: 'center', flexWrap: 'wrap' },
-		'.interval-btn': { padding: '8px 15px', background: 'rgba(255, 255, 255, 0.1)', color: 'white', cursor: 'pointer', borderRadius: '5px', transition: 'all 0.2s', fontSize: '12px' },
+		'.interval-btn': { padding: '8px 15px', minWidth: '70px', minHeight: '40px', background: 'rgba(255, 255, 255, 0.1)', color: 'white', cursor: 'pointer', borderRadius: '5px', transition: 'all 0.2s', fontSize: '20px', fontFamily: 'inherit', border: 'none' },
 		'.damage-type-selector': { display: 'flex', gap: '5px', marginBottom: '10px', justifyContent: 'center', flexWrap: 'wrap' },
-		'.damage-type-btn': { padding: '8px 15px', background: 'rgba(255, 255, 255, 0.1)', color: 'white', cursor: 'pointer', borderRadius: '5px', transition: 'all 0.2s', fontSize: '12px', border: '2px solid rgba(255, 255, 255, 0.3)' },
+		'.damage-type-btn': { padding: '8px 15px', minWidth: '70px', minHeight: '40px', background: 'rgba(255, 255, 255, 0.1)', color: 'white', cursor: 'pointer', borderRadius: '5px', transition: 'all 0.2s', fontSize: '20px', border: '2px solid rgba(255, 255, 255, 0.3)', fontFamily: 'inherit' },
 		'.damage-type-btn.active': { boxShadow: '0 0 10px rgba(255, 255, 255, 0.3)' },
-		'.metric-chart': { width: '100%', height: '550px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', display: 'block' }
+		'.metric-chart': { width: '100%', height: '550px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', display: 'block' },
+		'#mobBreakdown': { marginTop: '15px', padding: '15px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px' },
+		'.mob-breakdown-title': { color: '#9D4EDD', fontSize: '20px', marginBottom: '15px', textAlign: 'center' },
+		'.mob-breakdown-grid': { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px' },
+		'.mob-stat': { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 20px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '6px', minWidth: '120px' },
+		'.mob-stat-name': { fontSize: '18px', marginBottom: '5px', textTransform: 'capitalize', fontWeight: 'bold' },
+		'.mob-stat-count': { fontSize: '16px', color: '#FFF' }
 	};
 
 	Object.entries(styles).forEach(([sel, style]) => $(sel).css(style));
@@ -344,7 +382,7 @@ const applyStyles = ($) => {
 			if ($(this).hasClass('active')) {
 				const hexToRgba = (hex, a) =>
 					`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
-				$(this).css('background', hexToRgba(color, 0.3));
+				$(this).css('background', hexToRgba(color, 0.4));
 			}
 		}
 	});
@@ -356,22 +394,31 @@ const attachEventHandlers = ($) => {
 	$('.interval-btn').on('click', function () {
 		const type = $(this).data('type');
 		const interval = $(this).data('interval');
-		const color = sectionColors[type].primary;
+		const sectionMap = { gold: 'gold', xp: 'xp', damage: 'dps', kills: 'kills', killtype: 'kills' };
+		const color = sectionColors[sectionMap[type]]?.primary || '#FFF';
 
 		$(`[data-type="${type}"]`).removeClass('active').css('background', 'rgba(255, 255, 255, 0.1)');
 		const hexToRgba = (hex, a) =>
 			`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
 		$(this).addClass('active').css('background', hexToRgba(color, 0.2));
 
-		const intervalState = {
-			gold: { get: () => goldInterval, set: v => goldInterval = v, reset: resetGoldHistory },
-			xp: { get: () => xpInterval, set: v => xpInterval = v, reset: resetXpHistory }
-		};
+		if (type === 'kills') {
+			if (killInterval !== interval) {
+				killInterval = interval;
+				resetKillHistory();
+			}
+			$('[data-section="kills"] .metric-label').first().text(`Kills/${interval.charAt(0).toUpperCase() + interval.slice(1)}`);
+		} else {
+			const intervalState = {
+				gold: { get: () => goldInterval, set: v => goldInterval = v, reset: resetGoldHistory },
+				xp: { get: () => xpInterval, set: v => xpInterval = v, reset: resetXpHistory }
+			};
 
-		const s = intervalState[type];
-		if (s && s.get() !== interval) {
-			s.set(interval);
-			s.reset();
+			const s = intervalState[type];
+			if (s && s.get() !== interval) {
+				s.set(interval);
+				s.reset();
+			}
 		}
 
 		updateMetricsDashboard();
@@ -383,10 +430,8 @@ const attachEventHandlers = ($) => {
 		const color = $(this).data('color');
 
 		if ($(this).hasClass('active')) {
-			if (selectedDamageTypes.length > 1) {
-				$(this).removeClass('active').css('background', 'rgba(255, 255, 255, 0.1)');
-				selectedDamageTypes = selectedDamageTypes.filter(t => t !== damageType);
-			}
+			$(this).removeClass('active').css('background', 'rgba(255, 255, 255, 0.1)');
+			selectedDamageTypes = selectedDamageTypes.filter(t => t !== damageType);
 		} else {
 			$(this).addClass('active');
 			const hexToRgba = (hex, a) =>
@@ -406,9 +451,11 @@ const attachEventHandlers = ($) => {
 	);
 };
 
+// ========== UPDATE LOGIC ==========
 let $goldRate, $jackpotValue, $totalGold, $goldLabel;
 let $xpRate, $totalXP, $timeToLevel, $xpLabel;
 let $partyDPS, $yourDPS, $sessionTime;
+let $killRate, $totalKillCount, $mobBreakdown;
 
 const updateMetricsDashboard = () => {
 	const $ = parent.$;
@@ -428,6 +475,10 @@ const updateMetricsDashboard = () => {
 		$partyDPS = $('#partyDPS');
 		$yourDPS = $('#yourDPS');
 		$sessionTime = $('#sessionTime');
+
+		$killRate = $('#killRate');
+		$totalKillCount = $('#totalKillCount');
+		$mobBreakdown = $('#mobBreakdown');
 	}
 
 	const avgGold = calculateAverageGold();
@@ -452,7 +503,7 @@ const updateMetricsDashboard = () => {
 
 	if (elapsedSec > 0 && xpGained > 0) {
 		const secondsToLevel = Math.round(xpMissing / (xpGained / elapsedSec));
-		$timeToLevel.css('fontSize', '24px').text(elapsedSec > 0 && xpGained > 0 ? formatTime(secondsToLevel) : '--');
+		$timeToLevel.css('fontSize', '24px').text(formatTime(secondsToLevel));
 	} else {
 		$timeToLevel.text('--');
 	}
@@ -494,11 +545,35 @@ const updateMetricsDashboard = () => {
 		lastDpsUpdate = now;
 	}
 
+	const avgKills = calculateAverageKills('Total');
+	$killRate.text(Math.round(avgKills).toLocaleString('en'));
+	$totalKillCount.text(totalKills.toLocaleString('en'));
+
+	if (now - lastKillUpdate >= HISTORY_INTERVAL) {
+		if (!killHistory['Total']) killHistory['Total'] = [];
+		const totalAvg = calculateAverageKills('Total');
+		killHistory['Total'].push({ time: now, value: totalAvg });
+		if (killHistory['Total'].length > MAX_HISTORY) killHistory['Total'].shift();
+
+		for (const mobType in mobKills) {
+			if (!killHistory[mobType]) killHistory[mobType] = [];
+			const mobAvg = calculateAverageKills(mobType);
+			killHistory[mobType].push({ time: now, value: mobAvg });
+			if (killHistory[mobType].length > MAX_HISTORY) killHistory[mobType].shift();
+		}
+
+		lastKillUpdate = now;
+	}
+
+	updateMobBreakdown($);
+
 	drawChart('goldChart', [{ history: goldHistory, color: sectionColors.gold.primary }], sectionColors.gold.primary);
 	drawChart('xpChart', [{ history: xpHistory, color: sectionColors.xp.primary }], sectionColors.xp.primary);
 	drawDPSBarChart();
+	drawKillBarChart();
 };
 
+// ========== CHART DRAWING ==========
 const drawDPSBarChart = () => {
 	const $ = parent.$;
 	const canvas = parent.document.getElementById('dpsChart');
@@ -537,6 +612,14 @@ const drawDPSBarChart = () => {
 		return;
 	}
 
+	if (selectedDamageTypes.length === 0) {
+		ctx.fillStyle = '#999';
+		ctx.font = '24px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText('Select a damage type to display', canvas.width / 2, canvas.height / 2);
+		return;
+	}
+
 	players.sort((a, b) => {
 		const sumA = Object.values(a.values).reduce((s, v) => s + v, 0);
 		const sumB = Object.values(b.values).reduce((s, v) => s + v, 0);
@@ -550,8 +633,9 @@ const drawDPSBarChart = () => {
 
 	let maxValue = 1;
 	for (const player of players) {
-		const sum = Object.values(player.values).reduce((s, v) => s + v, 0);
-		if (sum > maxValue) maxValue = sum;
+		for (const type of selectedDamageTypes) {
+			if (player.values[type] > maxValue) maxValue = player.values[type];
+		}
 	}
 	maxValue *= 1.1;
 
@@ -586,7 +670,11 @@ const drawDPSBarChart = () => {
 			const barX = groupX + groupPadding + j * barWidth;
 			const barY = padding + chartHeight - barHeight;
 
-			ctx.fillStyle = damageTypeColors[type];
+			const baseColor = type === 'DPS'
+				? (classColors[player.ctype] || damageTypeColors.DPS)
+				: damageTypeColors[type];
+
+			ctx.fillStyle = getDamageBarFill(ctx, type, barX, barY, barWidth, barHeight, baseColor);
 			ctx.fillRect(barX, barY, barWidth, barHeight);
 
 			ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
@@ -594,7 +682,7 @@ const drawDPSBarChart = () => {
 			ctx.strokeRect(barX, barY, barWidth, barHeight);
 
 			if (barHeight > 30) {
-				ctx.font = '16px pixel, monospace';
+				ctx.font = '18px pixel, monospace';
 				ctx.textAlign = 'center';
 
 				const text = value.toLocaleString();
@@ -616,21 +704,156 @@ const drawDPSBarChart = () => {
 		ctx.fillText(player.name, groupX + groupWidth / 2, canvas.height - 20);
 	}
 
-	if (selectedDamageTypes.length > 1) {
+	if (selectedDamageTypes.length > 0) {
 		const legendY = 10;
 		let legendX = padding;
 
 		for (const type of selectedDamageTypes) {
-			ctx.fillStyle = damageTypeColors[type];
+			if (type === 'DPS' && players.length === 1) {
+				const player = players[0];
+				ctx.fillStyle = classColors[player.ctype] || damageTypeColors.DPS;
+			} else {
+				ctx.fillStyle = damageTypeColors[type];
+			}
 			ctx.fillRect(legendX, legendY, 15, 15);
 
 			ctx.fillStyle = 'white';
 			ctx.font = '16px pixel, monospace';
 			ctx.textAlign = 'left';
-			ctx.fillText(damageTypeLabels[type], legendX + 20, legendY + 12);
+			const label = type === 'DPS' && players.length === 1 ? damageTypeLabels[type] : damageTypeLabels[type];
+			ctx.fillText(label, legendX + 20, legendY + 12);
 
-			legendX += ctx.measureText(damageTypeLabels[type]).width + 40;
+			legendX += ctx.measureText(label).width + 40;
 		}
+	}
+};
+
+const updateMobBreakdown = ($) => {
+	const sortedMobs = Object.entries(mobKills).sort((a, b) => b[1] - a[1]);
+
+	if (sortedMobs.length === 0) {
+		$mobBreakdown.html('<div style="text-align: center; color: #999; padding: 20px;">No kills yet...</div>');
+		return;
+	}
+
+	let html = `<div class="mob-breakdown-title" style=" text-align: center; color: #9D4EDD; font-weight: bold; font-size: 22px; margin-bottom: 10px;">Mob Breakdown</div><div class="mob-breakdown-grid" style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap;">`;
+
+	sortedMobs.forEach(([mobType, count]) => {
+		const percentage = ((count / totalKills) * 100).toFixed(1);
+		const color = getMobColor(mobType);
+
+		html += `
+			<div class="mob-stat" style="text-align: center; font-size: 18px;">
+				<span class="mob-stat-name" style="color: ${color}; display: block; font-weight: bold;">${mobType}</span>
+				<span class="mob-stat-count" style="display: block;">${count.toLocaleString()} (${percentage}%)</span>
+			</div>
+		`;
+	});
+
+	html += '</div>';
+	$mobBreakdown.html(html);
+};
+
+const drawKillBarChart = () => {
+	const $ = parent.$;
+	const canvas = parent.document.getElementById('killChart');
+	if (!canvas || !$('#metricsDashboard').is(':visible')) return;
+
+	const ctx = canvas.getContext('2d');
+	const rect = canvas.getBoundingClientRect();
+
+	if (canvas.width !== rect.width || canvas.height !== rect.height) {
+		canvas.width = rect.width;
+		canvas.height = rect.height;
+	}
+
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+	const mobData = [];
+	const allMobTypes = Object.keys(mobKills);
+
+	for (const mobType of allMobTypes) {
+		const value = calculateAverageKills(mobType);
+		mobData.push({ type: mobType, displayName: mobType.charAt(0).toUpperCase() + mobType.slice(1), value });
+	}
+
+	if (mobData.length === 0) {
+		ctx.fillStyle = '#999';
+		ctx.font = '24px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText('No kills yet...', canvas.width / 2, canvas.height / 2);
+		return;
+	}
+
+	mobData.sort((a, b) => b.value - a.value);
+
+	const padding = 60;
+	const labelHeight = 40;
+	const chartHeight = canvas.height - padding - labelHeight;
+	const chartWidth = canvas.width - 2 * padding;
+
+	let maxValue = 1;
+	for (const mob of mobData) {
+		if (mob.value > maxValue) maxValue = mob.value;
+	}
+	maxValue *= 1.1;
+
+	ctx.strokeStyle = sectionColors.kills.axis;
+	ctx.lineWidth = 1;
+	for (let i = 0; i <= 5; i++) {
+		const y = padding + chartHeight * (1 - i / 5);
+		ctx.beginPath();
+		ctx.moveTo(padding, y);
+		ctx.lineTo(canvas.width - padding, y);
+		ctx.stroke();
+
+		ctx.fillStyle = sectionColors.kills.primary;
+		ctx.font = '16px pixel, monospace';
+		ctx.textAlign = 'right';
+		const value = Math.round(maxValue * i / 5);
+		ctx.fillText(value.toLocaleString(), padding - 10, y + 5);
+	}
+
+	const groupWidth = chartWidth / mobData.length;
+	const barWidth = Math.min(groupWidth - 20, 60);
+
+	for (let i = 0; i < mobData.length; i++) {
+		const mob = mobData[i];
+		const groupX = padding + i * groupWidth;
+		const mobColor = getMobColor(mob.type);
+
+		const value = mob.value;
+		const barHeight = (value / maxValue) * chartHeight;
+		const barX = groupX + (groupWidth - barWidth) / 2;
+		const barY = padding + chartHeight - barHeight;
+
+		ctx.fillStyle = mobColor;
+		ctx.fillRect(barX, barY, barWidth, barHeight);
+
+		ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+		ctx.lineWidth = 1;
+		ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+		if (barHeight > 30) {
+			ctx.font = '18px pixel, monospace';
+			ctx.textAlign = 'center';
+
+			const text = Math.round(value).toLocaleString();
+			const x = barX + barWidth / 2;
+			const y = barY + 15;
+
+			ctx.lineWidth = 3;
+			ctx.strokeStyle = 'black';
+			ctx.strokeText(text, x, y);
+
+			ctx.fillStyle = 'white';
+			ctx.fillText(text, x, y);
+		}
+
+		ctx.fillStyle = mobColor;
+		ctx.font = '16px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText(mob.displayName, groupX + groupWidth / 2, canvas.height - 20);
 	}
 };
 
@@ -769,6 +992,7 @@ const drawChart = (canvasId, lines, sectionColor) => {
 	ctx.fillText(`Last ${lastMinutes} min${lastMinutes !== 1 ? 's' : ''}`, canvas.width / 2, canvas.height - 10);
 };
 
+// ========== HELPER FUNCTIONS ==========
 const intervalSeconds = {
 	second: 1,
 	minute: 60,
@@ -788,6 +1012,18 @@ const calculateAverageXP = () => {
 	return divisor > 0 ? Math.round((character.xp - startXP) / divisor) : 0;
 };
 
+const calculateAverageKills = (killType = 'Total') => {
+	const elapsed = (performance.now() - killStartTime) / 1000;
+	const divisor = elapsed / intervalSeconds[killInterval];
+	if (divisor <= 0) return 0;
+
+	if (killType === 'Total') {
+		return totalKills / divisor;
+	} else {
+		return (mobKills[killType] || 0) / divisor;
+	}
+};
+
 const formatTime = (seconds) => {
 	const d = Math.floor(seconds / 86400);
 	const h = Math.floor((seconds % 86400) / 3600);
@@ -805,6 +1041,43 @@ const resetXpHistory = () => {
 	lastXpUpdate = 0;
 };
 
+const resetKillHistory = () => {
+	for (const key in killHistory) {
+		killHistory[key].length = 0;
+	}
+	lastKillUpdate = 0;
+};
+
+const barGradientCache = {};
+
+function getDamageBarFill(ctx, type, barX, barY, barWidth, barHeight, fallbackColor) {
+	if (type !== 'Burn' && type !== 'Blast') {
+		return fallbackColor;
+	}
+
+	const key = `${type}_${barWidth}_${barHeight}`;
+	if (barGradientCache[key]) return barGradientCache[key];
+
+	const g = ctx.createLinearGradient(barX, barY + barHeight, barX, barY);
+
+	switch (type) {
+		case 'Burn':
+			g.addColorStop(0.0, '#8B1A1A');
+			g.addColorStop(0.5, '#F4511E');
+			g.addColorStop(1.0, '#FFD54F');
+			break;
+
+		case 'Blast':
+			g.addColorStop(0.0, '#6D2C00');
+			g.addColorStop(1.0, '#FF9800');
+			break;
+	}
+
+	barGradientCache[key] = g;
+	return g;
+}
+
+// ========== EVENT LISTENERS ==========
 let updateInterval;
 
 const toggleMetricsDashboard = () => {

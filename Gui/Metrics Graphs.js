@@ -1092,9 +1092,9 @@ game.on('death', data => {
 	const party = get_party();
 	const partyMembers = party ? Object.keys(party) : [];
 
-	if (mob?.cooperative && mobTarget === character.name || partyMembers.includes(mobTarget)) {
+	if (mob?.cooperative && (mobTarget === character.name || partyMembers.includes(mobTarget))) {
 		totalKills++;
-		const mobType = mob.mtype || 'unknown';
+		const mobType = (mob.mtype || 'unknown').charAt(0).toUpperCase() + (mob.mtype || 'unknown').slice(1);
 		mobKills[mobType] = (mobKills[mobType] || 0) + 1;
 		getMobColor(mobType);
 	}
@@ -1106,7 +1106,7 @@ parent.socket.on("game_log", data => {
 	const match = data.match(/ killed (?:a|an) (.+)$/);
 	if (!match) return;
 
-	const mobType = match[1];
+	const mobType = match[1].charAt(0).toUpperCase() + match[1].slice(1);
 
 	totalKills++;
 	mobKills[mobType] = (mobKills[mobType] || 0) + 1;

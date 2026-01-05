@@ -47,7 +47,7 @@ const sectionColors = {
 	kills: { primary: '#9D4EDD', rgba: 'rgba(157, 78, 221, 0.3)', axis: 'rgba(157, 78, 221, 0.1)' }
 };
 
-// Mob type colors - vibrant and distinguishable
+// Mob type colors
 const mobColors = [
 	'#FF6B9D', '#4ECDC4', '#FFE66D', '#95E1D3', '#FF8B94',
 	'#A8E6CF', '#FFD3B6', '#FFAAA5', '#AA96DA', '#FCBAD3'
@@ -67,15 +67,15 @@ const damageTypeLabels = {
 };
 
 const damageTypeColors = {
-	DPS: '#E53935', // strong red — primary damage output
-	Base: '#6D1B7B', // dark purple — underlying/raw damage
-	Cleave: '#8D6E63', // steel brown — physical spread
-	Blast: '#FB8C00', // orange — burst / explosion
-	Burn: '#FDD835', // yellow — fire / DOT
-	HPS: '#43A047', // green — healing per second
-	MPS: '#1E88E5', // blue — mana resource
-	DR: '#546E7A', // slate — mitigation / reduction
-	Reflect: '#26A69A'  // teal — reactive damage
+	DPS: '#E53935',
+	Base: '#6D1B7B',
+	Cleave: '#8D6E63',
+	Blast: '#FB8C00',
+	Burn: '#FDD835',
+	HPS: '#43A047',
+	MPS: '#1E88E5',
+	DR: '#546E7A',
+	Reflect: '#26A69A'
 };
 
 // ========== INITIALIZATION ==========

@@ -13,6 +13,7 @@ let playerDamageSums = {};
 const dpsStartTime = performance.now();
 const dpsHistory = {};
 
+// Kill tracking state
 const killStartTime = performance.now();
 let totalKills = 0;
 let mobKills = {};
@@ -46,7 +47,7 @@ const sectionColors = {
 	kills: { primary: '#9D4EDD', rgba: 'rgba(157, 78, 221, 0.3)', axis: 'rgba(157, 78, 221, 0.1)' }
 };
 
-// Mob type colors
+// Mob type colors - vibrant and distinguishable
 const mobColors = [
 	'#FF6B9D', '#4ECDC4', '#FFE66D', '#95E1D3', '#FF8B94',
 	'#A8E6CF', '#FFD3B6', '#FFAAA5', '#AA96DA', '#FCBAD3'
@@ -66,15 +67,15 @@ const damageTypeLabels = {
 };
 
 const damageTypeColors = {
-	DPS: '#E53935',
-	Base: '#6D1B7B',
-	Cleave: '#8D6E63',
-	Blast: '#FB8C00',
-	Burn: '#FDD835',
-	HPS: '#43A047',
-	MPS: '#1E88E5',
-	DR: '#546E7A',
-	Reflect: '#D880F0'
+	DPS: '#E53935', // strong red — primary damage output
+	Base: '#6D1B7B', // dark purple — underlying/raw damage
+	Cleave: '#8D6E63', // steel brown — physical spread
+	Blast: '#FB8C00', // orange — burst / explosion
+	Burn: '#FDD835', // yellow — fire / DOT
+	HPS: '#43A047', // green — healing per second
+	MPS: '#1E88E5', // blue — mana resource
+	DR: '#546E7A', // slate — mitigation / reduction
+	Reflect: '#26A69A'  // teal — reactive damage
 };
 
 // ========== INITIALIZATION ==========
@@ -135,89 +136,6 @@ function calculateTotalDamageType(damageType, now) {
 	}
 	return total;
 }
-
-parent.socket.on('hit', data => {
-	const isParty = id => parent.party_list.includes(id);
-	try {
-		if (!isParty(data.hid) && !isParty(data.id)) return;
-
-		if (data.dreturn && get_player(data.id) && !get_player(data.hid)) {
-			getPlayerEntry(data.id).sumDamageReturn += data.dreturn;
-		}
-		if (data.reflect && get_player(data.id) && !get_player(data.hid)) {
-			getPlayerEntry(data.id).sumReflection += data.reflect;
-		}
-		if (get_player(data.hid) && (data.heal || data.lifesteal)) {
-			const e = getPlayerEntry(data.hid);
-			const healer = get_player(data.hid);
-			const target = get_player(data.id);
-
-			const totalHeal = (data.heal ?? 0) + (data.lifesteal ?? 0);
-			if (includeOverheal) {
-				e.sumHeal += totalHeal;
-			} else {
-				const actualHeal = (data.heal
-					? Math.min(data.heal, (target?.max_hp ?? 0) - (target?.hp ?? 0))
-					: 0
-				) + (data.lifesteal
-					? Math.min(data.lifesteal, healer.max_hp - healer.hp)
-					: 0
-					);
-				e.sumHeal += actualHeal;
-			}
-		}
-		if (get_player(data.hid) && data.manasteal) {
-			const e = getPlayerEntry(data.hid);
-			const p = get_entity(data.hid);
-			if (includeOverMana) {
-				e.sumManaSteal += data.manasteal;
-			} else {
-				e.sumManaSteal += Math.min(data.manasteal, p.max_mp - p.mp);
-			}
-		}
-		if (data.damage && get_player(data.hid)) {
-			const e = getPlayerEntry(data.hid);
-			e.sumDamage += data.damage;
-			if (data.source === 'burn') {
-				e.sumBurnDamage += data.damage;
-			} else if (data.splash) {
-				e.sumBlastDamage += data.damage;
-			} else if (data.source === 'cleave') {
-				e.sumCleaveDamage += data.damage;
-			} else {
-				e.sumBaseDamage += data.damage;
-			}
-		}
-	} catch (err) {
-		console.error('hit handler error', err);
-	}
-});
-
-// ========== KILL TRACKING ==========
-function getMobColor(mobType) {
-	if (!mobColorMap[mobType]) {
-		const colorIndex = Object.keys(mobColorMap).length % mobColors.length;
-		mobColorMap[mobType] = mobColors[colorIndex];
-	}
-	return mobColorMap[mobType];
-}
-
-game.on('death', function (data) {
-	if (!parent.entities[data.id]) return;
-
-	const mob = parent.entities[data.id];
-	if (mob.type !== 'monster') return;
-
-	const party = get_party();
-	const partyMembers = party ? Object.keys(party) : [];
-
-	if (mob.target === character.name || partyMembers.includes(mob.target)) {
-		totalKills++;
-		const mobType = mob.mtype || 'unknown';
-		mobKills[mobType] = (mobKills[mobType] || 0) + 1;
-		getMobColor(mobType);
-	}
-});
 
 // ========== UI CREATION ==========
 const createMetricsDashboard = () => {
@@ -1031,6 +949,14 @@ const formatTime = (seconds) => {
 	return `${d}d ${h}h ${m}m`;
 };
 
+function getMobColor(mobType) {
+	if (!mobColorMap[mobType]) {
+		const colorIndex = Object.keys(mobColorMap).length % mobColors.length;
+		mobColorMap[mobType] = mobColors[colorIndex];
+	}
+	return mobColorMap[mobType];
+}
+
 const resetGoldHistory = () => {
 	goldHistory.length = 0;
 	lastGoldUpdate = 0;
@@ -1103,7 +1029,78 @@ const toggleMetricsDashboard = () => {
 	}
 };
 
+parent.socket.on('hit', data => {
+	const isParty = id => parent.party_list.includes(id);
+	try {
+		if (!isParty(data.hid) && !isParty(data.id)) return;
+
+		if (data.dreturn && get_player(data.id) && !get_player(data.hid)) {
+			getPlayerEntry(data.id).sumDamageReturn += data.dreturn;
+		}
+		if (data.reflect && get_player(data.id) && !get_player(data.hid)) {
+			getPlayerEntry(data.id).sumReflection += data.reflect;
+		}
+		if (get_player(data.hid) && isParty(data.hid) && (data.heal || data.lifesteal)) {
+			const e = getPlayerEntry(data.hid);
+			const healer = get_player(data.hid);
+			const target = get_player(data.id);
+
+			const totalHeal = (data.heal ?? 0) + (data.lifesteal ?? 0);
+			if (includeOverheal) {
+				e.sumHeal += totalHeal;
+			} else {
+				const actualHeal = (data.heal
+					? Math.min(data.heal, (target?.max_hp ?? 0) - (target?.hp ?? 0))
+					: 0
+				) + (data.lifesteal
+					? Math.min(data.lifesteal, healer.max_hp - healer.hp)
+					: 0
+					);
+				e.sumHeal += actualHeal;
+			}
+		}
+		if (get_player(data.hid) && isParty(data.hid) && data.manasteal) {
+			const e = getPlayerEntry(data.hid);
+			const p = get_entity(data.hid);
+			if (includeOverMana) {
+				e.sumManaSteal += data.manasteal;
+			} else {
+				e.sumManaSteal += Math.min(data.manasteal, p.max_mp - p.mp);
+			}
+		}
+		if (data.damage && get_player(data.hid)) {
+			const e = getPlayerEntry(data.hid);
+			e.sumDamage += data.damage;
+			if (data.source === 'burn') {
+				e.sumBurnDamage += data.damage;
+			} else if (data.splash) {
+				e.sumBlastDamage += data.damage;
+			} else if (data.source === 'cleave') {
+				e.sumCleaveDamage += data.damage;
+			} else {
+				e.sumBaseDamage += data.damage;
+			}
+		}
+	} catch (err) {
+		console.error('hit handler error', err);
+	}
+});
+
+parent.socket.on("game_log", data => {
+	if (typeof data !== "string") return;
+
+	const match = data.match(/ killed (?:a|an) (.+)$/);
+	if (!match) return;
+
+	const mobType = match[1];
+
+	totalKills++;
+	mobKills[mobType] = (mobKills[mobType] || 0) + 1;
+	getMobColor(mobType);
+});
+
 character.on("loot", (data) => {
+
 	if (data.gold && typeof data.gold === 'number' && !Number.isNaN(data.gold)) {
 		const count = Object.keys(parent.party).filter(name =>
 			name === character.name || parent.entities[name]?.owner === character.owner

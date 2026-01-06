@@ -1111,8 +1111,8 @@ game.on('death', data => {
 parent.socket.on("game_log", data => {
 	if (typeof data !== "string") return;
 
-	const match = data.match(/ killed (?:a|an) (.+)$/);
-	if (!match) return;
+	const match = data.match(/ killed (.+)$/);
+	if (!match || !match[1]) return;
 
 	const mobType = match[1].charAt(0).toUpperCase() + match[1].slice(1);
 

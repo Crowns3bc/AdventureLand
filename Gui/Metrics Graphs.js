@@ -1087,17 +1087,25 @@ parent.socket.on('hit', data => {
 });
 
 game.on('death', data => {
-	const mob = parent.entities[data.id];
-	const mobTarget = mob?.target;
-	const party = get_party();
-	const partyMembers = party ? Object.keys(party) : [];
+    const mob = parent.entities[data.id];
+    if (!mob?.cooperative) return;
 
-	if (mob?.cooperative && (mobTarget === character.name || partyMembers.includes(mobTarget))) {
-		totalKills++;
-		const mobType = (mob.mtype || 'unknown').charAt(0).toUpperCase() + (mob.mtype || 'unknown').slice(1);
-		mobKills[mobType] = (mobKills[mobType] || 0) + 1;
-		getMobColor(mobType);
-	}
+    const party = get_party() || {};
+    const partyMembers = Object.keys(party);
+    const contributors = [character.name, ...partyMembers];
+
+    const didContribute = contributors.some(name => {
+        const entity = (name === character.name) ? character : parent.entities[name];
+        return entity?.s?.coop?.p > 0;
+    });
+
+    if (!didContribute) return;
+
+    totalKills++;
+    const mobType = (mob.mtype || 'unknown').charAt(0).toUpperCase() + (mob.mtype || 'unknown').slice(1);
+    mobKills[mobType] = (mobKills[mobType] || 0) + 1;
+
+    getMobColor(mobType);
 });
 
 parent.socket.on("game_log", data => {

@@ -1088,7 +1088,7 @@ parent.socket.on('hit', data => {
 
 game.on('death', data => {
 	const mob = parent.entities[data.id];
-	const mobTarget = mob.target;
+	const mobTarget = mob?.target;
 	const party = get_party();
 	const partyMembers = party ? Object.keys(party) : [];
 

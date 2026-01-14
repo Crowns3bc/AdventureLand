@@ -3,17 +3,19 @@
 // ============================================================================
 const home = 'targetron';
 const mobMap = 'uhills';
-const allBosses = ['grinch', 'icegolem', 'dragold', 'mrgreen', 'mrpumpkin', 'greenjr', 'jr', 'franky', 'rgoo', 'bgoo'];
+const allBosses = ['grinch', 'icegolem', 'dragold', 'mrgreen', 'mrpumpkin', 'greenjr', 'jr', 'franky', 'rgoo', 'bgoo', 'crabxx'];
 
 const CONFIG = {
 	combat: {
 		enabled: true,
 		targetPriority: ['CrownTown', 'CrownPriest'],
-		allBosses,
+		alwaysAttack: ['crabx'], // Attack regardless of target
+		attackIfTargeted: [...allBosses, 'phoenix'], // Only attack if has target
+		neverAttack: ['nerfedmummy'], // Never attack
 		useHuntersMark: true,
 		useSupershot: true,
 		minTargetsFor5Shot: 4,
-		minTargetsFor3Shot: 2
+		minTargetsFor3Shot: 2,
 	},
 
 	movement: {
@@ -21,16 +23,18 @@ const CONFIG = {
 		circleWalk: true,
 		circleSpeed: 0.95,
 		circleRadius: 75,
+		moveThreshold: 10,
+		clumpRadius: 65
 	},
 
 	equipment: {
-		autoSwapSets: true,
-		bossLuckSwitch: true,
 		bossHpThresholds: {
 			mrpumpkin: 100000,
 			mrgreen: 100000,
+			crabxx: 100000,
+			grinch: 100000,
 		},
-		mpThresholds: { upper: 1800, lower: 2400 },
+		mpThresholds: { upper: 1700, lower: 2100 },
 		chestThreshold: 12,
 		swapCooldown: 500,
 		capeSwapEnabled: false,
@@ -38,7 +42,7 @@ const CONFIG = {
 		bossSetSwapEnabled: true,
 		xpSetSwapEnabled: true,
 		xpMonsters: [home, 'sparkbot'],
-		xpMobHpThreshold: 25000,
+		xpMobHpThreshold: 12000,
 		useLicence: false,
 	},
 
@@ -51,13 +55,13 @@ const CONFIG = {
 
 	party: {
 		autoManage: true,
-		groupMembers: ['CrownsAnal', 'CrownTown', 'CrownPriest', "CrownMerch"]
+		groupMembers: ['CrownsAnal', 'CrownTown', 'CrownPriest', 'CrownMerch']
 	},
 
 	looting: {
 		enabled: true,
 		delayMs: 180000,
-		lootMonth: 'lootItemsDec'
+		lootMonth: 'lootItemsJan'
 	},
 
 	selling: {
@@ -86,8 +90,7 @@ const CONFIG = {
 		characters: {
 			MERCHANT: { name: 'CrownMerch', codeSlot: 95 },
 			PRIEST: { name: 'CrownPriest', codeSlot: 3 },
-			WARRIOR: { name: 'CrownTown', codeSlot: 2 },
-			//MAGE: { name: 'CrownMage', codeSlot: 8 }
+			WARRIOR: { name: 'CrownTown', codeSlot: 2 }
 		}
 	},
 
@@ -105,17 +108,17 @@ const CONFIG = {
 const TICK_RATE = {
 	main: 100,
 	action: 1,
+	mark: 40,
 	equipment: 25,
 	maintenance: 2000
 };
 
-const COOLDOWNS = {
-	cc: 135
-};
+const COOLDOWNS = { cc: 135 };
 
 const EVENT_LOCATIONS = [
-	{ name: 'mrpumpkin', map: 'halloween', x: -222, y: 720 },
-	{ name: 'mrgreen', map: 'spookytown', x: 610, y: 1000 }
+	{ name: 'mrpumpkin', map: 'halloween', x: -217, y: 720 },
+	{ name: 'mrgreen', map: 'spookytown', x: 605, y: 1000 },
+	{ name: 'crabxx', map: 'main', x: -971, y: 1780, join: true }
 ];
 
 const CACHE_TTL = 50;
@@ -136,7 +139,7 @@ const state = {
 };
 
 const cache = {
-	targets: { sortedByHP: [], inRange: [], outOfRange: [], lastUpdate: 0 },
+	targets: { sortedByHP: [], inRange: [], outOfRange: [], clumped: [], lastUpdate: 0 },
 	healTarget: null,
 	lastUpdate: 0,
 
@@ -246,214 +249,225 @@ const equipmentSets = {
 // ============================================================================
 // CORE UTILITIES
 // ============================================================================
-function updateCache() {
+const shouldAttackMob = (mob) => {
+	if (!mob || mob.dead) return false;
+
+	// 1. Never attack blacklist
+	if (CONFIG.combat.neverAttack.includes(mob.mtype)) return false;
+
+	// 2. Bosses: only if they already have a target
+	if (CONFIG.combat.attackIfTargeted.includes(mob.mtype)) {
+		return mob.target !== null && mob.target !== undefined;
+	}
+
+	// 3. Always attack whitelist (e.g., crabx)
+	if (CONFIG.combat.alwaysAttack.includes(mob.mtype)) return true;
+
+	// 4. Default: attack if targeting party members
+	return CONFIG.combat.targetPriority.includes(mob.target);
+};
+
+const updateCache = () => {
+	const now = performance.now();
 	cache.targets = updateTargetCache();
 	cache.healTarget = findHealTarget();
-	cache.lastUpdate = performance.now();
-}
+	cache.lastUpdate = now;
+};
 
-function updateTargetCache() {
-	const X = locations[home][0].x;
-	const Y = locations[home][0].y;
-	const rangeThreshold = 65;
+const updateTargetCache = () => {
+	const { x: homeX, y: homeY } = locations[home][0];
+	const clumpRadius = CONFIG.movement.clumpRadius;
 	const sortedByHP = [];
 
 	for (const id in parent.entities) {
 		const e = parent.entities[id];
-		if (
-			e.type === 'monster' &&
-			CONFIG.combat.targetPriority.includes(e.target) &&
-			!e.dead
-		) {
+		if (e.type === 'monster' && shouldAttackMob(e)) {
 			sortedByHP.push(e);
 		}
 	}
 
-	sortedByHP.sort((a, b) => b.hp - a.hp);
+	// Sort: Bosses FIRST, then alwaysAttack, then by HP
+	sortedByHP.sort((a, b) => {
+		const aBoss = CONFIG.combat.attackIfTargeted.includes(a.mtype);
+		const bBoss = CONFIG.combat.attackIfTargeted.includes(b.mtype);
+		if (aBoss !== bBoss) return bBoss - aBoss;
 
-	const inRange = [];
-	const outOfRange = [];
+		const aPriority = CONFIG.combat.alwaysAttack.includes(a.mtype);
+		const bPriority = CONFIG.combat.alwaysAttack.includes(b.mtype);
+		if (aPriority !== bPriority) return bPriority - aPriority;
+
+		return b.hp - a.hp;
+	});
+
+	const inRange = [], outOfRange = [], clumped = [];
 
 	for (const mob of sortedByHP) {
-		const dist = Math.hypot(mob.x - X, mob.y - Y);
-		(dist <= rangeThreshold ? inRange : outOfRange).push(mob);
-	}
+		if (is_in_range(mob)) {
+			inRange.push(mob);
 
-	return { sortedByHP, inRange, outOfRange };
-}
-
-function findHealTarget() {
-	const healer = get_entity('CrownPriest');
-	const healThreshold = (!healer || healer.rip) ? 0.9 : 0.4;
-
-	const partyNames = Object.keys(get_party() || {});
-	let lowest = null;
-	let lowestPct = 1;
-
-	for (const name of partyNames) {
-		if (name === character.name) continue;
-
-		const ally = get_player(name);
-		if (!ally || ally.rip) continue;
-
-		const pct = ally.hp / ally.max_hp;
-		if (pct < lowestPct) {
-			lowestPct = pct;
-			lowest = ally;
+			if (Math.hypot(mob.x - homeX, mob.y - homeY) <= clumpRadius) {
+				clumped.push(mob);
+			}
+		} else {
+			outOfRange.push(mob);
 		}
 	}
 
-	return lowest && lowestPct < healThreshold ? lowest : null;
-}
+	return { sortedByHP, inRange, outOfRange, clumped };
+};
+
+const findHealTarget = () => {
+	const healer = get_entity('CrownPriest');
+	const threshold = (!healer || healer.rip) ? 0.9 : 0.4;
+	const party = Object.keys(get_party() || {});
+
+	let target = null, minPct = 1;
+
+	for (const name of party) {
+		if (name === character.name) continue;
+		const ally = get_player(name);
+		if (ally?.hp && ally?.max_hp && !ally.rip) {
+			const pct = ally.hp / ally.max_hp;
+			if (pct < minPct) { minPct = pct; target = ally; }
+		}
+	}
+
+	return minPct < threshold ? target : null;
+};
 
 // ============================================================================
 // MAIN TICK LOOP
 // ============================================================================
-async function mainLoop() {
+const mainLoop = async () => {
 	try {
-		if (is_disabled(character)) {
-			return setTimeout(mainLoop, 250);
-		}
+		if (is_disabled(character)) return setTimeout(mainLoop, 250);
 
 		updateCache();
 
 		if (CONFIG.equipment.useLicence) {
-			let licenceSlot = locate_item("licence");
-			if (licenceSlot === -1 && (character?.s?.licenced?.ms ?? 0) < 5000) {
+			let slot = locate_item("licence");
+			if (slot === -1 && (character?.s?.licenced?.ms ?? 0) < 5000) {
 				await buy("licence");
-				// refresh the slot after buying
-				licenceSlot = locate_item("licence");
+				slot = locate_item("licence");
 			}
-
-			//console.log("Licence slot:", licenceSlot, "licenced.ms:", character?.s?.licenced?.ms);
-
-			// Consume as soon as the item exists and the buff is not near max
-			if ((character?.s?.licenced?.ms ?? 0) < 250 && licenceSlot !== -1) {
-				console.log("Attempting to consume licence");
-				await consume(licenceSlot);
-				console.log("Consume command sent for slot", licenceSlot);
+			if ((character?.s?.licenced?.ms ?? 0) < 250 && slot !== -1) {
+				await consume(slot);
 			}
 		}
 
-		if (shouldHandleEvents()) {
-			handleEvents();
-		} else if (CONFIG.movement.enabled) {
-			if (!get_nearest_monster({ type: home })) {
-				handleReturnHome();
-			} else if (CONFIG.movement.circleWalk) {
-				walkInCircle();
-			}
-		}
-
+		shouldHandleEvents() ? handleEvents() :
+			CONFIG.movement.enabled && (!get_nearest_monster({ type: home }) ?
+				handleReturnHome() :
+				CONFIG.movement.circleWalk && walkInCircle());
 	} catch (e) {
 		console.error('mainLoop error:', e);
 	}
-
 	setTimeout(mainLoop, TICK_RATE.main);
-}
+};
 
 // ============================================================================
 // ACTION LOOP - Attack and heal
 // ============================================================================
-async function actionLoop() {
+const actionLoop = async () => {
 	let delay = 5;
-
 	try {
-		if (is_disabled(character)) {
-			return setTimeout(actionLoop, 25);
-		}
+		if (is_disabled(character)) return setTimeout(actionLoop, 25);
 
 		updateCache();
+		const ms = ms_to_next_skill('attack');
 
-		const msUntilAttack = ms_to_next_skill('attack');
-
-		if (msUntilAttack < character.ping / 10) {
-			const healTarget = cache.healTarget;
-
-			if (healTarget) {
+		if (ms < character.ping / 10) {
+			if (cache.healTarget) {
 				equipSet('heal');
-				await attack(healTarget);
-			} else {
-				await handleAttack();
-			}
+				await attack(cache.healTarget);
+			} else await handleAttack();
 		} else {
-			if (msUntilAttack > 200) delay = 50;
-			else if (msUntilAttack > 50) delay = 20;
-			else delay = 5;
+			delay = ms > 200 ? 50 : ms > 50 ? 20 : 5;
 		}
-
-	} catch (err) {
-		//console.error('actionLoop error:', err);
-		delay = 1;
-	}
-
+	} catch { delay = 1; }
 	setTimeout(actionLoop, delay);
-}
+};
 
-async function handleAttack() {
-	const { sortedByHP, inRange, outOfRange } = cache.targets;
+const handleAttack = async () => {
+	const { sortedByHP, clumped, inRange, outOfRange } = cache.targets;
+	if (!sortedByHP.length) return;
 
-	if (sortedByHP.length === 0) return;
+	const min5 = CONFIG.combat.minTargetsFor5Shot;
+	const min3 = CONFIG.combat.minTargetsFor3Shot;
+	const mp5 = (G.skills['5shot']?.mp || 0);
+	const mp3 = (G.skills['3shot']?.mp || 0);
+	const can5shot = character.mp >= mp5;
+	const can3shot = character.mp >= mp3;
 
-	const cursed = get_nearest_monster_v2({ statusEffects: ['cursed'] });
-	if (cursed) {
-		change_target(cursed);
-		if (CONFIG.combat.useHuntersMark && !is_on_cooldown('huntersmark')) {
-			await use_skill('huntersmark', cursed);
-		}
-		if (CONFIG.combat.useSupershot && !is_on_cooldown('supershot')) {
-			await use_skill('supershot', cursed);
-		}
-	}
-
-	if (inRange.length >= CONFIG.combat.minTargetsFor5Shot) {
+	if (can5shot && clumped.length >= min5) {
 		equipSet('boom');
+		await use_skill('5shot', clumped.slice(0, 5).map(e => e.id));
+	} else if (can5shot && inRange.length >= min5) {
+		equipSet('dead');
 		await use_skill('5shot', inRange.slice(0, 5).map(e => e.id));
-	} else if (outOfRange.length >= CONFIG.combat.minTargetsFor5Shot) {
+	} else if (can5shot && outOfRange.length >= min5) {
 		equipSet('dead');
 		await use_skill('5shot', outOfRange.slice(0, 5).map(e => e.id));
-	} else if (sortedByHP.length >= CONFIG.combat.minTargetsFor3Shot) {
+	} else if (can3shot && sortedByHP.length >= min3) {
 		equipSet('dead');
 		await use_skill('3shot', sortedByHP.slice(0, 3).map(e => e.id));
-	} else if (sortedByHP.length === 1 && is_in_range(sortedByHP[0])) {
+	} else if (sortedByHP.length >= 1 && is_in_range(sortedByHP[0])) {
 		equipSet('single');
 		await attack(sortedByHP[0]);
 	}
-}
+};
+
+const skillLoop = async () => {
+	let delay = 5;
+	try {
+		if (!CONFIG.combat.useHuntersMark && !CONFIG.combat.useSupershot) return;
+		if (is_disabled(character)) return setTimeout(skillLoop, 250);
+
+		updateCache();
+
+		const { sortedByHP } = cache.targets;
+		if (!sortedByHP.length) return;
+
+		const target = sortedByHP[0];
+		if (!target || !is_in_range(target)) return;
+
+		const msHunter = ms_to_next_skill('huntersmark');
+		const msSuper = ms_to_next_skill('supershot');
+		const minMs = Math.min(msHunter, msSuper);
+
+		if (minMs < character.ping / 10) {
+			change_target(target);
+
+			if (CONFIG.combat.useHuntersMark && msHunter === 0 && !target.s?.marked) {
+				await use_skill('huntersmark', target);
+			}
+
+			if (CONFIG.combat.useSupershot && msSuper === 0) {
+				await use_skill('supershot', target);
+			}
+		} else {
+			delay = minMs > 200 ? 100 : minMs > 50 ? 20 : 5;
+		}
+	} catch { delay = 1; }
+	setTimeout(skillLoop, delay);
+};
 
 // ============================================================================
 // MAINTENANCE LOOP
 // ============================================================================
-async function maintenanceLoop() {
+const maintenanceLoop = async () => {
 	try {
-		if (CONFIG.potions.autoBuy) {
-			autoBuyPotions();
-		}
-
-		if (CONFIG.party.autoManage) {
-			partyMaker();
-		}
-
-		if (CONFIG.selling.enabled) {
-			sellItems();
-		}
-
-		if (CONFIG.upgrading.enabled) {
-			upgradeItems();
-		}
-
-		if (CONFIG.combining.enabled) {
-			combineItems();
-		}
+		if (CONFIG.potions.autoBuy) autoBuyPotions();
+		if (CONFIG.party.autoManage) partyMaker();
+		if (CONFIG.selling.enabled) sellItems();
+		if (CONFIG.upgrading.enabled) upgradeItems();
+		if (CONFIG.combining.enabled) combineItems();
 
 		clearInventory();
 		inventorySorter();
 		elixirUsage();
 
-		if (character.rip && locate_item('xptome') !== -1) {
-			respawn();
-		}
-
+		if (character.rip && locate_item('xptome') !== -1) respawn();
 	} catch (e) {
 		console.error('maintenanceLoop error:', e);
 	}
@@ -553,7 +567,7 @@ async function equipmentLoop() {
 		// XP Set Swap
 		if (CONFIG.equipment.xpSetSwapEnabled && now - state.lastXpSwap > swapCooldown && character.map === mobMap) {
 			const hasLowHpXpMob = Object.values(parent.entities).some(e =>
-				e.type === 'monster' &&
+				e?.type === 'monster' && !e.dead &&
 				CONFIG.equipment.xpMonsters.includes(e.mtype) &&
 				e.hp < CONFIG.equipment.xpMobHpThreshold
 			);
@@ -576,6 +590,8 @@ async function equipmentLoop() {
 				state.lastBossSetSwap = now;
 			}
 		}
+
+		scare();
 
 	} catch (e) {
 		console.error('equipmentLoop error:', e);
@@ -635,11 +651,18 @@ function handleEvents() {
 	const aliveSorted = EVENT_LOCATIONS
 		.map(e => ({ ...e, data: parent.S[e.name] }))
 		.filter(e => e.data?.live)
-		.sort((a, b) => (a.data.hp / a.data.max_hp) - (b.data.hp / b.data.max_hp));
+		.sort((a, b) =>
+			(a.data.hp / a.data.max_hp) - (b.data.hp / b.data.max_hp)
+		);
 
 	if (!aliveSorted.length) return;
 
 	const target = aliveSorted[0];
+
+	if (target.join === true && character.map !== target.map) {
+		parent.socket.emit('join', { name: target.name });
+		return;
+	}
 
 	if (!smart.moving) {
 		handleSpecificEvent(target.name, target.map, target.x, target.y);
@@ -669,28 +692,24 @@ function handleReturnHome() {
 	}
 }
 
-async function walkInCircle() {
-	if (smart.moving) return;
+const walkInCircle = async () => {
+	if (smart.moving || character.moving) return;
 
-	const center = locations[home][0];
-	const radius = CONFIG.movement.circleRadius;
+	const { x: centerX, y: centerY } = locations[home][0];
+	const now = performance.now();
+	const delta = (now - state.lastAngleUpdate) / 1000;
 
-	const currentTime = performance.now();
-	const deltaTime = currentTime - state.lastAngleUpdate;
-	state.lastAngleUpdate = currentTime;
+	state.angle = (state.angle + CONFIG.movement.circleSpeed * delta) % (2 * Math.PI);
+	state.lastAngleUpdate = now;
 
-	const deltaAngle = CONFIG.movement.circleSpeed * (deltaTime / 1000);
-	state.angle = (state.angle + deltaAngle) % (2 * Math.PI);
+	const targetX = centerX + Math.cos(state.angle) * CONFIG.movement.circleRadius;
+	const targetY = centerY + Math.sin(state.angle) * CONFIG.movement.circleRadius;
 
-	const offsetX = Math.cos(state.angle) * radius;
-	const offsetY = Math.sin(state.angle) * radius;
-	const targetX = center.x + offsetX;
-	const targetY = center.y + offsetY;
-
-	if (!character.moving) {
+	const distToTarget = Math.hypot(character.x - targetX, character.y - targetY);
+	if (distToTarget > CONFIG.movement.moveThreshold) {
 		await xmove(targetX, targetY);
 	}
-}
+};
 
 // ============================================================================
 // LOOTING
@@ -759,47 +778,27 @@ setInterval(lootInterval, 250);
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
-function clearInventory() {
-	const lootMule = get_player('CrownMerch');
-	if (!lootMule) return;
+const clearInventory = () => {
+	const mule = get_player('CrownMerch');
+	if (!mule) return;
 
-	if (character.gold > 51000000) {
-		send_gold(lootMule, character.gold - 50000000);
-	}
+	if (character.gold > 51000000) send_gold(mule, character.gold - 50000000);
 
-	const itemsToExclude = ['hpot1', 'mpot1', 'luckbooster', 'goldbooster', 'xpbooster', 'pumpkinspice', 'xptome'];
+	const exclude = new Set(['hpot1', 'mpot1', 'luckbooster', 'goldbooster', 'xpbooster', 'pumpkinspice', 'xptome']);
 
-	for (let i = 0; i < character.items.length; i++) {
-		const item = character.items[i];
-		if (item && !itemsToExclude.includes(item.name) && !item.l && !item.s) {
-			if (is_in_range(lootMule, 'attack')) {
-				send_item(lootMule.id, i, item.q ?? 1);
-			}
-		}
-	}
-}
+	character.items.forEach((item, i) => {
+		if (item && !exclude.has(item.name) && !item.l && !item.s && is_in_range(mule, 'attack'))
+			send_item(mule.id, i, item.q ?? 1);
+	});
+};
 
-function inventorySorter() {
-	const slotMap = {
-		tracktrix: 0,
-		ancientcomputer: 1,
-		hpot1: 2,
-		mpot1: 3,
-		xptome: 4,
-		pumpkinspice: 5,
-		xpbooster: 6,
-	};
-
-	for (let i = 0; i < character.items.length; i++) {
-		const item = character.items[i];
-		if (!item) continue;
-
-		const targetSlot = slotMap[item.name];
-		if (targetSlot !== undefined && i !== targetSlot) {
-			swap(i, targetSlot);
-		}
-	}
-}
+const inventorySorter = () => {
+	const slots = { tracktrix: 0, ancientcomputer: 1, hpot1: 2, mpot1: 3, xptome: 4, pumpkinspice: 5, xpbooster: 6 };
+	character.items.forEach((item, i) => {
+		const target = slots[item?.name];
+		if (target !== undefined && i !== target) swap(i, target);
+	});
+};
 
 function autoBuyPotions() {
 	if (quantity('hpot1') < CONFIG.potions.minStock) buy('hpot1', CONFIG.potions.minStock);
@@ -819,20 +818,17 @@ function elixirUsage() {
 
 let targetStartTimes = {};
 
-function scare() {
-	const slot = character.items.findIndex(i => i && i.name === 'jacko');
-	const currentTime = performance.now();
+const scare = () => {
+	const slot = character.items.findIndex(i => i?.name === 'jacko');
+	const now = performance.now();
 	let shouldScare = false;
 
 	for (const id in parent.entities) {
-		const current = parent.entities[id];
+		const e = parent.entities[id];
 
-		if (current.type === 'monster' && current.target === character.name && current.mtype !== 'grinch') {
-			if (!targetStartTimes[id]) {
-				targetStartTimes[id] = currentTime;
-			} else if (currentTime - targetStartTimes[id] > 1000) {
-				shouldScare = true;
-			}
+		if (e.type === 'monster' && e.target === character.name && e.mtype !== 'grinch') {
+			targetStartTimes[id] ??= now;
+			if (now - targetStartTimes[id] > 250) shouldScare = true;
 		} else {
 			delete targetStartTimes[id];
 		}
@@ -843,15 +839,11 @@ function scare() {
 		use('scare');
 		equip(slot);
 	}
-	if (character?.afk && !parent?.paused) {
-		pause();
-		parent.no_graphics = true
-	} else if (!character?.afk && parent?.paused) {
-		pause();
-		parent.no_graphics = false
-	}
-}
-setInterval(scare, 100);
+
+	const paused = parent?.paused;
+	if (character?.afk && !paused) { pause(); parent.no_graphics = true; }
+	else if (!character?.afk && paused) { pause(); parent.no_graphics = false; }
+};
 
 function partyMaker() {
 	if (!CONFIG.party.autoManage) return;
@@ -1165,69 +1157,38 @@ function ms_to_next_skill(skill) {
 	return ms < 0 ? 0 : ms;
 }
 
-async function equipBatch(data) {
-	if (!Array.isArray(data)) {
-		return Promise.reject({ reason: 'invalid', message: 'Not an array' });
-	}
-	if (data.length > 15) {
-		return Promise.reject({ reason: 'invalid', message: 'Too many items' });
-	}
+const equipBatch = async data => {
+	if (!Array.isArray(data) || data.length > 15) return;
 
-	let validItems = [];
+	const valid = data.reduce((acc, { itemName, slot, level, l }) => {
+		if (!itemName) return acc;
 
-	for (let i = 0; i < data.length; i++) {
-		let itemName = data[i].itemName;
-		let slot = data[i].slot;
-		let level = data[i].level;
-		let l = data[i].l;
+		const current = character.slots[slot];
+		if (current?.name === itemName && current.level === level && current.l === l) return acc;
 
-		if (!itemName) continue;
+		const i = character.items.findIndex(item =>
+			item?.name === itemName && item.level === level && item.l === l
+		);
+		if (i !== -1) acc.push({ num: i, slot });
+		return acc;
+	}, []);
 
-		let found = false;
-		if (parent.character.slots[slot]) {
-			let slotItem = parent.character.items[parent.character.slots[slot]];
-			if (slotItem && slotItem.name === itemName && slotItem.level === level && slotItem.l === l) {
-				found = true;
-			}
-		}
-
-		if (found) continue;
-
-		for (let j = 0; j < parent.character.items.length; j++) {
-			const item = parent.character.items[j];
-			if (item && item.name === itemName && item.level === level && item.l === l) {
-				validItems.push({ num: j, slot: slot });
-				break;
-			}
-		}
-	}
-
-	if (validItems.length === 0) return;
+	if (!valid.length) return;
 
 	try {
-		parent.socket.emit('equip_batch', validItems);
+		parent.socket.emit('equip_batch', valid);
 		await parent.push_deferred('equip_batch');
-	} catch (error) {
-		console.error('equipBatch error:', error);
-		return Promise.reject({ reason: 'invalid', message: 'Failed to equip' });
+	} catch (e) {
+		console.error('equipBatch:', e);
 	}
-}
+};
 
-function isSetEquipped(setName) {
-	const set = equipmentSets[setName];
-	if (!set) return false;
+const isSetEquipped = name =>
+	equipmentSets[name]?.every(({ itemName, slot, level }) =>
+		character.slots[slot]?.name === itemName && character.slots[slot]?.level === level
+	) ?? false;
 
-	return set.every(item =>
-		character.slots[item.slot]?.name === item.itemName &&
-		character.slots[item.slot]?.level === item.level
-	);
-}
-
-function equipSet(setName) {
-	if (isSetEquipped(setName)) return;
-	const set = equipmentSets[setName];
-	if (set) equipBatch(set);
-}
+const equipSet = name => equipmentSets[name] && equipBatch(equipmentSets[name]);
 
 // ============================================================================
 // SKIN CHANGER
@@ -1321,21 +1282,6 @@ function on_party_invite(name) {
 	}
 }
 
-game.on('death', data => {
-	const mob = parent.entities[data.id];
-	if (!mob || !mob.cooperative) return;
-
-	const mobName = mob.mtype;
-	const mobTarget = mob.target;
-	const partyMembers = Object.keys(get_party() || {});
-
-	if (mobTarget === character.name || partyMembers.includes(mobTarget)) {
-		const msg = `${mobName} died with ${character.luckm} luck`;
-		game_log(msg, '#96a4ff');
-		console.log(msg);
-	}
-});
-
 function sendUpdates() {
 	parent.socket.emit('send_updates', {});
 }
@@ -1346,6 +1292,7 @@ setInterval(sendUpdates, 20000);
 // ============================================================================
 mainLoop();
 actionLoop();
+skillLoop();
 equipmentLoop();
 maintenanceLoop();
 potionLoop();
@@ -1353,57 +1300,6 @@ potionLoop();
 // ============================================================================
 // UI Stuff
 // ============================================================================
-let deaths = 0; // Variable to track the number of deaths
-const killTime = new Date(); // Start time to calculate elapsed time
-
-game.on('death', function (data) {
-	if (parent.entities[data.id]) { // Check if the entity exists
-		const mob = parent.entities[data.id];
-		const mobName = mob.type;
-
-		// Check if the mob is a monster
-		if (mobName === 'monster') {
-			const mobTarget = mob.target; // Get the mob's target
-			const party = get_party(); // Get your party members
-
-			// If party exists, extract party member names into an array
-			const partyMembers = party ? Object.keys(party) : [];
-
-			// Check if the mob's target was the player or someone in the party
-			if (mobTarget === character.name || partyMembers.includes(mobTarget)) {
-				//console.log(data); // Log the death event
-				deaths++; // Increment the death count
-				killHandler(); // Call the killHandler function
-			}
-		}
-	}
-});
-
-function killHandler() {
-	const elapsed = (new Date() - killTime) / 1000; // Calculate elapsed time in seconds
-	if (elapsed > 0) { // Prevent division by zero
-		const deathsPerSec = deaths / elapsed; // Calculate deaths per second
-		const dailyKillRate = calculateKillRate(deathsPerSec); // Calculate deaths based on interval
-
-		//add_top_button("kpm", Math.round(dailyKillRate.kpm).toLocaleString() + ' kpm'); // Deaths per minute
-		//add_top_button("kph", Math.round(dailyKillRate.kph).toLocaleString() + ' kph'); // Deaths per hour
-		add_top_button("kpd", Math.round(dailyKillRate.kpd).toLocaleString() + ' kpd'); // Deaths per day
-
-		// If you don't like the buttons and would rather the old set_message version
-		// set_message(Math.round(dailyKillRate.kpd).toLocaleString() + ' kpd');
-	} else {
-		console.warn("Elapsed time is zero, cannot calculate rates.");
-	}
-}
-
-// Function to calculate deaths based on the interval
-function calculateKillRate(deathsPerSec) {
-	let kpm = deathsPerSec * 60; // Convert to deaths per minute
-	let kph = kpm * 60; // Convert to deaths per hour
-	let kpd = kph * 24; // Convert to deaths per day
-	return { kpm, kph, kpd };
-}
-
 function updateMonsterButton() {
 	let totalMonsters = 0;
 	let poisonedMonsters = 0;
@@ -1422,11 +1318,11 @@ function updateMonsterButton() {
 }
 
 // Call this function periodically to update the button
-setInterval(updateMonsterButton, 250);
+//setInterval(updateMonsterButton, 250);
 
 // ============= CONFIGURATION =============
-const DISCORD_WEBHOOK_URL = DISCORD_WEBHOOK_URL_HERE;
-const MENTION_USER_ID = "*****************";  // Set to null or "" to disable pings
+const DISCORD_WEBHOOK_URL = "DISCORD WEBHOOK URL HERE";
+const MENTION_USER_ID = "*********************";  // Set to null or "" to disable pings
 const BOT_USERNAME = "Lootbot";
 const OUTPUT_SIZE = 50; // Scale image size
 // =========================================
@@ -1547,7 +1443,6 @@ function generateItemImage(itemID) {
 
 				ctx.clearRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
 
-				// Disable image smoothing
 				ctx.imageSmoothingEnabled = false;
 				ctx.mozImageSmoothingEnabled = false;
 				ctx.webkitImageSmoothingEnabled = false;
@@ -1761,27 +1656,22 @@ function getArticle(itemName) {
 	initTimestamps();
 })();
 ///////////////////////////////////////////
-// Universal function to toggle any meter's visibility
 function toggleMeter(meterId) {
 	let $ = parent.$;
 	let meter = $(`#${meterId}`);
 
 	if (meter.length) {
-		meter.toggle();  // Toggles the visibility
+		meter.toggle();
 	}
 }
 
-// Function to open DPS meter configuration
 function openDPSConfig() {
 	let $ = parent.$;
 
-	// Remove any existing config popup
 	$('#dpsConfigPopup').remove();
 
-	// All available damage types
 	const allDamageTypes = ["Base", "Blast", "Burn", "HPS", "MPS", "DR", "RF", "DPS", "Dmg Taken"];
 
-	// Create config popup
 	let configPopup = $('<div id="dpsConfigPopup"></div>').css({
 		position: 'absolute',
 		top: '50%',
@@ -1800,7 +1690,6 @@ function openDPSConfig() {
 	configPopup.append('<h3>DPS Meter Configuration</h3>');
 	configPopup.append('<p style="font-size: 12px; margin: 5px 0;">Select which stats to display:</p>');
 
-	// Create checkboxes for each damage type
 	allDamageTypes.forEach(type => {
 		let checkboxDiv = $('<div></div>').css({
 			textAlign: 'left',
@@ -1812,7 +1701,6 @@ function openDPSConfig() {
 			marginRight: '10px'
 		});
 
-		// Check if currently displayed
 		if (damageTypes.includes(type)) {
 			checkbox.prop('checked', true);
 		}
@@ -1827,7 +1715,6 @@ function openDPSConfig() {
 		configPopup.append(checkboxDiv);
 	});
 
-	// Apply button
 	let applyButton = $('<button>Apply Changes</button>').css({
 		margin: '10px 5px 5px 5px',
 		padding: '10px 20px',
@@ -1837,21 +1724,18 @@ function openDPSConfig() {
 		borderRadius: '5px',
 		cursor: 'pointer'
 	}).click(function () {
-		// Update damageTypes array based on selections
-		damageTypes.length = 0; // Clear array
+		damageTypes.length = 0;
 		allDamageTypes.forEach(type => {
 			if ($(`#dps_${type}`).is(':checked')) {
 				damageTypes.push(type);
 			}
 		});
 
-		// Force UI update
 		updateDPSMeterUI();
 
 		$('#dpsConfigPopup').remove();
 	});
 
-	// Close button
 	let closeButton = $('<button>Cancel</button>').css({
 		margin: '5px',
 		padding: '10px 20px',
@@ -1870,14 +1754,11 @@ function openDPSConfig() {
 	$('body').append(configPopup);
 }
 
-// Function to create the toggle popup window
 function createTogglePopup() {
 	let $ = parent.$;
 
-	// Remove any existing popup window to avoid duplicates
 	$('#togglePopupWindow').remove();
 
-	// Create a popup window container
 	let togglePopup = $('<div id="togglePopupWindow"></div>').css({
 		position: 'absolute',
 		top: '50%',
@@ -1893,10 +1774,8 @@ function createTogglePopup() {
 		textAlign: 'center'
 	});
 
-	// Add a title to the popup
 	togglePopup.append('<h3>UI Addon Toggles</h3>');
 
-	// Add toggle buttons for each UI element
 	let scoopToggleBtn = $('<button>Toggle SCOOP Meter</button>').css({
 		margin: '5px',
 		padding: '10px'
@@ -1911,7 +1790,6 @@ function createTogglePopup() {
 		toggleMeter('dpsmeter');
 	});
 
-	// NEW: Configure DPS Meter button
 	let dpsConfigBtn = $('<button>Configure DPS Meter</button>').css({
 		margin: '5px',
 		padding: '10px',
@@ -1941,15 +1819,13 @@ function createTogglePopup() {
 		toggleMeter('newparty');
 	});
 
-	// Add buttons to the popup window
 	togglePopup.append(scoopToggleBtn);
 	togglePopup.append(dpsToggleBtn);
-	togglePopup.append(dpsConfigBtn);  // NEW: Add config button
+	togglePopup.append(dpsConfigBtn);
 	togglePopup.append(xpToggleBtn);
 	togglePopup.append(goldToggleBtn);
 	togglePopup.append(partyToggleBtn);
 
-	// Add a close button to hide the popup
 	let closeButton = $('<button>Close</button>').css({
 		margin: '5px',
 		padding: '10px',
@@ -1960,15 +1836,12 @@ function createTogglePopup() {
 	});
 
 	togglePopup.append(closeButton);
-
-	// Append the popup window to the game screen
 	$('body').append(togglePopup);
 }
 ///////////////////////////////////////////////
 function initXP() {
 	let $ = parent.$;
 
-	// XP text
 	$('#xpui').css({
 		fontSize: '28px',
 		width: "100%",
@@ -1976,14 +1849,11 @@ function initXP() {
 		color: "white",
 	});
 
-	// XP bar box (semi-transparent)
 	$('.xpsui').css({
-		background: "rgba(0, 0, 0, 0.7)"   // ← adjust opacity here
+		background: "rgba(0, 0, 0, 0.7)"
 	});
 
-	// XP progress fill (solid)
 	$('#xpslider').css({
-		//background: "rgb(0, 128, 0)"     // ← progress color
 	});
 }
 
@@ -1997,39 +1867,30 @@ function displayXP() {
 initXP();
 //setInterval(displayXP, 1000);
 //////////////////////////////////////////////////
-let lastGoldCheck = character.gold;  // Store the last known gold value
-let totalGoldAcquired = 0;           // Track the total gold acquired since the script started
+let lastGoldCheck = character.gold;
+let totalGoldAcquired = 0;
 
-// Function to check for gold increase and update the total gold acquired
 function trackGoldAcquisition() {
 	let currentGold = character.gold;
 
-	// If current gold is greater than the last check, we've gained gold
 	if (currentGold > lastGoldCheck) {
 		let goldGained = currentGold - lastGoldCheck;
-		totalGoldAcquired += goldGained; // Add the new gold gain to the total
+		totalGoldAcquired += goldGained;
 	}
 
-	// Update the last gold check value
 	lastGoldCheck = currentGold;
 
-	// Display the total gold acquired since code start
-	//set_message(`Gold Acquired: ${totalGoldAcquired.toLocaleString()}`);
 	set_message(totalGoldAcquired.toLocaleString(), "gold");
 }
 
-// Call the function periodically to check for gold changes
 setInterval(trackGoldAcquisition, 1000);  // Check every second	
 //////////////////////////////////////////////////////////////////////////
-// Initialize the scoop meter
 function initscoopMeter() {
 	let $ = parent.$;
 	let brc = $('#bottomrightcorner');
 
-	// Remove any existing scoop meter
 	brc.find('#scoopmeter').remove();
 
-	// Create a container for the scoop meter
 	let scoopmeter_container = $('<div id="scoopmeter"></div>').css({
 		fontSize: '20px',
 		color: 'white',
@@ -2041,7 +1902,6 @@ function initscoopMeter() {
 		backgroundColor: 'rgba(0, 0, 0, 0.7)',
 	});
 
-	// Create a div for the scoop meter content
 	let scoopmeter_content = $('<div id="scoopmetercontent"></div>').css({
 		display: 'table-cell',
 		verticalAlign: 'middle',
@@ -2050,11 +1910,9 @@ function initscoopMeter() {
 		border: '4px solid grey',
 	}).appendTo(scoopmeter_container);
 
-	// Insert the scoop meter container
 	brc.children().first().after(scoopmeter_container);
 }
 
-// Function to get nearby players/entities and sort by scoop
 function updatescoopMeterUI() {
 	try {
 		let $ = parent.$;
@@ -2064,63 +1922,53 @@ function updatescoopMeterUI() {
 
 		let entitiesWithscoop = [];
 
-		// Add your character's .s.coop.p
 		if (character?.s?.coop?.p !== undefined) {
 			entitiesWithscoop.push({
-				name: character.name, // Your character's name
-				scoop: character.s.coop.p, // Accessing the new scoop value
-				classType: character.ctype // Get the class type of your character
+				name: character.name,
+				scoop: character.s.coop.p,
+				classType: character.ctype
 			});
 		}
 
-		// Add nearby players/entities with .s.coop.p
 		for (let id in parent.entities) {
 			let entity = parent.entities[id];
-			if (!entity.npc && entity.s && entity.s.coop && entity.s.coop.p !== undefined) {  // Include only those with .s.coop.p
+			if (!entity.npc && entity.s && entity.s.coop && entity.s.coop.p !== undefined) {
 				entitiesWithscoop.push({
-					name: entity.name || entity.mtype, // Use player name or monster type
-					scoop: entity.s.coop.p, // Accessing the new scoop value
-					classType: entity.ctype // Get the class type of the entity
+					name: entity.name || entity.mtype,
+					scoop: entity.s.coop.p,
+					classType: entity.ctype
 				});
 			}
 		}
 
-		// Sort by scoop in descending order
 		entitiesWithscoop.sort((a, b) => b.scoop - a.scoop);
 
-		// Get the highest .s.coop.p to calculate percentages
-		let highestscoop = entitiesWithscoop[0].scoop || 1; // Prevent division by zero
+		let highestscoop = entitiesWithscoop[0].scoop || 1;
 
-		// Prepare the display string
 		let listString = '<div>👑 Boss Contribution 👑</div>';
 		listString += '<table border="1" style="width:100%;">';
 
-		// Track the max rows per column
 		let maxRows = 6;
 		let totalPlayers = entitiesWithscoop.length;
 		let numColumns = Math.ceil(totalPlayers / maxRows);
 
-		// Calculate column width based on number of columns
-		let columnWidth = (100 / numColumns).toFixed(2) + '%'; // e.g., '50.00%', '33.33%', etc.
+		let columnWidth = (100 / numColumns).toFixed(2) + '%';
 
-		// Iterate over each row (up to maxRows)
 		for (let row = 0; row < maxRows; row++) {
-			listString += '<tr>'; // Start a new row
+			listString += '<tr>';
 			for (let col = 0; col < numColumns; col++) {
 				let index = row + col * maxRows;
-				if (index >= totalPlayers) break; // Stop if no more players
+				if (index >= totalPlayers) break;
 
 				let entity = entitiesWithscoop[index];
-				const playerClass = entity.classType.toLowerCase(); // Ensure class type is in lowercase
-				const nameColor = classColors[playerClass] || '#FFFFFF'; // Default to white if class not found
+				const playerClass = entity.classType.toLowerCase();
+				const nameColor = classColors[playerClass] || '#FFFFFF';
 
-				// Calculate the percentage for the progress bar using .s.coop.p
 				let entityScoop = Number(entity.scoop) || 0;
 				let highestScoop = Number(highestscoop) || 1;
 				let percentBarWidth = (entityScoop / highestScoop) * 100;
 				percentBarWidth = Math.min(100, +percentBarWidth.toFixed(1));
 
-				// Create the progress bar with styling and the scoop value inside the bar
 				let progressBar = `<div style="width: 100%; background-color: gray; border-radius: 5px; overflow: hidden; position: relative;">
 					<div style="width: ${percentBarWidth}%; background-color: ${nameColor}; height: 10px;"></div>
 					<span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); margin-top: -1px; color: black; font-size: 16px; font-weight: bold;">
@@ -2128,10 +1976,9 @@ ${getFormattedscoop(entity.scoop)}
 </span>
 				</div>`;
 
-				// Apply color to the player's name and display the progress bar with scoop inside
 				listString += `<td style="color: ${nameColor}; width: ${columnWidth};">${entity.name} ${progressBar}</td>`;
 			}
-			listString += '</tr>'; // End the row
+			listString += '</tr>';
 		}
 
 		listString += '</table>';
@@ -2142,7 +1989,6 @@ ${getFormattedscoop(entity.scoop)}
 	}
 }
 
-// Helper function to format scoop with commas for readability and round to nearest whole number
 function getFormattedscoop(scoop) {
 	try {
 		let roundedscoop = Math.round(scoop); // Round to the nearest whole number
@@ -2153,7 +1999,6 @@ function getFormattedscoop(scoop) {
 	}
 }
 
-// Initialize the scoop meter and update it every 250ms
 initscoopMeter();
 setInterval(updatescoopMeterUI, 250);
 ////////////////////////////////////////////
@@ -2201,25 +2046,23 @@ function modifyServerDivAppearance() {
 	let otherDiv = $('#bottomleftcorner2 > div.clickable');
 
 	if (otherDiv.length) {
-		// Modify the appearance of the other div
 		otherDiv.css({
 			background: 'black',
 			border: 'solid gray',
 			borderWidth: '4px 4px',
-			width: '272px', // Adjust width as needed
-			height: '25px', // Adjust height as needed
+			width: '272px',
+			height: '25px',
 			lineHeight: '27px',
-			fontSize: '20px', // Adjust font size as needed
-			color: '#FFFFFF', // Adjust text color as needed
+			fontSize: '20px',
+			color: '#FFFFFF',
 			textAlign: 'center',
-			overflow: 'auto', // Add overflow auto to enable scrolling
-			backgroundColor: 'rgba(0, 0, 0, 0.7)', // Set opacity to 70%
+			overflow: 'auto',
+			backgroundColor: 'rgba(0, 0, 0, 0.7)',
 		});
 	} else {
 		console.log("Element not found.");
 	}
 }
-// Call the function after 30 seconds
 setTimeout(modifyServerDivAppearance, 40000);
 
 function modifyChatDivAppearance() {
@@ -2227,24 +2070,22 @@ function modifyChatDivAppearance() {
 	let otherDiv = $('#bottomleftcorner2 > div:nth-child(3)');
 
 	if (otherDiv.length) {
-		// Modify the appearance of the other div
 		otherDiv.css({
 			background: 'black',
 			border: 'solid gray',
 			borderWidth: '4px 4px',
-			width: '280px', // Adjust width as needed
-			height: '159px', // Adjust height as needed
-			fontSize: '17px', // Adjust font size as needed
-			color: '#FFFFFF', // Adjust text color as needed
+			width: '280px',
+			height: '159px',
+			fontSize: '17px',
+			color: '#FFFFFF',
 			textAlign: 'left',
-			overflow: 'auto', // Add overflow auto to enable scrolling
-			backgroundColor: 'rgba(0, 0, 0, 0.7)', // Set opacity to 70%
+			overflow: 'auto',
+			backgroundColor: 'rgba(0, 0, 0, 0.7)',
 		});
 	} else {
 		console.log("Element not found.");
 	}
 }
-// Call the function after 30 seconds
 setTimeout(modifyChatDivAppearance, 40000);
 
 function modifyChatLogDivAppearance() {
@@ -2252,10 +2093,9 @@ function modifyChatLogDivAppearance() {
 	let chatLogDiv = $('#chatlog');
 
 	if (chatLogDiv.length) {
-		// Modify the font size of the chat log div and disable horizontal scrolling
 		chatLogDiv.css({
-			fontSize: '18px', // Adjust font size as needed
-			overflowX: 'hidden', // Disable horizontal scrolling
+			fontSize: '18px',
+			overflowX: 'hidden',
 			backgroundColor: 'rgba(0, 0, 0, 0.1)',
 			width: '100%',
 		});
@@ -2263,7 +2103,6 @@ function modifyChatLogDivAppearance() {
 		console.log("Chat log div element not found.");
 	}
 }
-// Call the function after 30 seconds
 setTimeout(modifyChatLogDivAppearance, 40000);
 
 function modifyChatInputDivAppearance() {
@@ -2271,7 +2110,6 @@ function modifyChatInputDivAppearance() {
 	let otherDiv = $('#chatinput');
 
 	if (otherDiv.length) {
-		// Modify the appearance of the other div
 		otherDiv.css({
 			userSelect: 'none',
 			wordWrap: 'break-word',
@@ -2294,7 +2132,6 @@ function modifyChatInputDivAppearance() {
 		console.log("Element not found.");
 	}
 }
-// Call the function after 30 seconds
 setTimeout(modifyChatInputDivAppearance, 40000);
 
 function removeChatWithParty() {
@@ -2302,20 +2139,16 @@ function removeChatWithParty() {
 	let chatWithPartyDiv = $('#chatwparty');
 
 	if (chatWithPartyDiv.length) {
-		// Remove the chat with party div if it exists
 		chatWithPartyDiv.remove();
 	} else {
 		console.log("Chat with party div element not found.");
 	}
 }
 
-// Call the function after 30 seconds
 setTimeout(removeChatWithParty, 40000);
 //////////////////////////////////////////////////////////////////////////////
-// Helper to load the map of saved chest IDs
 function loadChestMap() {
 	const data = get(CHEST_STORAGE_KEY);
-	// Only accept non-null objects that are not arrays
 	return (data && typeof data === "object" && !Array.isArray(data))
 		? data
 		: {};
@@ -2326,9 +2159,9 @@ function updateChestButton() {
 	const count = Object.keys(chestMap).length;
 
 	add_top_button(
-		"chest_status",           // unique button ID
-		`Chests: ${count}`,       // button label
-		() => show_json(chestMap) // on-click function
+		"chest_status",
+		`Chests: ${count}`,
+		() => show_json(chestMap)
 	);
 }
 
@@ -2341,10 +2174,8 @@ function swapDivs() {
 	$('#movebottomrighthere').remove();
 	$('#skillbar').remove();
 	$('#chatwparty').remove();
-	//$('#chatinput').remove();
 	$('#bottomleftcorner2').children().first().before(`<div id="movebottomrighthere" style="display: flex; flex-direction: row; align-items: flex-end; margin-top: -20px;"></div>`);
 	$('#movebottomrighthere').append(skbar);
-	//$('#movebottomrighthere').append(iframelist);
 }
 
 swapDivs();
@@ -2365,16 +2196,15 @@ let css = `
 			fontFamily: 'pixel';
 		}
 	`;
-//width normal is 480px, translate 8% normal
 parent.$('head').append(`<style id="style-party-frames">${css}</style>`);
 parent.party_style_prepared = true;
 
 const includeThese = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'name', 'xp', 'level', 'share', 'cc'];
-const partyFrameWidth = 80; // Set the desired width for the party frames
+const partyFrameWidth = 80;
 
 function updatePartyData() {
 	let myInfo = Object.fromEntries(Object.entries(character).filter(current => { return character.read_only.includes(current[0]) || includeThese.includes(current[0]); }));
-	myInfo.lastSeen = performance.now();
+	myInfo.lastSeen = Date.now();
 	set(character.name + '_newparty_info', myInfo);
 }
 
@@ -2383,7 +2213,7 @@ setInterval(updatePartyData, 200);
 function getIFramedCharacter(name) {
 	for (const iframe of top.$('iframe')) {
 		const char = iframe.contentWindow.character;
-		if (!char) continue; // Character isn't loaded yet
+		if (!char) continue;
 		if (char.name == name) return char;
 	}
 	return null;
@@ -2451,14 +2281,9 @@ function addPartyFramePropertiesToggles() {
 		toggles.appendChild(create_toggle(key));
 	}
 
-	//let party = parent.document.getElementById('newparty');
-	//let party_parent = party.parentNode;
-	//party_parent.append(toggles);
-
 	const rightBottomMenu = parent.document.getElementById("bottomrightcorner");
 	const gameLogUi = parent.document.getElementById("gamelog");
 	//rightBottomMenu.insertBefore(toggles, gameLogUi);
-	// reactivate if you want toggle buttons ^^^^
 }
 
 function updatePartyFrames() {
@@ -2472,7 +2297,7 @@ function updatePartyFrames() {
 		for (let x = 0; x < partyFrame.children().length; x++) {
 			let party_member_name = Object.keys(parent.party)[x];
 			let info = get(party_member_name + '_newparty_info');
-			if (!info || performance.now() - info.lastSeen > 1000) {
+			if (!info || Date.now() - info.lastSeen > 1000) {
 				let iframed_party_member = getIFramedCharacter(party_member_name);
 				if (iframed_party_member) {
 					info = Object.fromEntries(Object.entries(iframed_party_member).filter(current => { return character.read_only.includes(current[0]) || includeThese.includes(current[0]); }));
@@ -2508,9 +2333,6 @@ function updatePartyFrames() {
 				let max_xp = G.levels[lvl];
 				xpWidth = info.xp / max_xp * 100;
 				xp = xpWidth.toFixed(2) + '%';
-
-				//const billion = 1_000_000_000;
-				//xp = (info.xp / billion).toFixed(1) + 'b/' + (max_xp / billion).toFixed(0) + 'b';
 			}
 
 			let ccWidth = 0;
@@ -2531,7 +2353,7 @@ function updatePartyFrames() {
 			let share = '??';
 			if (parent.party[party_member_name] && parent.party[party_member_name].share !== undefined) {
 				shareWidth = parent.party[party_member_name].share * 100;
-				share = (parent.party[party_member_name].share * 100).toFixed(2) + '%'; // Display share percentage with % sign
+				share = (parent.party[party_member_name].share * 100).toFixed(2) + '%';
 			}
 
 			let data = {
@@ -2555,7 +2377,7 @@ function updatePartyFrames() {
 				shareColor: 'teal',
 			};
 
-			for (let key of ['hp', 'mp', 'xp', 'cc']) { // add what you want to see here ['hp', 'mp', 'xp', 'cc', 'ping', 'share']
+			for (let key of ['hp', 'mp', 'xp', 'cc']) {
 				const text = key.toUpperCase();
 				const value = data[key];
 				const width = data[key + 'Width'];
@@ -2579,7 +2401,7 @@ parent.$('#party-props-toggles').remove();
 
 setInterval(updatePartyFrames, 500);
 ///////////////////////////////////////////////////////////////////////////////////////
-const ALDATA_KEY = "*************";
+const ALDATA_KEY = "*********************";
 
 function updateTrackerData() {
 	parent.socket.once("tracker", (data) => {
@@ -2589,7 +2411,6 @@ function updateTrackerData() {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ max: data.max, monsters: data.monsters }),
 		};
-		// if response.status == 200, it was successfully updated
 		fetch(url, settings).then((response) => console.log(response.status));
 	});
 }
@@ -2598,7 +2419,6 @@ function hideTracker() {
 	parent.hide_modal()
 }
 setTimeout(hideTracker, 1000);
-// Run the updateTrackerData function every minute (60000 milliseconds)
 setInterval(updateTrackerData, 1000 * 60 * 10);
 
 /**
@@ -2667,7 +2487,7 @@ function modify_tracker() {
 			});
 			html += "</div>";
 
-			// Stats tab (your custom addition)
+			// Stats tab
 			html += "<div class='trackers trackerx hidden' style='margin-top: 3px; padding: 10px;'>";
 			const kills = parent.tracker.max.monsters;
 			const achievements = {};
@@ -2740,8 +2560,6 @@ function modify_tracker() {
 			html += "</div></div>";
 
 			show_modal(html, { wwidth: 578, hideinbackground: true });
-
-			// Function to toggle dropdown visibility
 			window.toggleDropdown = function (achievement) {
 				const dropdown = document.getElementById('dropdown-' + achievement);
 				dropdown.style.display = (dropdown.style.display === 'none' || dropdown.style.display === '') ? 'block' : 'none';
@@ -2749,7 +2567,6 @@ function modify_tracker() {
 		};
 	};
 
-	// Eval the function in parent scope
 	const full_text = tracker_function.toString();
 	parent.smart_eval(full_text.slice(full_text.indexOf("{") + 1, full_text.lastIndexOf("}")));
 }
@@ -2762,7 +2579,6 @@ const goldStartTime = performance.now();
 let goldInterval = 'hour';
 const goldHistory = [];
 
-let sumXP = 0, largestXPGain = 0;
 const xpStartTime = performance.now();
 const startXP = character.xp;
 let xpInterval = 'second';
@@ -2771,7 +2587,20 @@ const xpHistory = [];
 let playerDamageSums = {};
 const dpsStartTime = performance.now();
 const dpsHistory = {};
-let dpsMaxValueSmoothed = 100;
+
+// Kill tracking state
+const killStartTime = performance.now();
+let totalKills = 0;
+let mobKills = {};
+let killInterval = 'day';
+const killHistory = {};
+
+// Multi-select damage types - default to DPS only
+let selectedDamageTypes = ['DPS'];
+
+// Toggle variables for overheal and over-manasteal
+let includeOverheal = false;
+let includeOverMana = false;
 
 // Chart config
 const MAX_HISTORY = 60;
@@ -2779,6 +2608,7 @@ const HISTORY_INTERVAL = 5000;
 let lastGoldUpdate = 0;
 let lastXpUpdate = 0;
 let lastDpsUpdate = 0;
+let lastKillUpdate = 0;
 
 const classColors = {
 	mage: '#3FC7EB', paladin: '#F48CBA', priest: '#FFFFFF',
@@ -2788,7 +2618,39 @@ const classColors = {
 const sectionColors = {
 	gold: { primary: '#FFD700', rgba: 'rgba(255, 215, 0, 0.3)', axis: 'rgba(255, 215, 0, 0.1)' },
 	xp: { primary: '#87CEEB', rgba: 'rgba(135, 206, 235, 0.3)', axis: 'rgba(135, 206, 235, 0.2)' },
-	dps: { primary: '#FF6B6B', rgba: 'rgba(255, 107, 107, 0.3)', axis: 'rgba(255, 107, 107, 0.2)' }
+	dps: { primary: '#FF6B6B', rgba: 'rgba(255, 107, 107, 0.3)', axis: 'rgba(255, 107, 107, 0.2)' },
+	kills: { primary: '#9D4EDD', rgba: 'rgba(157, 78, 221, 0.3)', axis: 'rgba(157, 78, 221, 0.1)' }
+};
+
+// Mob type colors
+const mobColors = [
+	'#FF6B9D', '#4ECDC4', '#FFE66D', '#95E1D3', '#FF8B94',
+	'#A8E6CF', '#FFD3B6', '#FFAAA5', '#AA96DA', '#FCBAD3'
+];
+let mobColorMap = {};
+
+const damageTypeLabels = {
+	DPS: 'Total DPS',
+	Base: 'Base Damage',
+	Cleave: 'Cleave Damage',
+	Blast: 'Blast Damage',
+	Burn: 'Burn Damage',
+	HPS: 'Healing',
+	MPS: 'Mana Steal',
+	DR: 'Damage Return',
+	Reflect: 'Reflection'
+};
+
+const damageTypeColors = {
+	DPS: '#E53935',
+	Base: '#6D1B7B',
+	Cleave: '#8D6E63',
+	Blast: '#FB8C00',
+	Burn: '#FDD835',
+	HPS: '#43A047',
+	MPS: '#1E88E5',
+	DR: '#546E7A',
+	Reflect: '#26A69A'
 };
 
 // ========== INITIALIZATION ==========
@@ -2806,63 +2668,49 @@ setTimeout(() => {
 function getPlayerEntry(id) {
 	return playerDamageSums[id] || (playerDamageSums[id] = {
 		startTime: performance.now(), sumDamage: 0, sumBurnDamage: 0,
-		sumBlastDamage: 0, sumBaseDamage: 0, sumHeal: 0, sumLifesteal: 0,
-		sumManaSteal: 0, sumDamageReturn: 0, sumReflection: 0,
-		sumDamageTakenPhys: 0, sumDamageTakenMag: 0
+		sumBlastDamage: 0, sumBaseDamage: 0, sumCleaveDamage: 0,
+		sumHeal: 0, sumManaSteal: 0,
+		sumDamageReturn: 0, sumReflection: 0,
 	});
 }
 
-function calculateDPS(id, now) {
+function calculateDamageTypeValue(id, now, damageType) {
 	const entry = playerDamageSums[id];
 	if (!entry) return 0;
 	const elapsed = now - entry.startTime;
 	if (elapsed <= 0) return 0;
-	return Math.floor((entry.sumDamage + entry.sumDamageReturn + entry.sumReflection) * 1000 / elapsed);
+
+	switch (damageType) {
+		case 'DPS':
+			return Math.floor((entry.sumDamage + entry.sumDamageReturn + entry.sumReflection) * 1000 / elapsed);
+		case 'Base':
+			return Math.floor(entry.sumBaseDamage * 1000 / elapsed);
+		case 'Cleave':
+			return Math.floor(entry.sumCleaveDamage * 1000 / elapsed);
+		case 'Blast':
+			return Math.floor(entry.sumBlastDamage * 1000 / elapsed);
+		case 'Burn':
+			return Math.floor(entry.sumBurnDamage * 1000 / elapsed);
+		case 'HPS':
+			return Math.floor(entry.sumHeal * 1000 / elapsed);
+		case 'MPS':
+			return Math.floor(entry.sumManaSteal * 1000 / elapsed);
+		case 'DR':
+			return Math.floor(entry.sumDamageReturn * 1000 / elapsed);
+		case 'Reflect':
+			return Math.floor(entry.sumReflection * 1000 / elapsed);
+		default:
+			return 0;
+	}
 }
 
-function calculateTotalDPS() {
-	let totalDmg = 0;
+function calculateTotalDamageType(damageType, now) {
+	let total = 0;
 	for (const id in playerDamageSums) {
-		const e = playerDamageSums[id];
-		totalDmg += e.sumDamage + e.sumDamageReturn + e.sumReflection;
+		total += calculateDamageTypeValue(id, now, damageType);
 	}
-	const elapsed = performance.now() - dpsStartTime;
-	return Math.floor(totalDmg * 1000 / Math.max(elapsed, 1));
+	return total;
 }
-
-parent.socket.on('hit', data => {
-	const isParty = id => parent.party_list.includes(id);
-	try {
-		if (!isParty(data.hid) && !isParty(data.id)) return;
-
-		if (data.dreturn && get_player(data.id) && !get_player(data.hid)) {
-			getPlayerEntry(data.id).sumDamageReturn += data.dreturn;
-		}
-		if (data.reflect && get_player(data.id) && !get_player(data.hid)) {
-			getPlayerEntry(data.id).sumReflection += data.reflect;
-		}
-		if (data.damage && get_player(data.id)) {
-			const e = getPlayerEntry(data.id);
-			if (data.damage_type === 'physical') e.sumDamageTakenPhys += data.damage;
-			else e.sumDamageTakenMag += data.damage;
-		}
-		if (get_player(data.hid) && (data.heal || data.lifesteal)) {
-			getPlayerEntry(data.hid).sumHeal += (data.heal || 0) + (data.lifesteal || 0);
-		}
-		if (get_player(data.hid) && data.manasteal) {
-			getPlayerEntry(data.hid).sumManaSteal += data.manasteal;
-		}
-		if (data.damage && get_player(data.hid)) {
-			const e = getPlayerEntry(data.hid);
-			e.sumDamage += data.damage;
-			if (data.source === 'burn') e.sumBurnDamage += data.damage;
-			else if (data.splash) e.sumBlastDamage += data.damage;
-			else e.sumBaseDamage += data.damage;
-		}
-	} catch (err) {
-		console.error('hit handler error', err);
-	}
-});
 
 // ========== UI CREATION ==========
 const createMetricsDashboard = () => {
@@ -2874,6 +2722,9 @@ const createMetricsDashboard = () => {
 
 	const intervalButtons = (type, buttons) =>
 		buttons.map(b => `<button class="interval-btn ${b.active ? 'active' : ''}" data-interval="${b.interval}" data-type="${type}">${b.label}</button>`).join('');
+
+	const damageButtons = (buttons) =>
+		buttons.map(b => `<button class="damage-type-btn ${b.active ? 'active' : ''}" data-damage-type="${b.type}" data-color="${b.color}">${b.label}</button>`).join('');
 
 	const dashboard = $(`
 		<div id="metricsDashboard">
@@ -2920,11 +2771,41 @@ const createMetricsDashboard = () => {
 				<div class="metrics-section" data-section="dps">
 					<h3>DPS Tracking</h3>
 					<div class="metrics-grid">
-						${metricCard('Party DPS', 'partyDPS')}
-						${metricCard('Your DPS', 'yourDPS')}
+						${metricCard('Party Total', 'partyDPS')}
+						${metricCard('Your Total', 'yourDPS')}
 						${metricCard('Session Time', 'sessionTime')}
 					</div>
+					<div class="damage-type-selector">
+						${damageButtons([
+		{ type: 'DPS', label: 'Total', color: damageTypeColors.DPS, active: true },
+		{ type: 'Base', label: 'Base', color: damageTypeColors.Base },
+		{ type: 'Cleave', label: 'Cleave', color: damageTypeColors.Cleave },
+		{ type: 'Blast', label: 'Blast', color: damageTypeColors.Blast },
+		{ type: 'Burn', label: 'Burn', color: damageTypeColors.Burn },
+		{ type: 'HPS', label: 'Heal', color: damageTypeColors.HPS },
+		{ type: 'MPS', label: 'Mana', color: damageTypeColors.MPS },
+		{ type: 'DR', label: 'Return', color: damageTypeColors.DR },
+		{ type: 'Reflect', label: 'Reflect', color: damageTypeColors.Reflect }
+	])}
+					</div>
 					<canvas id="dpsChart" class="metric-chart"></canvas>
+				</div>
+
+				<div class="metrics-section" data-section="kills">
+					<h3>Kill Tracking</h3>
+					<div class="metrics-grid">
+						${metricCard('Kills/Day', 'killRate')}
+						${metricCard('Total Kills', 'totalKillCount')}
+					</div>
+					<div class="interval-selector" id="killIntervalSelector">
+						${intervalButtons('kills', [
+		{ interval: 'minute', label: 'Minute' },
+		{ interval: 'hour', label: 'Hour' },
+		{ interval: 'day', label: 'Day', active: true }
+	])}
+					</div>
+					<canvas id="killChart" class="metric-chart"></canvas>
+					<div id="mobBreakdown"></div>
 				</div>
 			</div>
 		</div>
@@ -2942,45 +2823,61 @@ const createMetricsDashboard = () => {
 };
 
 const applyStyles = ($) => {
-	// Base styles
 	const styles = {
 		'#metricsHeader': {
 			background: 'linear-gradient(to right, #1a1a2e, #16213e)', padding: '12px 15px',
 			borderBottom: '2px solid #3436a0ff', display: 'flex', justifyContent: 'space-between',
 			alignItems: 'center', borderRadius: '7px 7px 0 0', userSelect: 'none'
 		},
-		'#metricsTitle': { color: '#3436a0ff', fontSize: '24px', fontWeight: 'bold', textShadow: '0 0 10px rgba(99, 102, 241, 0.5)' },
-		'#closeBtn': { background: 'rgba(255, 255, 255, 0.1)', border: '1px solid #6366F1', color: '#6366F1', fontSize: '20px', width: '30px', height: '30px', cursor: 'pointer', borderRadius: '3px', transition: 'all 0.2s' },
+		'#metricsTitle': { color: '#3436a0ff', fontSize: '34px', fontWeight: 'bold', textShadow: '0 0 10px rgba(99, 102, 241, 0.5)' },
+		'#closeBtn': { background: 'rgba(255, 255, 255, 0.1)', border: '1px solid #6366F1', color: '#6366F1', fontSize: '25px', width: '30px', height: '30px', cursor: 'pointer', borderRadius: '3px', transition: 'all 0.2s', fontFamily: 'inherit' },
 		'#metricsContent': { padding: '15px', color: 'white', height: 'calc(90vh - 70px)', overflowY: 'auto', overflowX: 'hidden' },
 		'.metrics-section': { marginBottom: '20px', padding: '15px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px' },
 		'.metrics-section h3': { marginTop: '0', marginBottom: '15px', fontSize: '28px', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '1px' },
-		'.metrics-grid': { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '15px' },
+		'.metrics-grid': { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '15px' },
 		'.metric-card': { background: 'rgba(0, 0, 0, 0.4)', padding: '15px', borderRadius: '8px', textAlign: 'center' },
 		'.metric-label': { fontSize: '20px', color: '#aaa', marginBottom: '8px', textTransform: 'uppercase' },
 		'.metric-value': { fontSize: '24px', fontWeight: 'bold' },
-		'.interval-selector': { display: 'flex', gap: '5px', marginBottom: '15px', justifyContent: 'center' },
-		'.interval-btn': { padding: '8px 15px', background: 'rgba(255, 255, 255, 0.1)', color: 'white', cursor: 'pointer', borderRadius: '5px', transition: 'all 0.2s', fontSize: '12px' },
-		'.metric-chart': { width: '100%', height: '550px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', display: 'block' }
+		'.interval-selector': { display: 'flex', gap: '5px', marginBottom: '15px', justifyContent: 'center', flexWrap: 'wrap' },
+		'.interval-btn': { padding: '8px 15px', minWidth: '70px', minHeight: '40px', background: 'rgba(255, 255, 255, 0.1)', color: 'white', cursor: 'pointer', borderRadius: '5px', transition: 'all 0.2s', fontSize: '20px', fontFamily: 'inherit', border: 'none' },
+		'.damage-type-selector': { display: 'flex', gap: '5px', marginBottom: '10px', justifyContent: 'center', flexWrap: 'wrap' },
+		'.damage-type-btn': { padding: '8px 15px', minWidth: '70px', minHeight: '40px', background: 'rgba(255, 255, 255, 0.1)', color: 'white', cursor: 'pointer', borderRadius: '5px', transition: 'all 0.2s', fontSize: '20px', border: '2px solid rgba(255, 255, 255, 0.3)', fontFamily: 'inherit' },
+		'.damage-type-btn.active': { boxShadow: '0 0 10px rgba(255, 255, 255, 0.3)' },
+		'.metric-chart': { width: '100%', height: '550px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', display: 'block' },
+		'#mobBreakdown': { marginTop: '15px', padding: '15px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px' },
+		'.mob-breakdown-title': { color: '#9D4EDD', fontSize: '20px', marginBottom: '15px', textAlign: 'center' },
+		'.mob-breakdown-grid': { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px' },
+		'.mob-stat': { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 20px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '6px', minWidth: '120px' },
+		'.mob-stat-name': { fontSize: '18px', marginBottom: '5px', textTransform: 'capitalize', fontWeight: 'bold' },
+		'.mob-stat-count': { fontSize: '16px', color: '#FFF' }
 	};
 
-	// Apply base styles
 	Object.entries(styles).forEach(([sel, style]) => $(sel).css(style));
 
-	// Section-specific border colors
 	$('.metrics-section').each(function () {
-		const section = $(this).data('section'); // gold, xp, dps
+		const section = $(this).data('section');
 		const color = sectionColors[section]?.rgba || 'rgba(255,255,255,0.2)';
-		$(this).css('border', `2px solid ${color}`); // slightly thicker for visibility
-		// Optionally adjust h3 title color
+		$(this).css('border', `2px solid ${color}`);
 		$(this).find('h3').css('color', sectionColors[section]?.primary || '#FFF');
 	});
 
-	// Chart-specific styling
 	Object.entries(sectionColors).forEach(([section, colors]) => {
 		$(`[data-section="${section}"] .metric-card`).css('border', `1px solid ${colors.rgba}`);
 		$(`[data-section="${section}"] .metric-value`).css('color', colors.primary);
 		$(`[data-section="${section}"] .interval-btn`).css('border', `1px solid ${colors.primary}`);
 		$(`[data-section="${section}"] .metric-chart`).css('border', `1px solid ${colors.rgba}`);
+	});
+
+	$('.damage-type-btn').each(function () {
+		const color = $(this).data('color');
+		if (color) {
+			$(this).css('border-color', color);
+			if ($(this).hasClass('active')) {
+				const hexToRgba = (hex, a) =>
+					`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+				$(this).css('background', hexToRgba(color, 0.4));
+			}
+		}
 	});
 };
 
@@ -2990,22 +2887,52 @@ const attachEventHandlers = ($) => {
 	$('.interval-btn').on('click', function () {
 		const type = $(this).data('type');
 		const interval = $(this).data('interval');
-		const color = sectionColors[type].primary;
+		const sectionMap = { gold: 'gold', xp: 'xp', damage: 'dps', kills: 'kills', killtype: 'kills' };
+		const color = sectionColors[sectionMap[type]]?.primary || '#FFF';
 
 		$(`[data-type="${type}"]`).removeClass('active').css('background', 'rgba(255, 255, 255, 0.1)');
 		const hexToRgba = (hex, a) =>
 			`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
-		$(this).css('background', hexToRgba(color, 0.2));
+		$(this).addClass('active').css('background', hexToRgba(color, 0.2));
 
-		const intervalState = {
-			gold: { get: () => goldInterval, set: v => goldInterval = v, reset: resetGoldHistory },
-			xp: { get: () => xpInterval, set: v => xpInterval = v, reset: resetXpHistory }
-		};
+		if (type === 'kills') {
+			if (killInterval !== interval) {
+				killInterval = interval;
+				resetKillHistory();
+			}
+			$('[data-section="kills"] .metric-label').first().text(`Kills/${interval.charAt(0).toUpperCase() + interval.slice(1)}`);
+		} else {
+			const intervalState = {
+				gold: { get: () => goldInterval, set: v => goldInterval = v, reset: resetGoldHistory },
+				xp: { get: () => xpInterval, set: v => xpInterval = v, reset: resetXpHistory }
+			};
 
-		const s = intervalState[type];
-		if (s && s.get() !== interval) {
-			s.set(interval);
-			s.reset();
+			const s = intervalState[type];
+			if (s && s.get() !== interval) {
+				s.set(interval);
+				s.reset();
+			}
+		}
+
+		updateMetricsDashboard();
+	});
+
+	$('.damage-type-btn').on('click', function () {
+		const $ = parent.$;
+		const damageType = $(this).data('damage-type');
+		const color = $(this).data('color');
+
+		if ($(this).hasClass('active')) {
+			$(this).removeClass('active').css('background', 'rgba(255, 255, 255, 0.1)');
+			selectedDamageTypes = selectedDamageTypes.filter(t => t !== damageType);
+		} else {
+			$(this).addClass('active');
+			const hexToRgba = (hex, a) =>
+				`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
+			$(this).css('background', hexToRgba(color, 0.3));
+			if (!selectedDamageTypes.includes(damageType)) {
+				selectedDamageTypes.push(damageType);
+			}
 		}
 
 		updateMetricsDashboard();
@@ -3017,11 +2944,11 @@ const attachEventHandlers = ($) => {
 	);
 };
 
-
 // ========== UPDATE LOGIC ==========
 let $goldRate, $jackpotValue, $totalGold, $goldLabel;
 let $xpRate, $totalXP, $timeToLevel, $xpLabel;
 let $partyDPS, $yourDPS, $sessionTime;
+let $killRate, $totalKillCount, $mobBreakdown;
 
 const updateMetricsDashboard = () => {
 	const $ = parent.$;
@@ -3041,6 +2968,10 @@ const updateMetricsDashboard = () => {
 		$partyDPS = $('#partyDPS');
 		$yourDPS = $('#yourDPS');
 		$sessionTime = $('#sessionTime');
+
+		$killRate = $('#killRate');
+		$totalKillCount = $('#totalKillCount');
+		$mobBreakdown = $('#mobBreakdown');
 	}
 
 	const avgGold = calculateAverageGold();
@@ -3065,7 +2996,7 @@ const updateMetricsDashboard = () => {
 
 	if (elapsedSec > 0 && xpGained > 0) {
 		const secondsToLevel = Math.round(xpMissing / (xpGained / elapsedSec));
-		$timeToLevel.css('fontSize', '24px').text(elapsedSec > 0 && xpGained > 0 ? formatTime(secondsToLevel) : '--');
+		$timeToLevel.css('fontSize', '24px').text(formatTime(secondsToLevel));
 	} else {
 		$timeToLevel.text('--');
 	}
@@ -3078,10 +3009,11 @@ const updateMetricsDashboard = () => {
 		lastXpUpdate = now;
 	}
 
-	const totalDPS = calculateTotalDPS();
-	const yourDPS = calculateDPS(character.id, now);
-	$partyDPS.text(totalDPS.toLocaleString('en'));
-	$yourDPS.text(yourDPS.toLocaleString('en'));
+	const totalPartyDPS = calculateTotalDamageType('DPS', now);
+	const totalYourDPS = calculateDamageTypeValue(character.id, now, 'DPS');
+
+	$partyDPS.text(totalPartyDPS.toLocaleString('en'));
+	$yourDPS.text(totalYourDPS.toLocaleString('en'));
 
 	const elapsedMs = now - dpsStartTime;
 	const hours = Math.floor(elapsedMs / 3600000);
@@ -3090,45 +3022,332 @@ const updateMetricsDashboard = () => {
 
 	if (now - lastDpsUpdate >= HISTORY_INTERVAL) {
 		for (const id in playerDamageSums) {
-			if (!dpsHistory[id]) dpsHistory[id] = [];
-			const dps = calculateDPS(id, now);
-			dpsHistory[id].push({ time: now, value: dps });
-			if (dpsHistory[id].length > MAX_HISTORY) dpsHistory[id].shift();
+			if (!dpsHistory[id]) dpsHistory[id] = {};
+
+			for (const damageType of Object.keys(damageTypeLabels)) {
+				if (!dpsHistory[id][damageType]) dpsHistory[id][damageType] = [];
+
+				const value = calculateDamageTypeValue(id, now, damageType);
+				dpsHistory[id][damageType].push({ time: now, value });
+
+				if (dpsHistory[id][damageType].length > MAX_HISTORY) {
+					dpsHistory[id][damageType].shift();
+				}
+			}
 		}
 		lastDpsUpdate = now;
 	}
 
-	drawChart('goldChart', [{ history: goldHistory, color: sectionColors.gold.primary }], sectionColors.gold.primary);
-	drawChart('xpChart', [{ history: xpHistory, color: sectionColors.xp.primary }], sectionColors.xp.primary);
-	drawChart('dpsChart', getDPSLines(), sectionColors.dps.primary);
-};
+	const avgKills = calculateAverageKills('Total');
+	$killRate.text(Math.round(avgKills).toLocaleString('en'));
+	$totalKillCount.text(totalKills.toLocaleString('en'));
 
+	if (now - lastKillUpdate >= HISTORY_INTERVAL) {
+		if (!killHistory['Total']) killHistory['Total'] = [];
+		const totalAvg = calculateAverageKills('Total');
+		killHistory['Total'].push({ time: now, value: totalAvg });
+		if (killHistory['Total'].length > MAX_HISTORY) killHistory['Total'].shift();
 
-// ========== CHART DRAWING ==========
-const getDPSLines = () => {
-	let currentMax = 1;
-	const lines = [];
-
-	for (const id in dpsHistory) {
-		const history = dpsHistory[id];
-		if (!history?.length) continue;
-
-		for (const p of history) currentMax = Math.max(currentMax, p.value);
-
-		const player = get_player(id);
-		if (player && history.length >= 2) {
-			lines.push({
-				history,
-				color: classColors[player.ctype] || '#FFF',
-				label: player.name
-			});
+		for (const mobType in mobKills) {
+			if (!killHistory[mobType]) killHistory[mobType] = [];
+			const mobAvg = calculateAverageKills(mobType);
+			killHistory[mobType].push({ time: now, value: mobAvg });
+			if (killHistory[mobType].length > MAX_HISTORY) killHistory[mobType].shift();
 		}
+
+		lastKillUpdate = now;
 	}
 
-	dpsMaxValueSmoothed = dpsMaxValueSmoothed * 0.95 + currentMax * 0.05;
-	lines.forEach(l => l.smoothedMax = Math.max(dpsMaxValueSmoothed, currentMax));
+	updateMobBreakdown($);
 
-	return lines;
+	drawChart('goldChart', [{ history: goldHistory, color: sectionColors.gold.primary }], sectionColors.gold.primary);
+	drawChart('xpChart', [{ history: xpHistory, color: sectionColors.xp.primary }], sectionColors.xp.primary);
+	drawDPSBarChart();
+	drawKillBarChart();
+};
+
+// ========== CHART DRAWING ==========
+const drawDPSBarChart = () => {
+	const $ = parent.$;
+	const canvas = parent.document.getElementById('dpsChart');
+	if (!canvas || !$('#metricsDashboard').is(':visible')) return;
+
+	const ctx = canvas.getContext('2d');
+	const rect = canvas.getBoundingClientRect();
+
+	if (canvas.width !== rect.width || canvas.height !== rect.height) {
+		canvas.width = rect.width;
+		canvas.height = rect.height;
+	}
+
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+	const now = performance.now();
+	const players = [];
+
+	for (const id in playerDamageSums) {
+		const player = get_player(id);
+		if (!player) continue;
+
+		const values = {};
+		for (const type of selectedDamageTypes) {
+			values[type] = calculateDamageTypeValue(id, now, type);
+		}
+
+		players.push({ id, name: player.name, ctype: player.ctype, values });
+	}
+
+	if (players.length === 0) {
+		ctx.fillStyle = '#999';
+		ctx.font = '24px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText('No data available', canvas.width / 2, canvas.height / 2);
+		return;
+	}
+
+	if (selectedDamageTypes.length === 0) {
+		ctx.fillStyle = '#999';
+		ctx.font = '24px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText('Select a damage type to display', canvas.width / 2, canvas.height / 2);
+		return;
+	}
+
+	players.sort((a, b) => {
+		const sumA = Object.values(a.values).reduce((s, v) => s + v, 0);
+		const sumB = Object.values(b.values).reduce((s, v) => s + v, 0);
+		return sumB - sumA;
+	});
+
+	const padding = 60;
+	const labelHeight = 40;
+	const chartHeight = canvas.height - padding - labelHeight;
+	const chartWidth = canvas.width - 2 * padding;
+
+	let maxValue = 1;
+	for (const player of players) {
+		for (const type of selectedDamageTypes) {
+			if (player.values[type] > maxValue) maxValue = player.values[type];
+		}
+	}
+	maxValue *= 1.1;
+
+	ctx.strokeStyle = sectionColors.dps.axis;
+	ctx.lineWidth = 1;
+	for (let i = 0; i <= 5; i++) {
+		const y = padding + chartHeight * (1 - i / 5);
+		ctx.beginPath();
+		ctx.moveTo(padding, y);
+		ctx.lineTo(canvas.width - padding, y);
+		ctx.stroke();
+
+		ctx.fillStyle = sectionColors.dps.primary;
+		ctx.font = '16px pixel, monospace';
+		ctx.textAlign = 'right';
+		const value = Math.round(maxValue * i / 5);
+		ctx.fillText(value.toLocaleString(), padding - 10, y + 5);
+	}
+
+	const groupWidth = chartWidth / players.length;
+	const barWidth = Math.min(groupWidth / selectedDamageTypes.length - 10, 60);
+	const groupPadding = (groupWidth - barWidth * selectedDamageTypes.length) / 2;
+
+	for (let i = 0; i < players.length; i++) {
+		const player = players[i];
+		const groupX = padding + i * groupWidth;
+
+		for (let j = 0; j < selectedDamageTypes.length; j++) {
+			const type = selectedDamageTypes[j];
+			const value = player.values[type];
+			const barHeight = (value / maxValue) * chartHeight;
+			const barX = groupX + groupPadding + j * barWidth;
+			const barY = padding + chartHeight - barHeight;
+
+			const baseColor = type === 'DPS'
+				? (classColors[player.ctype] || damageTypeColors.DPS)
+				: damageTypeColors[type];
+
+			ctx.fillStyle = getDamageBarFill(ctx, type, barX, barY, barWidth, barHeight, baseColor);
+			ctx.fillRect(barX, barY, barWidth, barHeight);
+
+			ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+			ctx.lineWidth = 1;
+			ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+			if (barHeight > 30) {
+				ctx.font = '18px pixel, monospace';
+				ctx.textAlign = 'center';
+
+				const text = value.toLocaleString();
+				const x = barX + barWidth / 2;
+				const y = barY + 15;
+
+				ctx.lineWidth = 3;
+				ctx.strokeStyle = 'black';
+				ctx.strokeText(text, x, y);
+
+				ctx.fillStyle = 'white';
+				ctx.fillText(text, x, y);
+			}
+		}
+
+		ctx.fillStyle = classColors[player.ctype] || '#FFF';
+		ctx.font = '16px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText(player.name, groupX + groupWidth / 2, canvas.height - 20);
+	}
+
+	if (selectedDamageTypes.length > 0) {
+		const legendY = 10;
+		let legendX = padding;
+
+		for (const type of selectedDamageTypes) {
+			if (type === 'DPS' && players.length === 1) {
+				const player = players[0];
+				ctx.fillStyle = classColors[player.ctype] || damageTypeColors.DPS;
+			} else {
+				ctx.fillStyle = damageTypeColors[type];
+			}
+			ctx.fillRect(legendX, legendY, 15, 15);
+
+			ctx.fillStyle = 'white';
+			ctx.font = '16px pixel, monospace';
+			ctx.textAlign = 'left';
+			const label = type === 'DPS' && players.length === 1 ? damageTypeLabels[type] : damageTypeLabels[type];
+			ctx.fillText(label, legendX + 20, legendY + 12);
+
+			legendX += ctx.measureText(label).width + 40;
+		}
+	}
+};
+
+const updateMobBreakdown = ($) => {
+	const sortedMobs = Object.entries(mobKills).sort((a, b) => b[1] - a[1]);
+
+	if (sortedMobs.length === 0) {
+		$mobBreakdown.html('<div style="text-align: center; color: #999; padding: 20px;">No kills yet...</div>');
+		return;
+	}
+
+	let html = `<div class="mob-breakdown-title" style=" text-align: center; color: #9D4EDD; font-weight: bold; font-size: 22px; margin-bottom: 10px;">Mob Breakdown</div><div class="mob-breakdown-grid" style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap;">`;
+
+	sortedMobs.forEach(([mobType, count]) => {
+		const percentage = ((count / totalKills) * 100).toFixed(1);
+		const color = getMobColor(mobType);
+
+		html += `
+			<div class="mob-stat" style="text-align: center; font-size: 18px;">
+				<span class="mob-stat-name" style="color: ${color}; display: block; font-weight: bold;">${mobType}</span>
+				<span class="mob-stat-count" style="display: block;">${count.toLocaleString()} (${percentage}%)</span>
+			</div>
+		`;
+	});
+
+	html += '</div>';
+	$mobBreakdown.html(html);
+};
+
+const drawKillBarChart = () => {
+	const $ = parent.$;
+	const canvas = parent.document.getElementById('killChart');
+	if (!canvas || !$('#metricsDashboard').is(':visible')) return;
+
+	const ctx = canvas.getContext('2d');
+	const rect = canvas.getBoundingClientRect();
+
+	if (canvas.width !== rect.width || canvas.height !== rect.height) {
+		canvas.width = rect.width;
+		canvas.height = rect.height;
+	}
+
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+	const mobData = [];
+	const allMobTypes = Object.keys(mobKills);
+
+	for (const mobType of allMobTypes) {
+		const value = calculateAverageKills(mobType);
+		mobData.push({ type: mobType, displayName: mobType.charAt(0).toUpperCase() + mobType.slice(1), value });
+	}
+
+	if (mobData.length === 0) {
+		ctx.fillStyle = '#999';
+		ctx.font = '24px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText('No kills yet...', canvas.width / 2, canvas.height / 2);
+		return;
+	}
+
+	mobData.sort((a, b) => b.value - a.value);
+
+	const padding = 60;
+	const labelHeight = 40;
+	const chartHeight = canvas.height - padding - labelHeight;
+	const chartWidth = canvas.width - 2 * padding;
+
+	let maxValue = 1;
+	for (const mob of mobData) {
+		if (mob.value > maxValue) maxValue = mob.value;
+	}
+	maxValue *= 1.1;
+
+	ctx.strokeStyle = sectionColors.kills.axis;
+	ctx.lineWidth = 1;
+	for (let i = 0; i <= 5; i++) {
+		const y = padding + chartHeight * (1 - i / 5);
+		ctx.beginPath();
+		ctx.moveTo(padding, y);
+		ctx.lineTo(canvas.width - padding, y);
+		ctx.stroke();
+
+		ctx.fillStyle = sectionColors.kills.primary;
+		ctx.font = '16px pixel, monospace';
+		ctx.textAlign = 'right';
+		const value = Math.round(maxValue * i / 5);
+		ctx.fillText(value.toLocaleString(), padding - 10, y + 5);
+	}
+
+	const groupWidth = chartWidth / mobData.length;
+	const barWidth = Math.min(groupWidth - 20, 60);
+
+	for (let i = 0; i < mobData.length; i++) {
+		const mob = mobData[i];
+		const groupX = padding + i * groupWidth;
+		const mobColor = getMobColor(mob.type);
+
+		const value = mob.value;
+		const barHeight = (value / maxValue) * chartHeight;
+		const barX = groupX + (groupWidth - barWidth) / 2;
+		const barY = padding + chartHeight - barHeight;
+
+		ctx.fillStyle = mobColor;
+		ctx.fillRect(barX, barY, barWidth, barHeight);
+
+		ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+		ctx.lineWidth = 1;
+		ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+		if (barHeight > 30) {
+			ctx.font = '18px pixel, monospace';
+			ctx.textAlign = 'center';
+
+			const text = Math.round(value).toLocaleString();
+			const x = barX + barWidth / 2;
+			const y = barY + 15;
+
+			ctx.lineWidth = 3;
+			ctx.strokeStyle = 'black';
+			ctx.strokeText(text, x, y);
+
+			ctx.fillStyle = 'white';
+			ctx.fillText(text, x, y);
+		}
+
+		ctx.fillStyle = mobColor;
+		ctx.font = '16px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText(mob.displayName, groupX + groupWidth / 2, canvas.height - 20);
+	}
 };
 
 const drawChart = (canvasId, lines, sectionColor) => {
@@ -3286,12 +3505,32 @@ const calculateAverageXP = () => {
 	return divisor > 0 ? Math.round((character.xp - startXP) / divisor) : 0;
 };
 
+const calculateAverageKills = (killType = 'Total') => {
+	const elapsed = (performance.now() - killStartTime) / 1000;
+	const divisor = elapsed / intervalSeconds[killInterval];
+	if (divisor <= 0) return 0;
+
+	if (killType === 'Total') {
+		return totalKills / divisor;
+	} else {
+		return (mobKills[killType] || 0) / divisor;
+	}
+};
+
 const formatTime = (seconds) => {
 	const d = Math.floor(seconds / 86400);
 	const h = Math.floor((seconds % 86400) / 3600);
 	const m = Math.floor((seconds % 3600) / 60);
 	return `${d}d ${h}h ${m}m`;
 };
+
+function getMobColor(mobType) {
+	if (!mobColorMap[mobType]) {
+		const colorIndex = Object.keys(mobColorMap).length % mobColors.length;
+		mobColorMap[mobType] = mobColors[colorIndex];
+	}
+	return mobColorMap[mobType];
+}
 
 const resetGoldHistory = () => {
 	goldHistory.length = 0;
@@ -3302,6 +3541,42 @@ const resetXpHistory = () => {
 	xpHistory.length = 0;
 	lastXpUpdate = 0;
 };
+
+const resetKillHistory = () => {
+	for (const key in killHistory) {
+		killHistory[key].length = 0;
+	}
+	lastKillUpdate = 0;
+};
+
+const barGradientCache = {};
+
+function getDamageBarFill(ctx, type, barX, barY, barWidth, barHeight, fallbackColor) {
+	if (type !== 'Burn' && type !== 'Blast') {
+		return fallbackColor;
+	}
+
+	const key = `${type}_${barWidth}_${barHeight}`;
+	if (barGradientCache[key]) return barGradientCache[key];
+
+	const g = ctx.createLinearGradient(barX, barY + barHeight, barX, barY);
+
+	switch (type) {
+		case 'Burn':
+			g.addColorStop(0.0, '#8B1A1A');
+			g.addColorStop(0.5, '#F4511E');
+			g.addColorStop(1.0, '#FFD54F');
+			break;
+
+		case 'Blast':
+			g.addColorStop(0.0, '#6D2C00');
+			g.addColorStop(1.0, '#FF9800');
+			break;
+	}
+
+	barGradientCache[key] = g;
+	return g;
+}
 
 // ========== EVENT LISTENERS ==========
 let updateInterval;
@@ -3328,6 +3603,95 @@ const toggleMetricsDashboard = () => {
 		}
 	}
 };
+
+parent.socket.on('hit', data => {
+	const isParty = id => parent.party_list.includes(id);
+	try {
+		if (!isParty(data.hid) && !isParty(data.id)) return;
+
+		if (data.dreturn && get_player(data.id) && !get_player(data.hid)) {
+			getPlayerEntry(data.id).sumDamageReturn += data.dreturn;
+		}
+		if (data.reflect && get_player(data.id) && !get_player(data.hid)) {
+			getPlayerEntry(data.id).sumReflection += data.reflect;
+		}
+		if (get_player(data.hid) && isParty(data.hid) && (data.heal || data.lifesteal)) {
+			const e = getPlayerEntry(data.hid);
+			const healer = get_player(data.hid);
+			const target = get_player(data.id);
+
+			const totalHeal = (data.heal ?? 0) + (data.lifesteal ?? 0);
+			if (includeOverheal) {
+				e.sumHeal += totalHeal;
+			} else {
+				const actualHeal = (data.heal
+					? Math.min(data.heal, (target?.max_hp ?? 0) - (target?.hp ?? 0))
+					: 0
+				) + (data.lifesteal
+					? Math.min(data.lifesteal, healer.max_hp - healer.hp)
+					: 0
+					);
+				e.sumHeal += actualHeal;
+			}
+		}
+		if (get_player(data.hid) && isParty(data.hid) && data.manasteal) {
+			const e = getPlayerEntry(data.hid);
+			const p = get_entity(data.hid);
+			if (includeOverMana) {
+				e.sumManaSteal += data.manasteal;
+			} else {
+				e.sumManaSteal += Math.min(data.manasteal, p.max_mp - p.mp);
+			}
+		}
+		if (data.damage && get_player(data.hid)) {
+			const e = getPlayerEntry(data.hid);
+			e.sumDamage += data.damage;
+			if (data.source === 'burn') {
+				e.sumBurnDamage += data.damage;
+			} else if (data.splash) {
+				e.sumBlastDamage += data.damage;
+			} else if (data.source === 'cleave') {
+				e.sumCleaveDamage += data.damage;
+			} else {
+				e.sumBaseDamage += data.damage;
+			}
+		}
+	} catch (err) {
+		console.error('hit handler error', err);
+	}
+});
+
+/*
+game.on('death', data => {
+	const mob = parent.entities[data.id];
+	if (!mob?.cooperative) return;
+
+	const mobTarget = mob.target;
+	const party = get_party();
+	const partyMembers = party ? Object.keys(party) : [];
+
+	if (mobTarget === character.name || partyMembers.includes(mobTarget)) {
+
+		totalKills++;
+		const mobType = (mob.mtype || 'unknown').charAt(0).toUpperCase() + (mob.mtype || 'unknown').slice(1);
+		mobKills[mobType] = (mobKills[mobType] || 0) + 1;
+		getMobColor(mobType);
+	}
+});
+*/
+parent.socket.on("game_log", data => {
+	if (typeof data !== "string") return;
+
+	const match = data.match(/killed (.+)$/);
+	if (!match) return;
+
+	let mobType = match[1].trim().replace(/^(a |an |the )/i, '');
+	mobType = mobType.charAt(0).toUpperCase() + mobType.slice(1);
+
+	totalKills++;
+	mobKills[mobType] = (mobKills[mobType] || 0) + 1;
+	getMobColor(mobType);
+});
 
 character.on("loot", (data) => {
 

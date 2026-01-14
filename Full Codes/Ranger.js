@@ -108,7 +108,6 @@ const CONFIG = {
 const TICK_RATE = {
 	main: 100,
 	action: 1,
-	mark: 40,
 	equipment: 25,
 	maintenance: 2000
 };

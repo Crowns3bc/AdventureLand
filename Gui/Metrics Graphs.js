@@ -1086,39 +1086,11 @@ parent.socket.on('hit', data => {
 	}
 });
 
-game.on('death', data => {
-    const mob = parent.entities[data.id];
-    if (!mob?.cooperative) return;
-
-    const party = get_party() || {};
-    const partyMembers = Object.keys(party);
-    const contributors = [character.name, ...partyMembers];
-
-    const didContribute = contributors.some(name => {
-        const entity = (name === character.name) ? character : parent.entities[name];
-        return entity?.s?.coop?.p > 0;
-    });
-
-    if (!didContribute) return;
-
-    totalKills++;
-    const mobType = (mob.mtype || 'unknown').charAt(0).toUpperCase() + (mob.mtype || 'unknown').slice(1);
-    mobKills[mobType] = (mobKills[mobType] || 0) + 1;
-
-    getMobColor(mobType);
-});
-
-parent.socket.on("game_log", data => {
-	if (typeof data !== "string") return;
-
-	const match = data.match(/ killed (.+)$/);
-	if (!match || !match[1]) return;
-
-	const mobType = match[1].charAt(0).toUpperCase() + match[1].slice(1);
-
+parent.socket.on("kill_credit", ({mtype}) => {
+	if (!mtype) return;
 	totalKills++;
-	mobKills[mobType] = (mobKills[mobType] || 0) + 1;
-	getMobColor(mobType);
+	mobKills[mtype] = (mobKills[mtype] || 0) + 1;
+	getMobColor(mtype);
 });
 
 character.on("loot", (data) => {

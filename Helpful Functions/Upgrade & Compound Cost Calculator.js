@@ -37,9 +37,9 @@
  */
 
 const COSTS = {
-	scroll: [G.items.scroll0.g, G.items.scroll1.g, G.items.scroll2.g, G.items.scroll3.g, 5e9],
-	cscroll: [G.items.cscroll0.g, G.items.cscroll1.g, G.items.cscroll2.g, G.items.cscroll3.g, 15e9],
-	offering: [0, 2500000, G.items.offering.g, 500000000]
+	scroll: [G.items.scroll0.g, G.items.scroll1.g, G.items.scroll2.g, G.items.scroll3.g, Infinity],
+	cscroll: [G.items.cscroll0.g, G.items.cscroll1.g, G.items.cscroll2.g, G.items.cscroll3.g, Infinity],
+	offering: [0, 2500000, G.items.offering.g, Infinity]
 };
 
 const MANUAL_IGRADE = { lostearring: 2 };
@@ -167,8 +167,8 @@ const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 		const item = { name: itemName, level: lvl, grace: realGrace };
 		const grade = item_grade(item);
 
-		if (realGrace < lvl + 1) {
-			const newGrace = Math.min(realGrace + 0.5, lvl + 1);
+		if (realGrace < 13) {
+			const newGrace = Math.min(realGrace + 0.5, 13);
 			const primCost = COSTS.offering[1];
 			const newTotalCost = totalCost + primCost;
 			const idx = Math.round(newGrace * 10);

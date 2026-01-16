@@ -24,8 +24,7 @@
  *   upgradeCost("bataxe", 1000000)                      // +0 to +12, no Lucky Slot, show results
  *   upgradeCost("bataxe", 1000000, 8)                   // +0 to +8, no Lucky Slot, show results
  *   upgradeCost("bataxe", 1000000, 12, true)            // +0 to +12, WITH Lucky Slot, show results
- *   upgradeCost("bataxe", 1000000, 12, false, false)    // +0 to +12, no Lucky Slot, show results
- *   upgradeCost("bataxe", 1000000, 12, true, false, false) // +0 to +12, Lucky Slot, return only (no display)
+ *   upgradeCost("bataxe", 1000000, 12, false, false)    // +0 to +12, no Lucky Slot, return only (no display)
  * 
  *   // COMPOUNDS
  *   compoundCost("hpamulet", 3200)                      // +0 to +7, minimize cost, show results
@@ -154,12 +153,11 @@ const getCompoundChance = (item, scroll_def, offering_def) => {
 
 const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 	const { targetLevel = 12, luckySlot = false, startLevel = 0, startGrace = 0 } = opts;
-	const SIZE = 140;
-	const dp = Array(SIZE).fill(0).map(() => Array(SIZE).fill(null));
+	const dp = Array(13).fill(0).map(() => Array(140).fill(null));
 	const pq = new MinHeap();
 
-	dp[startLevel][startGrace * 10] = [0, itemValue, "init", -1, -1, 0];
-	pq.push([0, startLevel, startGrace * 10]);
+	dp[startLevel][startGrace * 10] = [itemValue, "init", -1, -1, 0];
+	pq.push([itemValue, startLevel, startGrace * 10]);
 
 	while (pq.size()) {
 		const [totalCost, lvl, grace] = pq.pop();
@@ -168,7 +166,6 @@ const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 		const realGrace = grace / 10;
 		const item = { name: itemName, level: lvl, grace: realGrace };
 		const grade = item_grade(item);
-		const currentItemCost = dp[lvl][grace][1];
 
 		if (realGrace < lvl + 1) {
 			const newGrace = Math.min(realGrace + 0.5, lvl + 1);
@@ -176,7 +173,7 @@ const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 			const newTotalCost = totalCost + primCost;
 			const idx = Math.round(newGrace * 10);
 			if (!dp[lvl][idx] || newTotalCost < dp[lvl][idx][0]) {
-				dp[lvl][idx] = [newTotalCost, currentItemCost, "prim", lvl, grace, 0];
+				dp[lvl][idx] = [newTotalCost, "prim", lvl, grace, 0];
 				pq.push([newTotalCost, lvl, idx]);
 			}
 		}
@@ -190,25 +187,14 @@ const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 					let finalChance = chance;
 					if (luckySlot) finalChance = 0.6 * Math.min(1, (chance + 0.012) / 0.975) + 0.4 * chance;
 
-					let primstacks = 0, tl = lvl, tg = grace;
-					while (tl >= 0 && tg >= 0 && dp[tl][tg]) {
-						const [, , act, pl, pg] = dp[tl][tg];
-						if (act === "prim") {
-							primstacks++;
-							tl = pl;
-							tg = pg;
-						} else break;
-					}
-
-					const attemptCost = currentItemCost + COSTS.scroll[s] + COSTS.offering[o] + (COSTS.offering[1] * primstacks);
+					const attemptCost = totalCost + COSTS.scroll[s] + COSTS.offering[o];
 					const expectedCost = attemptCost / finalChance;
-					const newTotalCost = totalCost + expectedCost;
 					const newLvl = lvl + 1;
 					const idx = Math.round(new_grace * 10);
 
-					if (!dp[newLvl][idx] || newTotalCost < dp[newLvl][idx][0]) {
-						dp[newLvl][idx] = [newTotalCost, expectedCost, `${s},${o}`, lvl, grace, primstacks];
-						pq.push([newTotalCost, newLvl, idx]);
+					if (!dp[newLvl][idx] || expectedCost < dp[newLvl][idx][0]) {
+						dp[newLvl][idx] = [expectedCost, `${s},${o}`, lvl, grace];
+						pq.push([expectedCost, newLvl, idx]);
 					}
 				}
 			}
@@ -257,7 +243,7 @@ const calculateCompoundPath = (itemValue, itemName, startLevel, targetLevel, opt
 	return { path, total_expected_cost: cumCost, total_items_needed: itemsNeeded, final_level: item.level, final_grace: item.grace };
 };
 
-function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, optimizeItem = false, display = true) {
+function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, display = true) {
 	if (!G.items[itemName]) return null;
 
 	const dp = calculateUpgrade(itemName, itemValue, { targetLevel, luckySlot });
@@ -277,7 +263,7 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, o
 		const simplePath = [];
 		let cl = lvl, cg = minIdx;
 		while (cl > 0 || cg !== 0) {
-			const [, , action, pl, pg] = dp[cl][cg];
+			const [, action, pl, pg] = dp[cl][cg];
 			if (action !== "init" && action !== "prim") {
 				const [s, o] = action.split(',').map(Number);
 				simplePath.unshift([SCROLL_NAMES.upgrade[s], o === 0 ? null : OFFERING_NAMES[o]]);
@@ -304,16 +290,27 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, o
 	const path = [];
 	let cl = targetLevel, cg = minIdx;
 	while (cl > 0 || cg !== 0) {
-		const [totalCostAtLevel, , action, pl, pg, primstacks] = dp[cl][cg];
+		const [totalCostAtLevel, action, pl, pg] = dp[cl][cg];
 		if (action !== "init" && action !== "prim") {
 			const [s, o] = action.split(',').map(Number);
+
+			let primstacks = 0, tl = pl, tg = pg;
+			while (tl >= 0 && tg >= 0 && dp[tl][tg]) {
+				const [, act, ppl, ppg] = dp[tl][tg];
+				if (act === "prim") {
+					primstacks++;
+					tl = ppl;
+					tg = ppg;
+				} else break;
+			}
+
 			const item = { name: itemName, level: pl, grace: pg / 10 };
 			const { chance } = getUpgradeChance(item, UPGRADE_SCROLLS[s], OFFERINGS[o]);
 			let finalChance = chance;
 			if (luckySlot) finalChance = 0.6 * Math.min(1, (chance + 0.012) / 0.975) + 0.4 * chance;
 
-			const prevItemCost = dp[pl][pg][1];
-			const attemptCost = prevItemCost + COSTS.scroll[s] + COSTS.offering[o] + (COSTS.offering[1] * primstacks);
+			const prevTotalCost = dp[pl][pg][0];
+			const attemptCost = prevTotalCost + COSTS.scroll[s] + COSTS.offering[o];
 
 			path.unshift({
 				from_level: pl, to_level: cl, scroll: s, offering: o, primstacks: primstacks,

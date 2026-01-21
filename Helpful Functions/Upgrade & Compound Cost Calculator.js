@@ -324,11 +324,11 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, d
 
 	const output = {
 		item: itemName, base_item_value: fmtGold(itemValue), from_level: 0, to_level: targetLevel,
-		total_expected_cost: fmtGold(minCost), total_items_needed: Math.ceil(path.reduce((p, s) => p * s.expected_attempts, 1)),
+		total_expected_cost: fmtGold(minCost), total_items_needed: Math.ceil(path.reduce((p, s) => p * (s.chance >= 0.999999 ? 1 : s.expected_attempts), 1)),
 		upgrade_steps: path.map(s => ({
 			upgrade: `+${s.from_level} → +${s.to_level}`, scroll: SCROLL_NAMES.upgrade[s.scroll],
 			offering: OFFERING_NAMES[s.offering], primstacks: s.primstacks,
-			success_chance: `${(s.chance * 100).toFixed(2)}%`, expected_attempts: s.expected_attempts.toFixed(2),
+			success_chance: `${(s.chance * 100).toFixed(2)}%`, expected_attempts: (s.chance >= 0.999999 ? 1 : s.expected_attempts).toFixed(2),
 			cost_per_attempt: fmtGold(s.step_cost), expected_cost: fmtGold(s.expected_cost)
 		})),
 		//all_level_paths: allPaths

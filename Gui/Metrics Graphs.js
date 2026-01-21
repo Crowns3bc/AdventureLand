@@ -141,6 +141,7 @@ function calculateTotalDamageType(damageType, now) {
 const createMetricsDashboard = () => {
 	const $ = parent.$;
 	$('#metricsDashboard').remove();
+	$('#metricsBackdrop').remove(); // Also remove backdrop if it exists
 
 	const metricCard = (label, valueId) =>
 		`<div class="metric-card"><div class="metric-label">${label}</div><div class="metric-value" id="${valueId}">0</div></div>`;
@@ -150,6 +151,18 @@ const createMetricsDashboard = () => {
 
 	const damageButtons = (buttons) =>
 		buttons.map(b => `<button class="damage-type-btn ${b.active ? 'active' : ''}" data-damage-type="${b.type}" data-color="${b.color}">${b.label}</button>`).join('');
+
+	// Create backdrop first
+	const backdrop = $('<div id="metricsBackdrop"></div>').css({
+		position: 'fixed',
+		top: 0,
+		left: 0,
+		width: '100%',
+		height: '100%',
+		background: 'rgba(0, 0, 0, 0.5)',
+		zIndex: 9998,
+		display: 'none'
+	});
 
 	const dashboard = $(`
 		<div id="metricsDashboard">
@@ -242,6 +255,7 @@ const createMetricsDashboard = () => {
 		fontFamily: $('#bottomrightcorner').css('font-family') || 'pixel'
 	});
 
+	$('body').append(backdrop);
 	$('body').append(dashboard);
 	applyStyles($);
 	attachEventHandlers($);
@@ -307,7 +321,22 @@ const applyStyles = ($) => {
 };
 
 const attachEventHandlers = ($) => {
-	$('#closeBtn').on('click', () => $('#metricsDashboard').hide());
+	const closeDashboard = () => {
+		$('#metricsDashboard').hide();
+		$('#metricsBackdrop').hide();
+		if (updateInterval) {
+			clearInterval(updateInterval);
+			updateInterval = null;
+		}
+	}
+
+	$('#closeBtn').on('click', closeDashboard);
+	$('#metricsBackdrop').on('click', closeDashboard);
+	parent.$(parent.document).on('keydown.metricsDashboard', function (e) {
+		if (e.key === 'Escape' && $('#metricsDashboard').is(':visible')) {
+			closeDashboard();
+		}
+	});
 
 	$('.interval-btn').on('click', function () {
 		const type = $(this).data('type');
@@ -1016,11 +1045,13 @@ const toggleMetricsDashboard = () => {
 
 	if (dashboard.is(':visible')) {
 		dashboard.hide();
+		$('#metricsBackdrop').hide();
 		if (updateInterval) {
 			clearInterval(updateInterval);
 			updateInterval = null;
 		}
 	} else {
+		$('#metricsBackdrop').show();
 		dashboard.show();
 		updateMetricsDashboard();
 		if (!updateInterval) {
@@ -1086,7 +1117,7 @@ parent.socket.on('hit', data => {
 	}
 });
 
-parent.socket.on("kill_credit", ({mtype}) => {
+parent.socket.on("kill_credit", ({ mtype }) => {
 	if (!mtype) return;
 	totalKills++;
 	mobKills[mtype] = (mobKills[mtype] || 0) + 1;
@@ -1094,7 +1125,6 @@ parent.socket.on("kill_credit", ({mtype}) => {
 });
 
 character.on("loot", (data) => {
-
 	if (data.gold && typeof data.gold === 'number' && !Number.isNaN(data.gold)) {
 		const count = Object.keys(parent.party).filter(name =>
 			name === character.name || parent.entities[name]?.owner === character.owner

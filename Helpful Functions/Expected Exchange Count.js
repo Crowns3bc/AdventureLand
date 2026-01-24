@@ -1,6 +1,6 @@
 /**
  * Calculates expected items from exchanging/opening containers
- * @param {string} dropName - Container name (e.g., "basketofeggs", "chest1")
+ * @param {string} dropName - Container name (e.g., "basketofeggs", "gem0")
  * @param {number} count - Number of containers to open
  * @param {boolean} display - Whether to show results (default: true)
  * @returns {Object} Expected items by name, or null if container doesn't exist
@@ -11,8 +11,11 @@
 function exchangeCount(dropName, count, display = true) {
 	if (!G.drops[dropName]) return null;
 
+	const exchangeRate = G.items[dropName]?.e ?? 1;
+	const effectiveCount = count / exchangeRate;
+
 	const results = new Map();
-	const stack = [{ name: dropName, amount: count }];
+	const stack = [{ name: dropName, amount: effectiveCount }];
 
 	while (stack.length) {
 		const { name, amount } = stack.pop();

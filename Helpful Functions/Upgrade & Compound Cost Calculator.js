@@ -207,7 +207,7 @@ const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 const calculateCompoundPath = (itemValue, itemName, startLevel, targetLevel, optimizeItem) => {
 	const path = [];
 	let item = { name: itemName, level: startLevel, grace: 0 };
-	let cumCost = itemValue, curCost = itemValue, itemsNeeded = 1;
+	let cumCost = 0, curCost = itemValue, itemsNeeded = 1;
 
 	for (let lvl = startLevel; lvl < targetLevel; lvl++) {
 		let best = null;

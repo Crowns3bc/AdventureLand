@@ -37,9 +37,9 @@
  */
 
 const COSTS = {
-	scroll: [G.items.scroll0.g, G.items.scroll1.g, G.items.scroll2.g, G.items.scroll3.g, Infinity],
-	cscroll: [G.items.cscroll0.g, G.items.cscroll1.g, G.items.cscroll2.g, G.items.cscroll3.g, Infinity],
-	offering: [0, 2500000, G.items.offering.g, Infinity]
+	scroll: [G.items.scroll0.g, G.items.scroll1.g, G.items.scroll2.g, G.items.scroll3.g, 50000000000],
+	cscroll: [G.items.cscroll0.g, G.items.cscroll1.g, G.items.cscroll2.g, G.items.cscroll3.g, 50000000000],
+	offering: [0, 2500000, G.items.offering.g, 650000000]
 };
 
 const MANUAL_IGRADE = { lostearring: 2 };
@@ -68,7 +68,6 @@ const OFFERING_NAMES = ["none", "offeringp", "offering", "offeringx"];
 
 const gradeCache = {};
 const getZeroGrade = n => gradeCache[n] ?? (gradeCache[n] = item_grade({ name: n, level: 0 }));
-const fmtGold = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 const getUpgradeChance = (item, scroll_def, offering_def) => {
 	let grace = item.grace || 0, new_grace = grace;
@@ -184,11 +183,8 @@ const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 					const { chance, new_grace } = getUpgradeChance(item, UPGRADE_SCROLLS[s], OFFERINGS[o]);
 					if (!chance) continue;
 
-					let finalChance = chance;
-					if (luckySlot) finalChance = 0.6 * Math.min(1, (chance + 0.012) / 0.975) + 0.4 * chance;
-
 					const attemptCost = totalCost + COSTS.scroll[s] + COSTS.offering[o];
-					const expectedCost = attemptCost / finalChance;
+					const expectedCost = attemptCost / chance;
 					const newLvl = lvl + 1;
 					const idx = Math.round(new_grace * 10);
 
@@ -246,36 +242,7 @@ const calculateCompoundPath = (itemValue, itemName, startLevel, targetLevel, opt
 function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, display = true) {
 	if (!G.items[itemName]) return null;
 
-	const dp = calculateUpgrade(itemName, itemValue, { targetLevel, luckySlot });
-
-	const allPaths = {};
-	for (let lvl = 1; lvl <= targetLevel; lvl++) {
-		let minCost = Infinity, minIdx = -1;
-		for (let g = 0; g < 140; g++) {
-			if (dp[lvl][g] && dp[lvl][g][0] < minCost) {
-				minCost = dp[lvl][g][0];
-				minIdx = g;
-			}
-		}
-
-		if (minIdx === -1) continue;
-
-		const simplePath = [];
-		let cl = lvl, cg = minIdx;
-		while (cl > 0 || cg !== 0) {
-			const [, action, pl, pg] = dp[cl][cg];
-			if (action !== "init" && action !== "prim") {
-				const [s, o] = action.split(',').map(Number);
-				simplePath.unshift([SCROLL_NAMES.upgrade[s], o === 0 ? null : OFFERING_NAMES[o]]);
-			}
-			cl = pl;
-			cg = pg;
-		}
-
-		allPaths[lvl] = simplePath;
-	}
-
-	//console.log("Optimal paths to each level:", allPaths);
+	const dp = calculateUpgrade(itemName, itemValue, { targetLevel });
 
 	let minCost = Infinity, minIdx = -1;
 	for (let g = 0; g < 140; g++) {
@@ -290,18 +257,15 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, d
 	const path = [];
 	let cl = targetLevel, cg = minIdx;
 	while (cl > 0 || cg !== 0) {
-		const [totalCostAtLevel, action, pl, pg] = dp[cl][cg];
+		const [, action, pl, pg] = dp[cl][cg];
 		if (action !== "init" && action !== "prim") {
 			const [s, o] = action.split(',').map(Number);
 
 			let primstacks = 0, tl = pl, tg = pg;
 			while (tl >= 0 && tg >= 0 && dp[tl][tg]) {
 				const [, act, ppl, ppg] = dp[tl][tg];
-				if (act === "prim") {
-					primstacks++;
-					tl = ppl;
-					tg = ppg;
-				} else break;
+				if (act === "prim") { primstacks++; tl = ppl; tg = ppg; }
+				else break;
 			}
 
 			const item = { name: itemName, level: pl, grace: pg / 10 };
@@ -309,29 +273,30 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, d
 			let finalChance = chance;
 			if (luckySlot) finalChance = 0.6 * Math.min(1, (chance + 0.012) / 0.975) + 0.4 * chance;
 
-			const prevTotalCost = dp[pl][pg][0];
-			const attemptCost = prevTotalCost + COSTS.scroll[s] + COSTS.offering[o];
-
-			path.unshift({
-				from_level: pl, to_level: cl, scroll: s, offering: o, primstacks: primstacks,
-				chance: finalChance, expected_attempts: 1 / finalChance, step_cost: attemptCost,
-				expected_cost: totalCostAtLevel, grace_after: cg / 10
-			});
+			path.unshift({ from_level: pl, to_level: cl, scroll: s, offering: o, primstacks, chance: finalChance, grace_after: cg / 10 });
 		}
 		cl = pl;
 		cg = pg;
 	}
 
+	let cumCost = itemValue;
+	for (const s of path) {
+		s.step_cost = cumCost + COSTS.scroll[s.scroll] + COSTS.offering[s.offering];
+		s.expected_cost = s.chance >= 0.999999 ? s.step_cost : s.step_cost / s.chance;
+		s.expected_attempts = s.chance >= 0.999999 ? 1 : 1 / s.chance;
+		cumCost = s.expected_cost;
+	}
+
 	const output = {
 		item: itemName, base_item_value: fmtGold(itemValue), from_level: 0, to_level: targetLevel,
-		total_expected_cost: fmtGold(minCost), total_items_needed: Math.ceil(path.reduce((p, s) => p * (s.chance >= 0.999999 ? 1 : s.expected_attempts), 1)),
+		total_expected_cost: fmtGold(cumCost),
+		total_items_needed: Math.ceil(path.reduce((p, s) => p * s.expected_attempts, 1)),
 		upgrade_steps: path.map(s => ({
 			upgrade: `+${s.from_level} → +${s.to_level}`, scroll: SCROLL_NAMES.upgrade[s.scroll],
 			offering: OFFERING_NAMES[s.offering], primstacks: s.primstacks,
-			success_chance: `${(s.chance * 100).toFixed(2)}%`, expected_attempts: (s.chance >= 0.999999 ? 1 : s.expected_attempts).toFixed(2),
+			success_chance: `${(s.chance * 100).toFixed(2)}%`, expected_attempts: s.expected_attempts.toFixed(2),
 			cost_per_attempt: fmtGold(s.step_cost), expected_cost: fmtGold(s.expected_cost)
-		})),
-		//all_level_paths: allPaths
+		}))
 	};
 
 	if (display) show_json(output);

@@ -89,7 +89,7 @@ async function sortGlobalBank() {
 		.filter(k => k !== "gold" && bank_packs[k])
 		.sort((a, b) => +a.replace("items", "") - +b.replace("items", ""));
 
-	const packFloor = pack => bank_packs[pack][0];
+	const packFloor = pack => bank_packs[pack]?.[0];
 
 	const flat = [];
 	for (const pack of allPacks)
@@ -107,11 +107,28 @@ async function sortGlobalBank() {
 	for (const e of flat) loc.set(`${e.curPack}:${e.curSlot}`, e);
 
 	const placed = e => e.curPack === e.targetPack && e.curSlot === e.targetSlot;
-	const inInv = e => e.curPack === "__inv__";
+	const inInv  = e => e.curPack === "__inv__";
+
+	console.log(`=== sortGlobalBank: ${flat.length} total items across ${allPacks.length} packs ===`);
+
+	const misplaced = flat.filter(e => !placed(e));
+	console.log(`${misplaced.length} items are out of position`);
+	const misplacedByName = {};
+	for (const e of misplaced) (misplacedByName[e.item.name] ??= []).push(e);
+	for (const [name, entries] of Object.entries(misplacedByName)) {
+		if (entries.length === 1) {
+			const e = entries[0];
+			console.log(`  ${name} (lv${e.item.level}): ${e.curPack}[${e.curSlot}] -> ${e.targetPack}[${e.targetSlot}]`);
+		} else {
+			const first = entries[0], last = entries[entries.length - 1];
+			console.log(`  ${name} x${entries.length}: ${first.curPack}[${first.curSlot}]..${last.curPack}[${last.curSlot}] -> ${first.targetPack}[${first.targetSlot}]..${last.targetPack}[${last.targetSlot}]`);
+		}
+	}
 
 	let curFloor = character.map;
 	const go = async to => {
-		if (curFloor === to) return;
+		if (!to || curFloor === to) return;
+		console.log(`  [travel] ${curFloor} -> ${to}`);
 		const [x, y] = FLOOR_ENTRY[to][curFloor];
 		await smart_move({ map: to, x, y });
 		curFloor = to;
@@ -133,43 +150,52 @@ async function sortGlobalBank() {
 
 	let iters = 0;
 	while (iters++ < 500) {
-		const held = flat.filter(inInv);
+		const held     = flat.filter(inInv);
 		const unplaced = flat.filter(e => !placed(e) && !inInv(e));
 		if (!held.length && !unplaced.length) break;
 
-		console.log(`Pass ${iters}: ${unplaced.length} unplaced, ${held.length} in inv`);
+		console.log(`--- Pass ${iters}: ${unplaced.length} unplaced in bank, ${held.length} in inventory ---`);
 		let progress = false;
 
-		for (const entry of held) {
-			if (!inInv(entry)) continue;
-			await go(packFloor(entry.targetPack));
+		if (held.length) {
+			console.log(`[phase 1] depositing ${held.length} held items`);
+			for (const entry of [...held]) {
+				if (!inInv(entry)) continue;
+				const floor = packFloor(entry.targetPack);
+				await go(floor);
 
-			const occupant = loc.get(`${entry.targetPack}:${entry.targetSlot}`);
-			await bank_store(entry.curSlot, entry.targetPack, entry.targetSlot);
+				const occupant = loc.get(`${entry.targetPack}:${entry.targetSlot}`);
+				if (occupant && occupant !== entry)
+					console.log(`  storing ${entry.item.name} (lv${entry.item.level}) from inv[${entry.curSlot}] -> ${entry.targetPack}[${entry.targetSlot}], displacing ${occupant.item.name} (lv${occupant.item.level}) to inv`);
+				else
+					console.log(`  storing ${entry.item.name} (lv${entry.item.level}) from inv[${entry.curSlot}] -> ${entry.targetPack}[${entry.targetSlot}] (empty slot)`);
 
-			const invSlot = entry.curSlot;
-			moveToBank(entry, entry.targetPack, entry.targetSlot);
-
-			if (occupant && occupant !== entry) {
-				moveToInv(occupant, invSlot);
+				await bank_store(entry.curSlot, entry.targetPack, entry.targetSlot);
+				const invSlot = entry.curSlot;
+				moveToBank(entry, entry.targetPack, entry.targetSlot);
+				if (occupant && occupant !== entry) moveToInv(occupant, invSlot);
+				progress = true;
 			}
-			progress = true;
 		}
 
 		const stillUnplaced = flat.filter(e => !placed(e) && !inInv(e));
-		for (const entry of stillUnplaced) {
-			const fi = character.items.findIndex(it => !it);
-			if (fi === -1) break;
-			await go(packFloor(entry.curPack));
-			await bank_retrieve(entry.curPack, entry.curSlot, fi);
-			moveToInv(entry, fi);
-			progress = true;
+		if (stillUnplaced.length) {
+			console.log(`[phase 2] picking up ${stillUnplaced.length} unplaced items`);
+			for (const entry of stillUnplaced) {
+				const fi = character.items.findIndex(it => !it);
+				if (fi === -1) { console.log("  inventory full, will deposit next pass"); break; }
+				console.log(`  retrieving ${entry.item.name} (lv${entry.item.level}) from ${entry.curPack}[${entry.curSlot}] -> inv[${fi}] (target: ${entry.targetPack}[${entry.targetSlot}])`);
+				await go(packFloor(entry.curPack));
+				await bank_retrieve(entry.curPack, entry.curSlot, fi);
+				moveToInv(entry, fi);
+				progress = true;
+			}
 		}
 
-		if (!progress) { console.log("No progress, aborting"); break; }
+		if (!progress) { console.log("No progress made, aborting"); break; }
 	}
 
-	console.log("Global sort done, running per-floor fine sort...");
+	console.log("=== Global placement done, running per-floor fine sort ===");
 	for (const floor of ["bank", "bank_b", "bank_u"]) {
 		await go(floor);
 		await sortAllBank();

@@ -17,6 +17,10 @@ Game Log Filter:
 Adds toggle buttons to the game log window, letting you easily hide or show different types of messages.
 <img width="426" height="34" alt="image" src="https://github.com/user-attachments/assets/d1893422-d958-4490-86e0-161f934f54ce" />
 
+Gold History:
+Adds a top button to display the history of your gold. utilizes local storage and only saves 1 data entry per day                      
+<img width="2167" height="1123" alt="image" src="https://github.com/user-attachments/assets/1f4c6001-7013-4e3c-a29e-d985171a6141" />              
+
 Gold Meter:                                                
 Shows your average gold earnings over configurable time frames, including gold per minute, hour, or day.
 <img width="428" height="72" alt="image" src="https://github.com/user-attachments/assets/028eb9b5-8a23-47af-8392-f53284cc6b8b" />

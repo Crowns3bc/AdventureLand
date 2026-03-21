@@ -4,16 +4,17 @@
 // ============================================================================
 const home = 'targetron';
 const mobMap = 'uhills';
-const allBosses = ['grinch', 'icegolem', 'dragold', 'mrgreen', 'mrpumpkin', 'greenjr', 'jr', 'franky', 'rgoo', 'bgoo'];
+const allBosses = ['grinch', 'icegolem', 'dragold', 'mrgreen', 'mrpumpkin', 'greenjr', 'jr', 'franky', 'rgoo', 'bgoo', 'crabxx', 'phoenix', 'mvampire'];
 
 const CONFIG = {
 	combat: {
 		enabled: true,
-		targetPriority: ['CrownPriest'],
+		targetPriority: ['CrownPriest', 'CrownTown'],
 		allBosses,
 		cleaveMinMobs: 1,
 		agitateMinMobs: 3,
-		tauntEnts: false
+		tauntEnts: false,
+		scare: false
 	},
 
 	movement: {
@@ -21,6 +22,15 @@ const CONFIG = {
 		circleWalk: true,
 		circleSpeed: 1.8,
 		circleRadius: 35,
+		moveThreshold: 10,
+		followKited: {
+			enabled: false,
+			targets: ['bscorpion', 'phoenix', 'mvampire'],
+			approachDistance: 0.5,  // Move halfway (0.5) or closer (0.8) or exact position (1.0)
+			maxFollowRange: 400,  // Don't chase beyond this distance
+			updateInterval: 50,  // How often to recalculate position (ms)
+			stopWhenInRange: true  // Stop moving when in attack range
+		}
 	},
 
 	equipment: {
@@ -29,20 +39,30 @@ const CONFIG = {
 		bossHpThresholds: {
 			mrpumpkin: 200000,
 			mrgreen: 200000,
+			grinch: 100000,
+			crabxx: 40000,
+			dragold: 200000,
 		},
-		singleTargetMaps: ['halloween', 'spookyforest', 'desertland'],
-		aoeMaps: ['cave', 'main', 'goobrawl', 'level2n', 'level2w', 'mforest', 'tunnel', 'uhills', 'winterland'],
+		singleTargetMaps: ['halloween', 'spookyforest', 'desertland', 'cave'],
+		aoeMaps: ['main', 'goobrawl', 'level2n', 'level2w', 'mforest', 'tunnel', 'uhills', 'winterland'],
 		cleaveMaps: ['cave', 'desertland', 'goobrawl', 'halloween', 'level2n', 'level2w', 'main', 'mforest', 'spookytown', 'uhills', 'winterland', 'level2e'],
-		mpThresholds: { upper: 2350, lower: 2250 },
+		mpThresholds: { upper: 2250, lower: 1850 },
 		chestThreshold: 12,
 		swapCooldown: 500,
 		boosterSwapEnabled: true,
-		capeSwapEnabled: true,
+		capeSwapEnabled: false,
 		coatSwapEnabled: true,
 		bossSetSwapEnabled: true,
-		weaponSwapEnabled: true
+		weaponSwapEnabled: true,
+		temporal: {
+			enabled: true,
+			targetMob: 'bscorpion',
+			orbName: 'orboftemporal',
+			skillName: 'temporalsurge',
+			characters: ['CrownPriest', 'CrownsAnal', 'CrownTown'], // Rotation order
+			storageKey: 'temporal_surge_rotation'
+		}
 	},
-
 	potions: {
 		autoBuy: true,
 		hpThreshold: 400,
@@ -71,10 +91,10 @@ const CONFIG = {
 // CONSTANTS
 // ============================================================================
 const TICK_RATE = {
-	main: 100,
+	main: 50,
 	action: 1,
 	skill: 40,
-	equipment: 25,
+	equipment: 50,
 	maintenance: 2000
 };
 
@@ -85,10 +105,12 @@ const COOLDOWNS = {
 
 const EVENT_LOCATIONS = [
 	{ name: 'mrpumpkin', map: 'halloween', x: -222, y: 720 },
-	{ name: 'mrgreen', map: 'spookytown', x: 610, y: 1000 }
+	{ name: 'mrgreen', map: 'spookytown', x: 610, y: 1000 },
+	//{ name: 'crabxx', map: 'main', x: -961, y: 1780, join: true },
+	{ name: 'dragold', map: 'cave', x: 1150, y: -850 }
 ];
 
-const CACHE_TTL = 100;
+const CACHE_TTL = 50;
 
 // ============================================================================
 // STATE & CACHE
@@ -96,6 +118,7 @@ const CACHE_TTL = 100;
 const state = {
 	skinReady: false,
 	lastBasherSwap: 0,
+	lastCircleWalk: 0,
 	lastCleaveSwap: 0,
 	lastCapeSwap: 0,
 	lastCoatSwap: 0,
@@ -166,8 +189,8 @@ const destination = {
 
 const equipmentSets = {
 	single: [
-		{ itemName: "fireblade", slot: "mainhand", level: 13, l: "s" },
-		{ itemName: "candycanesword", slot: "offhand", level: 13, l: "s" },
+		{ itemName: "candycanesword", slot: "mainhand", level: 13, l: "s" },
+		{ itemName: "fireblade", slot: "offhand", level: 13, l: "s" },
 	],
 	aoe: [
 		{ itemName: "vhammer", slot: "mainhand", level: 9, l: "s" },
@@ -182,34 +205,27 @@ const equipmentSets = {
 	dps: [
 		{ itemName: "cearring", slot: "earring1", level: 5, l: "l" },
 		{ itemName: "cearring", slot: "earring2", level: 5, l: "u" },
-		{ itemName: "coat", slot: "chest", level: 13, l: "l" },
+		//{ itemName: "coat", slot: "chest", level: 13, l: "l" },
 		{ itemName: "orbofstr", slot: "orb", level: 5, l: "l" },
 		{ itemName: "suckerpunch", slot: "ring1", level: 2, l: "l" },
 		{ itemName: "suckerpunch", slot: "ring2", level: 2, l: "u" },
-		{ itemName: "fireblade", slot: "mainhand", level: 13, l: "s" },
-		{ itemName: "candycanesword", slot: "offhand", level: 13, l: "s" },
+		//{ itemName: "fireblade", slot: "mainhand", level: 13, l: "s" },
+		//{ itemName: "candycanesword", slot: "offhand", level: 13, l: "s" },
 	],
 	luck: [
-		{ itemName: "mearring", slot: "earring1", level: 0, l: "l" },
-		{ itemName: "mearring", slot: "earring2", level: 0, l: "u" },
+		{ itemName: "mearring", slot: "earring1", level: 1, l: "l" },
+		{ itemName: "mearring", slot: "earring2", level: 1, l: "u" },
 		{ itemName: "rabbitsfoot", slot: "orb", level: 2, l: "l" },
 		{ itemName: "ringofluck", slot: "ring2", level: 0, l: "u" },
 		{ itemName: "ringofluck", slot: "ring1", level: 0, l: "l" },
 		{ itemName: "mshield", slot: "offhand", level: 9, l: "l" },
 		{ itemName: "tshirt88", slot: "chest", level: 0, l: "l" }
 	],
-	stealth: [
-		{ itemName: "stealthcape", slot: "cape", level: 0, l: "l" },
-	],
-	cape: [
-		{ itemName: "vcape", slot: "cape", level: 6, l: "l" },
-	],
-	mana: [
-		{ itemName: "tshirt9", slot: "chest", level: 6, l: "l" }
-	],
-	stat: [
-		{ itemName: "coat", slot: "chest", level: 13, l: "l" }
-	],
+	stealth: [{ itemName: "stealthcape", slot: "cape", level: 0, l: "l" }],
+	cape: [{ itemName: "vcape", slot: "cape", level: 6, l: "l" }],
+	mana: [{ itemName: "tshirt9", slot: "chest", level: 6, l: "l" }],
+	stat: [{ itemName: "coat", slot: "chest", level: 13, l: "l" }],
+
 	dpsAccessories: [
 		{ itemName: "cearring", slot: "earring1", level: 5, l: "l" },
 		{ itemName: "cearring", slot: "earring2", level: 5, l: "u" },
@@ -224,70 +240,61 @@ const equipmentSets = {
 // ============================================================================
 function updateCache() {
 	if (!cache.isValid()) {
-		cache.target = findBestTarget();
-		cache.partyMembers = getPartyMembers();
-		cache.lastUpdate = performance.now();
+		const now = performance.now();
+
+		// Single-pass entity scan for ALL cached data
+		cache.target = null;
+		cache.tankEntity = get_entity('CrownPriest');
+		cache.mobCount = 0;
+		cache.hasLowBoss = false;
+		cache.monstersInCleaveRange = [];
+
+		const tankName = cache.tankEntity?.name;
+		const cleaveRange = G.skills.cleave.range;
+
+		// ONE loop to gather everything
+		for (const id in parent.entities) {
+			const e = parent.entities[id];
+			if (e.type !== 'monster' || e.dead) continue;
+
+			// Count mobs targeting tank
+			if (tankName && e.target === tankName) {
+				cache.mobCount++;
+			}
+
+			// Check for low boss
+			if (!cache.hasLowBoss &&
+				CONFIG.combat.allBosses.includes(e.mtype) &&
+				e.hp < (CONFIG.equipment.bossHpThresholds[e.mtype] || Infinity)) {
+				cache.hasLowBoss = true;
+			}
+
+			// Cleave range check
+			if (e.visible && distance(character, e) <= cleaveRange) {
+				cache.monstersInCleaveRange.push(e);
+			}
+
+			// Find best target (if not already found)
+			if (!cache.target && e.visible) {
+				const dist = distance(character, e);
+				if (dist <= character.range) {
+					// Boss priority
+					if (CONFIG.combat.allBosses.includes(e.mtype)) {
+						cache.target = e;
+						continue;
+					}
+
+					// Target priority with curse
+					if (CONFIG.combat.targetPriority.includes(e.target) && e.s?.cursed) {
+						cache.target = e;
+					}
+				}
+			}
+		}
+
+		cache.partyMembers = Object.keys(get_party() || {});
+		cache.lastUpdate = now;
 	}
-
-	cache.tankEntity = get_entity('CrownPriest')
-	cache.monstersInCleaveRange = findMonstersInCleaveRange();
-}
-
-function findBestTarget() {
-	// Priority 1: Bosses
-	for (const bossType of CONFIG.combat.allBosses) {
-		const boss = get_nearest_monster_v2({
-			type: bossType,
-			max_distance: character.range
-		});
-		if (boss) return boss;
-	}
-
-	// Priority 2: Targets with curse
-	for (const name of CONFIG.combat.targetPriority) {
-		const target = get_nearest_monster_v2({
-			target: name,
-			max_distance: character.range,
-			statusEffects: ['cursed']
-		});
-		if (target) return target;
-	}
-
-	// Priority 3: Targets with max HP
-	for (const name of CONFIG.combat.targetPriority) {
-		const target = get_nearest_monster_v2({
-			target: name,
-			check_max_hp: true,
-			max_distance: character.range
-		});
-		if (target) return target;
-	}
-
-	return null;
-}
-
-function getPartyMembers() {
-	return Object.keys(get_party() || {});
-}
-
-function findMonstersInCleaveRange() {
-	return Object.values(parent.entities).filter(e =>
-		e?.type === 'monster' &&
-		!e.dead &&
-		e.visible &&
-		distance(character, e) <= G.skills.cleave.range
-	);
-}
-
-function mobCount() {
-	const tankName = cache.tankEntity?.name;
-	if (!tankName) return 0;
-
-	return Object.values(parent.entities).filter(e =>
-		e?.type === 'monster' &&
-		e.target === tankName &&
-		!e.dead
-	).length;
 }
 
 // ============================================================================
@@ -296,7 +303,7 @@ function mobCount() {
 async function mainLoop() {
 	try {
 		if (is_disabled(character)) {
-			return setTimeout(mainLoop, 250);
+			return setTimeout(mainLoop, 500);
 		}
 
 		updateCache();
@@ -304,12 +311,17 @@ async function mainLoop() {
 		if (shouldHandleEvents()) {
 			handleEvents();
 		}
-
 		else if (CONFIG.movement.enabled) {
 			if (!get_nearest_monster({ type: home })) {
 				handleReturnHome();
+			} else if (CONFIG.movement.followKited.enabled) {
+				await follower.followKited();
 			} else if (CONFIG.movement.circleWalk) {
-				walkInCircle();
+				const now = performance.now();
+				if (now - state.lastCircleWalk >= 150) {
+					state.lastCircleWalk = now;
+					walkInCircle();
+				}
 			}
 		}
 
@@ -331,28 +343,22 @@ async function actionLoop() {
 			return setTimeout(actionLoop, 25);
 		}
 
-		// Keep cache fresh even while waiting on cooldowns
 		updateCache();
 
 		const target = cache.target;
 		const msUntilAttack = ms_to_next_skill('attack');
 
-		if (
-			target &&
-			msUntilAttack < character.ping / 10 &&
-			is_in_range(target) &&
-			!smart.moving
-		) {
-			await attack(target);
+		if (target && msUntilAttack === 0 && is_in_range(target)) {
+			await use_skill("attack", target);
 		} else {
-			if (msUntilAttack > 200) delay = 40;
+			if (msUntilAttack > 200) delay = 100;
 			else if (msUntilAttack > 60) delay = 20;
 			else delay = 5;
 		}
 
 	} catch (e) {
-		console.error('actionLoop error:', e);
-		delay = 1;
+		//console.error('actionLoop error:', e);
+		delay = 5;
 	}
 
 	setTimeout(actionLoop, delay);
@@ -432,7 +438,8 @@ async function handleStomp() {
 	await use_skill('stomp');
 
 	if (needsSwap) {
-		const targetSet = mobCount() === 1 ? 'single' : 'aoe';
+		const targetSet = CONFIG.equipment.singleTargetMaps.includes(character.map) ? 'single' : 'aoe';
+		state.lastBossSetSwap = now;
 		equipBatch(equipmentSets[targetSet]);
 	}
 }
@@ -441,6 +448,7 @@ async function handleCleave() {
 	const msUntilCleave = ms_to_next_skill('cleave');
 	if (msUntilCleave !== 0) return;
 	if (!canCleave()) return;
+	if (cache.hasLowBoss) return false;
 
 	const mainhand = character.slots?.mainhand?.name;
 	const needsSwap = mainhand !== 'bataxe';
@@ -454,10 +462,9 @@ async function handleCleave() {
 
 	await use_skill('cleave');
 
-	if (needsSwap) {
-		const targetSet = mobCount() === 1 ? 'single' : 'aoe';
-		equipBatch(equipmentSets[targetSet]);
-	}
+	const targetSet = CONFIG.equipment.singleTargetMaps.includes(character.map) ? 'single' : 'aoe';
+	state.lastBossSetSwap = now;
+	equipBatch(equipmentSets[targetSet]);
 }
 
 function canCleave() {
@@ -467,7 +474,7 @@ function canCleave() {
 	if (character.cc >= COOLDOWNS.cc) return false;
 	if (ms_to_next_skill('attack') <= 75) return false;
 
-	const requiredMP = character.mp_cost * 2 + G.skills.cleave.mp + 320;
+	const requiredMP = character.mp_cost * 2 + G.skills.cleave.mp + 1000;
 	if (character.mp < requiredMP) return false;
 
 	const tank = cache.tankEntity;
@@ -486,37 +493,40 @@ function canCleave() {
 }
 
 async function handleAgitate(tank) {
-	if (is_on_cooldown('agitate') || !tank || tank.rip) return;
+	if (is_on_cooldown('agitate') || !tank?.rip === false) return;
 
-	const skillRange = G.skills.agitate.range;
-	const nearbyMobs = Object.values(parent.entities).filter(e =>
-		e.visible && !e.dead && e.type === 'monster' && distance(character, e) <= skillRange
-	);
+	const range = G.skills.agitate.range;
+	let crabCount = 0, crabTargeted = 0;
+	let otherCount = 0, otherTargeted = 0;
 
-	const crabx = nearbyMobs.filter(e => e.mtype === 'crabx');
-	const untargetedCrabs = crabx.filter(m => !m.target);
+	for (const id in parent.entities) {
+		const e = parent.entities[id];
+		if (e.type !== 'monster' || !e.visible || e.dead) continue;
+		if (distance(character, e) > range) continue;
+
+		if (e.mtype === 'crabx') {
+			crabCount++;
+			if (e.target) crabTargeted++;
+		} else if (['sparkbot', 'jr', 'greenjr', home].includes(e.mtype)) {
+			if (e.target !== character.name && e.target !== tank?.name) {
+				otherCount++;
+			}
+		}
+	}
 
 	// Crabx priority
-	if (crabx.length >= 5 && untargetedCrabs.length === 5) {
+	if (crabCount >= 3 && crabTargeted === 0) {
 		await use_skill('agitate');
+		game_log("Agitating " + crabCount + " crabs", "#EF8642");
 		return;
 	}
 
 	// Other mobs
-	const otherMobs = nearbyMobs.filter(e => ['sparkbot', 'jr', 'greenjr', home].includes(e.mtype));
-	const untargetedOther = otherMobs.filter(m => !m.target);
-
-	if (otherMobs.length >= CONFIG.combat.agitateMinMobs && untargetedOther.length >= CONFIG.combat.agitateMinMobs && !smart.moving) {
-		const needsProtecting = ['porcupine', 'redfairy'];
-		const nearbyThreat = needsProtecting.some(type => {
-			const target = get_nearest_monster({ type });
-			return target && is_in_range(target, 'agitate');
-		});
-
-		if (!nearbyThreat && distance(character, tank) <= 100) {
-			await use_skill('agitate');
-			game_log('Agitating!!');
-		}
+	if (otherCount >= CONFIG.combat.agitateMinMobs &&
+		!smart.moving &&
+		distance(character, tank) <= 100) {
+		await use_skill('agitate');
+		game_log("Agitating " + otherCount + " mobs", "#EF8642");
 	}
 }
 
@@ -559,7 +569,6 @@ async function maintenanceLoop() {
 		clearInventory();
 		inventorySorter();
 		elixirUsage();
-		scare();
 
 		if (character.rip && locate_item('xptome') !== -1) {
 			respawn();
@@ -605,11 +614,7 @@ async function equipmentLoop() {
 	const delay = TICK_RATE.equipment;
 
 	try {
-		if (!state.skinReady) {
-			return setTimeout(equipmentLoop, delay);
-		}
-
-		if (character.cc > COOLDOWNS.cc) {
+		if (!state.skinReady || character.cc > COOLDOWNS.cc) {
 			return setTimeout(equipmentLoop, delay);
 		}
 
@@ -619,7 +624,7 @@ async function equipmentLoop() {
 		// Don't swap if using special weapons
 		const mainhand = character.slots?.mainhand?.name;
 		if (mainhand === 'basher' || mainhand === 'bataxe') {
-			return setTimeout(equipmentLoop, delay);
+			//return setTimeout(equipmentLoop, delay);
 		}
 
 		// --- FIND ACTIVE BOSS ---
@@ -700,7 +705,7 @@ async function equipmentLoop() {
 
 				// Weapon swap based on mob count/map
 				if (CONFIG.equipment.weaponSwapEnabled) {
-					const homeCount = mobCount();
+					const homeCount = cache.mobCount;
 					if (homeCount === 1) {
 						if (!isSetEquipped('single')) {
 							equipSet('single');
@@ -730,7 +735,9 @@ async function equipmentLoop() {
 				state.lastBossSetSwap = now;
 			}
 		}
-
+		if (CONFIG.combat.scare) {
+			scare();
+		}
 	} catch (e) {
 		console.error('equipmentLoop error:', e);
 	}
@@ -778,7 +785,6 @@ function shouldHandleEvents() {
 function handleEvents() {
 	if (parent?.S?.holidayseason && !character?.s?.holidayspirit) {
 		if (!smart.moving) {
-			scare();
 			smart_move({ to: 'town' }, () => {
 				parent.socket.emit('interaction', { type: 'newyear_tree' });
 			});
@@ -789,15 +795,21 @@ function handleEvents() {
 	const aliveSorted = EVENT_LOCATIONS
 		.map(e => ({ ...e, data: parent.S[e.name] }))
 		.filter(e => e.data?.live)
-		.sort((a, b) => (a.data.hp / a.data.max_hp) - (b.data.hp / b.data.max_hp));
+		.sort((a, b) =>
+			(a.data.hp / a.data.max_hp) - (b.data.hp / b.data.max_hp)
+		);
 
 	if (!aliveSorted.length) return;
 
 	const target = aliveSorted[0];
 
+	if (target.join === true && character.map !== target.map) {
+		parent.socket.emit('join', { name: target.name });
+		return;
+	}
+
 	if (!smart.moving) {
 		handleSpecificEvent(target.name, target.map, target.x, target.y);
-		scare();
 	}
 }
 
@@ -819,33 +831,123 @@ async function handleSpecificEvent(eventType, mapName, x, y) {
 }
 
 function handleReturnHome() {
+	if (distance(character, destination) < 20) return;
+
 	if (!smart.moving) {
 		smart_move(destination);
 	}
 }
 
-async function walkInCircle() {
-	if (smart.moving) return;
+const walkInCircle = async () => {
+	if (smart.moving || character.moving) return;
 
-	const center = locations[home][0];
-	const radius = CONFIG.movement.circleRadius;
+	const { x: centerX, y: centerY } = locations[home][0];
+	const now = performance.now();
+	const delta = (now - state.lastAngleUpdate) / 1000;
 
-	const currentTime = performance.now();
-	const deltaTime = currentTime - state.lastAngleUpdate;
-	state.lastAngleUpdate = currentTime;
+	state.angle = (state.angle - CONFIG.movement.circleSpeed * delta) % (2 * Math.PI);
+	state.lastAngleUpdate = now;
 
-	const deltaAngle = CONFIG.movement.circleSpeed * (deltaTime / 1000);
-	state.angle = (state.angle + deltaAngle) % (2 * Math.PI);
+	const targetX = centerX + Math.cos(state.angle) * CONFIG.movement.circleRadius;
+	const targetY = centerY + Math.sin(state.angle) * CONFIG.movement.circleRadius;
 
-	const offsetX = Math.cos(state.angle) * radius;
-	const offsetY = Math.sin(state.angle) * radius;
-	const targetX = center.x + offsetX;
-	const targetY = center.y + offsetY;
-
-	if (!character.moving) {
+	const distToTarget = Math.hypot(character.x - targetX, character.y - targetY);
+	if (distToTarget > CONFIG.movement.moveThreshold) {
 		await xmove(targetX, targetY);
 	}
+};
+
+const follower = {
+	async followKited() {
+		if (!CONFIG.movement.followKited.enabled) return false;
+		if (smart.moving) return false;
+
+		const target = get_nearest_monster_v2({
+			type: CONFIG.movement.followKited.targets,
+			max_distance: CONFIG.movement.followKited.maxFollowRange
+		});
+
+		if (!target) return false;
+
+		if (CONFIG.movement.followKited.stopWhenInRange && is_in_range(target, 40)) return true;
+
+		const dx = target.real_x - character.real_x;
+		const dy = target.real_y - character.real_y;
+		const approachX = character.real_x + dx * CONFIG.movement.followKited.approachDistance;
+		const approachY = character.real_y + dy * CONFIG.movement.followKited.approachDistance;
+
+		if (!smart.moving) {
+			await xmove(approachX, approachY);
+		}
+
+		return true;
+	}
+};
+
+// ============================================================================
+// TEMPORAL SURGE COORDINATION
+// ============================================================================
+function getTemporalRotation() {
+	const stored = localStorage.getItem(CONFIG.equipment.temporal.storageKey);
+	if (!stored) {
+		const initial = {
+			lastUser: null,
+			nextIndex: 0,
+			lastKillTime: 0
+		};
+		localStorage.setItem(CONFIG.equipment.temporal.storageKey, JSON.stringify(initial));
+		return initial;
+	}
+	return JSON.parse(stored);
 }
+
+function updateTemporalRotation() {
+	const rotation = getTemporalRotation();
+	rotation.lastUser = character.name;
+	rotation.nextIndex = (rotation.nextIndex + 1) % CONFIG.equipment.temporal.characters.length;
+	rotation.lastKillTime = Date.now();
+	localStorage.setItem(CONFIG.equipment.temporal.storageKey, JSON.stringify(rotation));
+}
+
+function isMyTurnForTemporal() {
+	const rotation = getTemporalRotation();
+	const myIndex = CONFIG.equipment.temporal.characters.indexOf(character.name);
+
+	if (myIndex === -1) return false;
+
+	return rotation.lastUser === null || rotation.nextIndex === myIndex;
+}
+
+async function handleTemporalSurge() {
+	if (!CONFIG.equipment.temporal.enabled) return;
+	if (!isMyTurnForTemporal()) return;
+
+	const orbSlot = character.items.findIndex(i => i?.name === 'orboftemporal');;
+	if (orbSlot === -1) {
+		game_log(`Missing ${CONFIG.equipment.temporal.orbName}!`, 'red');
+		return;
+	}
+
+	try {
+		equip(orbSlot, 'orb');
+		use_skill(CONFIG.equipment.temporal.skillName);
+		game_log(`⏰ Temporal Surge used on ${CONFIG.equipment.temporal.targetMob}!`, '#00FFFF');
+		updateTemporalRotation();
+		equip(orbSlot, 'orb');
+	} catch (e) {
+		game_log(`Temporal surge failed: ${e}`, 'red');
+		console.error('Temporal surge error:', e);
+	}
+}
+
+parent.socket.on('kill_credit', async (data) => {
+	if (!CONFIG.equipment.temporal.enabled) return;
+	if (data.mtype !== CONFIG.equipment.temporal.targetMob) return;
+
+	if (!is_on_cooldown("temporalsurge")) {
+		await handleTemporalSurge();
+	}
+});
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -858,12 +960,12 @@ function clearInventory() {
 		send_gold(lootMule, character.gold - 5000000);
 	}
 
-	const itemsToExclude = ['hpot1', 'mpot1', 'luckbooster', 'goldbooster', 'xpbooster', 'pumpkinspice', 'xptome'];
+	const itemsToExclude = ['hpot1', 'mpot1', 'luckbooster', 'xpbooster', 'pumpkinspice', 'xptome'];
 
 	for (let i = 0; i < character.items.length; i++) {
 		const item = character.items[i];
 		if (item && !itemsToExclude.includes(item.name) && !item.l && !item.s) {
-			if (is_in_range(lootMule, 'attack')) {
+			if (is_in_range(lootMule, "zapperzap")) {
 				send_item(lootMule.id, i, item.q ?? 1);
 			}
 		}
@@ -871,18 +973,22 @@ function clearInventory() {
 }
 
 const moveStuff = {
-	basher: 40,
-	computer: 1,
-	fireblade: 35,
-	hpot1: 2,
-	luckbooster: 6,
-	mpot1: 3,
-	pumpkinspice: 5,
-	rapier: 41,
-	scythe: 39,
 	tracker: 0,
-	candycanesword: 36,
+	computer: 1,
+	hpot1: 2,
+	mpot1: 3,
 	xptome: 4,
+	pumpkinspice: 5,
+	luckbooster: 6,
+	vhammer: 24,
+	glolipop: 25,
+	fireblade: 35,
+	candycanesword: 36,
+	vattire: 37,
+	mshield: 38,
+	bataxe: 39,
+	basher: 40,
+	rapier: 41,
 };
 
 function inventorySorter() {
@@ -924,11 +1030,8 @@ function scare() {
 		const current = parent.entities[id];
 
 		if (current.type === 'monster' && current.target === character.name && current.mtype !== 'grinch') {
-			if (!targetStartTimes[id]) {
-				targetStartTimes[id] = currentTime;
-			} else if (currentTime - targetStartTimes[id] > 1000) {
-				shouldScare = true;
-			}
+			targetStartTimes[id] ??= currentTime;
+			if (currentTime - targetStartTimes[id] > 1000) shouldScare = true;
 		} else {
 			delete targetStartTimes[id];
 		}
@@ -979,6 +1082,11 @@ setInterval(suicide, 50);
 function sleep(ms) {
 	return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+setInterval(() => {
+	if (character?.afk && !parent?.paused) pause();
+	else if (!character?.afk && parent?.paused) pause();
+}, 50);
 
 // ============================================================================
 // ESSENTIAL HELPER FUNCTIONS

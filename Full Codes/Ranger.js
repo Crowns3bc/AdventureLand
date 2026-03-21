@@ -1,17 +1,18 @@
 // ============================================================================
-// CONFIGURATION - Toggle features here instead of editing code
+// CONFIGURATION
 // ============================================================================
 const home = 'targetron';
 const mobMap = 'uhills';
+const homeServer = 'USIII';
 const allBosses = ['grinch', 'icegolem', 'dragold', 'mrgreen', 'mrpumpkin', 'greenjr', 'jr', 'franky', 'rgoo', 'bgoo', 'crabxx'];
 
 const CONFIG = {
 	combat: {
 		enabled: true,
-		targetPriority: ['CrownTown', 'CrownPriest'],
-		alwaysAttack: ['crabx'], // Attack regardless of target
-		attackIfTargeted: [...allBosses, 'phoenix'], // Only attack if has target
-		neverAttack: ['nerfedmummy'], // Never attack
+		targetPriority: ['CrownPriest'],
+		alwaysAttack: ['crabx'],
+		attackIfTargeted: [...allBosses, 'phoenix'],
+		neverAttack: ['nerfedmummy', 'bat'],
 		useHuntersMark: true,
 		useSupershot: true,
 		minTargetsFor5Shot: 4,
@@ -24,7 +25,22 @@ const CONFIG = {
 		circleSpeed: 0.95,
 		circleRadius: 75,
 		moveThreshold: 10,
-		clumpRadius: 65
+		clumpRadius: 65,
+		rangedKiting: {
+			enabled: false,
+			targets: ['bscorpion'],
+			minDistance: 155,
+			maxDistance: null,
+			rangeBuffer: 20,
+			optimalDistance: 170,
+			moveThrottle: 100,
+			sampleAngles: 90,
+			moveDistance: 30,
+			prioritizeDistance: true,
+			repositionThreshold: 20,
+			maxKiteRange: 400,
+			debug: false
+		}
 	},
 
 	equipment: {
@@ -33,6 +49,7 @@ const CONFIG = {
 			mrgreen: 100000,
 			crabxx: 100000,
 			grinch: 100000,
+			dragold: 200000,
 		},
 		mpThresholds: { upper: 1700, lower: 2100 },
 		chestThreshold: 12,
@@ -41,9 +58,17 @@ const CONFIG = {
 		coatSwapEnabled: true,
 		bossSetSwapEnabled: true,
 		xpSetSwapEnabled: true,
-		xpMonsters: [home, 'sparkbot'],
+		xpMonsters: ['sparkbot'],
 		xpMobHpThreshold: 12000,
 		useLicence: false,
+		temporal: {
+			enabled: true,
+			targetMob: 'bscorpion',
+			orbName: 'orboftemporal',
+			skillName: 'temporalsurge',
+			characters: ['CrownPriest', 'CrownsAnal', 'CrownTown'],
+			storageKey: 'temporal_surge_rotation'
+		}
 	},
 
 	potions: {
@@ -61,21 +86,17 @@ const CONFIG = {
 	looting: {
 		enabled: true,
 		delayMs: 180000,
-		lootMonth: 'lootItemsJan'
+		lootMonth: 'lootItemsFeb'
 	},
 
 	selling: {
 		enabled: true,
 		whitelist: ['vitearring', 'iceskates', 'cclaw', 'hpbelt', 'ringsj', 'hpamulet',
 			'warmscarf', 'quiver', 'snowball', 'vitring', 'wbreeches', 'wgloves',
-			'strring', 'dexring', 'intring']
+			'wattire', 'wshoes', 'wcap', 'strring', 'dexring', 'intring', 'wbook0']
 	},
 
-	upgrading: {
-		enabled: false,
-		whitelist: {}
-	},
-
+	upgrading: { enabled: false, whitelist: {} },
 	combining: {
 		enabled: false,
 		whitelist: {
@@ -88,7 +109,7 @@ const CONFIG = {
 	characterStarter: {
 		enabled: true,
 		characters: {
-			MERCHANT: { name: 'CrownMerch', codeSlot: 95 },
+			MERCHANT: { name: 'CrownMerch', codeSlot: 4 },
 			PRIEST: { name: 'CrownPriest', codeSlot: 3 },
 			WARRIOR: { name: 'CrownTown', codeSlot: 2 }
 		}
@@ -99,28 +120,41 @@ const CONFIG = {
 		targetPlayer: 'CrownMerch',
 		checkInterval: 1000,
 		lowInventorySlots: 7
+	},
+
+	dragold: {
+		enabled: true,
+		// How far before spawn time we're willing to hop to a shard
+		preSpawnBuffer: 5000,
 	}
 };
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-const TICK_RATE = {
-	main: 100,
-	action: 1,
-	equipment: 25,
-	maintenance: 2000
-};
-
+const TICK_RATE = { main: 100, action: 1, mark: 40, equipment: 25, maintenance: 2000 };
 const COOLDOWNS = { cc: 135 };
+const CACHE_TTL = 50;
 
 const EVENT_LOCATIONS = [
 	{ name: 'mrpumpkin', map: 'halloween', x: -217, y: 720 },
 	{ name: 'mrgreen', map: 'spookytown', x: 605, y: 1000 },
-	{ name: 'crabxx', map: 'main', x: -971, y: 1780, join: true }
+	//{ name: 'crabxx', map: 'main', x: -971, y: 1780, join: true },
+	{ name: 'dragold', map: 'cave', x: 1200, y: -850 }
 ];
 
-const CACHE_TTL = 50;
+const REGIONS = ['US', 'EU', 'ASIA'];
+
+// ============================================================================
+// OPTIMIZED LOOKUPS
+// ============================================================================
+const COMBAT_SETS = {
+	neverAttack: new Set(CONFIG.combat.neverAttack),
+	attackIfTargeted: new Set(CONFIG.combat.attackIfTargeted),
+	alwaysAttack: new Set(CONFIG.combat.alwaysAttack),
+	targetPriority: new Set(CONFIG.combat.targetPriority),
+	xpMonsters: new Set(CONFIG.equipment.xpMonsters),
+};
 
 // ============================================================================
 // STATE & CACHE
@@ -138,17 +172,12 @@ const state = {
 };
 
 const cache = {
-	targets: { sortedByHP: [], inRange: [], outOfRange: [], clumped: [], lastUpdate: 0 },
+	targets: { sortedByHP: [], inRange: [], outOfRange: [], clumped: [] },
 	healTarget: null,
+	priestTargets: 0,
+	hasLowHpXpMob: false,
 	lastUpdate: 0,
-
-	isValid() {
-		return performance.now() - this.lastUpdate < CACHE_TTL;
-	},
-
-	invalidate() {
-		this.lastUpdate = 0;
-	}
+	isValid() { return performance.now() - this.lastUpdate < CACHE_TTL; }
 };
 
 // ============================================================================
@@ -157,7 +186,7 @@ const cache = {
 const locations = {
 	bat: [{ x: 1200, y: -782 }],
 	bigbird: [{ x: 1304, y: -69 }],
-	bscorpion: [{ x: -408, y: -1141 }],
+	bscorpion: [{ x: -561, y: -1400 }],
 	boar: [{ x: 19, y: -1109 }],
 	cgoo: [{ x: -221, y: -274 }],
 	crab: [{ x: -11840, y: -37 }],
@@ -188,11 +217,7 @@ const locations = {
 	xscorpion: [{ x: -495, y: 685 }]
 };
 
-const destination = {
-	map: mobMap,
-	x: locations[home][0].x,
-	y: locations[home][0].y
-};
+const destination = { map: mobMap, x: locations[home][0].x, y: locations[home][0].y };
 
 const equipmentSets = {
 	single: [
@@ -207,11 +232,8 @@ const equipmentSets = {
 		{ itemName: "pouchbow", slot: "mainhand", level: 13, l: "l" },
 		{ itemName: "alloyquiver", slot: "offhand", level: 10, l: "l" },
 	],
-	heal: [
-		{ itemName: "cupid", slot: "mainhand", level: 9, l: "l" },
-	],
+	heal: [{ itemName: "cupid", slot: "mainhand", level: 9, l: "l" }],
 	dps: [
-		//{ itemName: "dexamulet", slot: "amulet", level: 6, l: "l" },
 		{ itemName: "dexearring", slot: "earring2", level: 5, l: "l" },
 		{ itemName: "dexearring", slot: "earring1", level: 5, l: "l" },
 		{ itemName: "suckerpunch", slot: "ring1", level: 2, l: "l" },
@@ -219,6 +241,7 @@ const equipmentSets = {
 	],
 	luck: [
 		{ itemName: "mearring", slot: "earring1", level: 0, l: "l" },
+		{ itemName: "mearring", slot: "earring2", level: 0, l: "u" },
 		{ itemName: "rabbitsfoot", slot: "orb", level: 2, l: "l" },
 		{ itemName: "ringofluck", slot: "ring2", level: 0, l: "u" },
 		{ itemName: "ringofluck", slot: "ring1", level: 0, l: "l" }
@@ -229,20 +252,239 @@ const equipmentSets = {
 	],
 	orb: [
 		{ itemName: "orbofdex", slot: "orb", level: 5, l: "l" },
-		{ itemName: "amuletofm", slot: "amulet", level: 0, l: "l" },
+		{ itemName: "dexamulet", slot: "amulet", level: 6, l: "l" },
 	],
-	stealth: [
-		{ itemName: "stealthcape", slot: "cape", level: 0, l: "l" },
-	],
-	cape: [
-		{ itemName: "vcape", slot: "cape", level: 6, l: "l" },
-	],
-	mana: [
-		{ itemName: "tshirt9", slot: "chest", level: 7, l: "l" }
-	],
-	stat: [
-		{ itemName: "coat", slot: "chest", level: 12, l: "s" }
-	],
+	stealth: [{ itemName: "stealthcape", slot: "cape", level: 0, l: "l" }],
+	cape: [{ itemName: "vcape", slot: "cape", level: 6, l: "l" }],
+	mana: [{ itemName: "tshirt9", slot: "chest", level: 7, l: "l" }],
+	stat: [{ itemName: "coat", slot: "chest", level: 12, l: "s" }],
+};
+
+// ============================================================================
+// DRAGOLD SERVER HOPPING — STATE MACHINE
+// ============================================================================
+// States:
+//   IDLE      — no dragold to chase, normal play
+//   HOPPING   — changing server toward a dragold shard (blocks mainLoop movement)
+//   FIGHTING  — on the dragold shard, dragold is live here (lets handleEvents run)
+//   RETURNING — dragold here is dead, heading back to homeServer
+//
+// Critical rule: once FIGHTING, we stay until parent.S.dragold confirms dead locally.
+// Scan data NEVER causes us to leave a shard we're actively fighting on.
+// ============================================================================
+const dragold = {
+	state: 'IDLE',          // current state machine state
+	targetShard: null,      // shard we're hopping toward (or fighting on)
+	scanResults: [],        // latest scan data, updated by socket callbacks
+	hopping: false,         // true while change_server call is in flight (prevents re-entry)
+
+	// Called once at boot. Opens one socket per server; callbacks update scanResults forever.
+	startScanning() {
+		if (!CONFIG.dragold.enabled) return;
+		const servers = parent?.X?.servers;
+		if (!servers) return;
+
+		for (const server of servers) {
+			if (server.name === 'PVP') continue;
+			const shard = server.region + server.name;
+			const socket = parent.io(`https://${server.address}`, { path: server.path + 'socket.io', transports: ['websocket'] });
+			socket.on('server_info', (data) => {
+				if (!data?.dragold) return;
+				const spawnTime = new Date(data.dragold.spawn).getTime();
+				const idx = this.scanResults.findIndex(r => r.shard === shard);
+				const entry = { shard, live: data.dragold.live, spawnTime };
+				if (idx >= 0) this.scanResults[idx] = entry;
+				else this.scanResults.push(entry);
+			});
+		}
+	},
+
+	// Returns the current shard identifier string (e.g. "USIII")
+	currentShard() {
+		return parent.server_region + parent.server_identifier;
+	},
+
+	// Is dragold live on THIS server right now? Uses local authoritative data, not scan.
+	localDragoldLive() {
+		return parent?.S?.dragold?.live === true;
+	},
+
+	// Pick the best shard to hop to from scan results.
+	// Returns shard string or null if nothing worth chasing.
+	pickTargetShard() {
+		const now = Date.now();
+		const cur = this.currentShard();
+		let best = null;
+
+		for (const r of this.scanResults) {
+			if (r.shard === cur) continue; // don't hop to ourselves
+
+			if (r.live) {
+				// Live dragold on another shard — immediate priority
+				best = r;
+				break;
+			}
+
+			// Not live yet — only consider if spawn is coming soon
+			const untilSpawn = r.spawnTime - now;
+			if (untilSpawn > 0 && untilSpawn <= CONFIG.dragold.preSpawnBuffer) {
+				if (!best || r.spawnTime < best.spawnTime) best = r;
+			}
+		}
+
+		return best?.shard ?? null;
+	},
+
+	// Loot all pending chests before we leave. Returns true if still looting (block hop).
+	async lootBeforeHop() {
+		const chests = Object.keys(get_chests());
+		if (chests.length === 0) return false;
+
+		// Loot each chest by ID, one at a time
+		for (const id of chests) {
+			try { await loot(id); } catch (e) { /* chest may already be gone */ }
+		}
+		return true; // we looted this tick, let it settle before hopping
+	},
+
+	// Parse a shard string like "USIII" into { region: "US", name: "III" }
+	parseShard(shard) {
+		for (const region of REGIONS) {
+			if (shard.startsWith(region)) return { region, name: shard.slice(region.length) };
+		}
+		return null;
+	},
+
+	// Execute the actual server change. Returns true on success.
+	async changeServer(shard) {
+		const parsed = this.parseShard(shard);
+		if (!parsed) {
+			game_log(`dragold: can't parse shard "${shard}"`, 'red');
+			return false;
+		}
+		game_log(`🐉 Hopping to ${shard} for dragold`, '#FFD700');
+		this.hopping = true;
+		try {
+			change_server(parsed.region, parsed.name);
+			// change_server triggers a full reconnect; script will re-run on new shard.
+			// We set hopping=true so that if somehow tick fires before reconnect, we don't double-call.
+			return true;
+		} catch (e) {
+			game_log(`dragold: server change failed — ${e}`, 'red');
+			this.hopping = false;
+			return false;
+		}
+	},
+
+	// Main tick. Called every mainLoop iteration.
+	// Returns 'block' if mainLoop should skip movement/events this tick,
+	// or 'continue' if normal flow should proceed.
+	async tick() {
+		if (!CONFIG.dragold.enabled) return 'continue';
+		if (this.hopping) return 'block'; // change_server in flight, wait for reconnect
+
+		const cur = this.currentShard();
+
+		switch (this.state) {
+			// ─── IDLE ─────────────────────────────────────────────────────────
+			// Normal play. Watch scan for a dragold worth chasing.
+			case 'IDLE': {
+				// If we happen to be on a shard with a live dragold (e.g. it spawned
+				// while we were here), jump straight to FIGHTING.
+				if (this.localDragoldLive()) {
+					this.state = 'FIGHTING';
+					this.targetShard = cur;
+					game_log('🐉 Dragold live here — entering FIGHTING', '#FFD700');
+					return 'continue'; // let handleEvents navigate to it
+				}
+
+				const target = this.pickTargetShard();
+				if (target) {
+					this.state = 'HOPPING';
+					this.targetShard = target;
+					// fall through to HOPPING on this same tick
+				} else {
+					return 'continue';
+				}
+			}
+			// falls through intentionally when a target is found
+
+			// ─── HOPPING ──────────────────────────────────────────────────────
+			// Heading to a dragold shard. Loot chests first, then change server.
+			case 'HOPPING': {
+				// If we already arrived (script re-ran on new shard), transition.
+				if (cur === this.targetShard) {
+					if (this.localDragoldLive()) {
+						this.state = 'FIGHTING';
+						game_log('🐉 Arrived — dragold is live, FIGHTING', '#FFD700');
+						return 'continue';
+					}
+					// Arrived but dragold isn't live (killed before we got here, or pre-spawn hasn't fired)
+					game_log('🐉 Arrived but dragold not live here — back to IDLE', '#FFD700');
+					this.state = 'IDLE';
+					this.targetShard = null;
+					return 'continue';
+				}
+
+				// Still on old shard — loot chests then hop
+				if (await this.lootBeforeHop()) return 'block'; // looted this tick, wait
+
+				await this.changeServer(this.targetShard);
+				return 'block';
+			}
+
+			// ─── FIGHTING ─────────────────────────────────────────────────────
+			// On the dragold shard. Stay here until dragold is confirmed dead LOCALLY.
+			// We deliberately ignore scan data here — parent.S.dragold is authoritative.
+			case 'FIGHTING': {
+				if (this.localDragoldLive()) {
+					return 'continue'; // still alive, let handleEvents do the fight
+				}
+				// Dragold is dead on this shard. Time to leave.
+				game_log('🐉 Dragold dead — RETURNING home', '#FFD700');
+				this.state = 'RETURNING';
+				this.targetShard = null;
+				// fall through to RETURNING on same tick
+			}
+			// falls through intentionally
+
+			// ─── RETURNING ────────────────────────────────────────────────────
+			// Dragold here is dead. Head back to homeServer unless a new LIVE dragold
+			// popped somewhere (pre-spawn only is not enough — we want to go home first).
+			case 'RETURNING': {
+				// Check if a live dragold appeared elsewhere while we're returning.
+				// Only react to actually-live ones, not pre-spawn timers.
+				const liveShard = this.scanResults.find(
+					r => r.shard !== cur && r.live
+				)?.shard;
+
+				if (liveShard) {
+					this.state = 'HOPPING';
+					this.targetShard = liveShard;
+					game_log(`🐉 New live dragold on ${liveShard} — diverting`, '#FFD700');
+					// fall through to HOPPING handled next tick
+					return 'block';
+				}
+
+				// No live dragold elsewhere. Are we home yet?
+				if (cur === homeServer) {
+					this.state = 'IDLE';
+					this.targetShard = null;
+					return 'continue'; // we're home, resume normal
+				}
+
+				// Not home yet — hop home
+				if (await this.lootBeforeHop()) return 'block';
+
+				await this.changeServer(homeServer);
+				return 'block';
+			}
+
+			default:
+				this.state = 'IDLE';
+				return 'continue';
+		}
+	}
 };
 
 // ============================================================================
@@ -250,69 +492,69 @@ const equipmentSets = {
 // ============================================================================
 const shouldAttackMob = (mob) => {
 	if (!mob || mob.dead) return false;
-
-	// 1. Never attack blacklist
-	if (CONFIG.combat.neverAttack.includes(mob.mtype)) return false;
-
-	// 2. Bosses: only if they already have a target
-	if (CONFIG.combat.attackIfTargeted.includes(mob.mtype)) {
+	if (COMBAT_SETS.neverAttack.has(mob.mtype)) return false;
+	if (COMBAT_SETS.attackIfTargeted.has(mob.mtype)) {
 		return mob.target !== null && mob.target !== undefined;
 	}
-
-	// 3. Always attack whitelist (e.g., crabx)
-	if (CONFIG.combat.alwaysAttack.includes(mob.mtype)) return true;
-
-	// 4. Default: attack if targeting party members
-	return CONFIG.combat.targetPriority.includes(mob.target);
+	if (COMBAT_SETS.alwaysAttack.has(mob.mtype)) return true;
+	return COMBAT_SETS.targetPriority.has(mob.target);
 };
 
 const updateCache = () => {
-	const now = performance.now();
-	cache.targets = updateTargetCache();
-	cache.healTarget = findHealTarget();
-	cache.lastUpdate = now;
-};
+	if (!cache.isValid()) {
+		const now = performance.now();
+		const { x: homeX, y: homeY } = locations[home][0];
+		const clumpRadius = CONFIG.movement.clumpRadius;
+		const xpHpThreshold = CONFIG.equipment.xpMobHpThreshold;
 
-const updateTargetCache = () => {
-	const { x: homeX, y: homeY } = locations[home][0];
-	const clumpRadius = CONFIG.movement.clumpRadius;
-	const sortedByHP = [];
+		cache.priestTargets = 0;
+		cache.hasLowHpXpMob = false;
 
-	for (const id in parent.entities) {
-		const e = parent.entities[id];
-		if (e.type === 'monster' && shouldAttackMob(e)) {
-			sortedByHP.push(e);
-		}
-	}
+		const sortedByHP = [];
 
-	// Sort: Bosses FIRST, then alwaysAttack, then by HP
-	sortedByHP.sort((a, b) => {
-		const aBoss = CONFIG.combat.attackIfTargeted.includes(a.mtype);
-		const bBoss = CONFIG.combat.attackIfTargeted.includes(b.mtype);
-		if (aBoss !== bBoss) return bBoss - aBoss;
+		for (const id in parent.entities) {
+			const e = parent.entities[id];
+			if (e.type !== 'monster') continue;
 
-		const aPriority = CONFIG.combat.alwaysAttack.includes(a.mtype);
-		const bPriority = CONFIG.combat.alwaysAttack.includes(b.mtype);
-		if (aPriority !== bPriority) return bPriority - aPriority;
+			if (e.target === 'CrownPriest') cache.priestTargets++;
 
-		return b.hp - a.hp;
-	});
-
-	const inRange = [], outOfRange = [], clumped = [];
-
-	for (const mob of sortedByHP) {
-		if (is_in_range(mob)) {
-			inRange.push(mob);
-
-			if (Math.hypot(mob.x - homeX, mob.y - homeY) <= clumpRadius) {
-				clumped.push(mob);
+			if (!cache.hasLowHpXpMob && !e.dead &&
+				COMBAT_SETS.xpMonsters.has(e.mtype) &&
+				e.hp < xpHpThreshold) {
+				cache.hasLowHpXpMob = true;
 			}
-		} else {
-			outOfRange.push(mob);
-		}
-	}
 
-	return { sortedByHP, inRange, outOfRange, clumped };
+			if (shouldAttackMob(e)) sortedByHP.push(e);
+		}
+
+		sortedByHP.sort((a, b) => {
+			const aBoss = COMBAT_SETS.attackIfTargeted.has(a.mtype);
+			const bBoss = COMBAT_SETS.attackIfTargeted.has(b.mtype);
+			if (aBoss !== bBoss) return bBoss - aBoss;
+
+			const aPriority = COMBAT_SETS.alwaysAttack.has(a.mtype);
+			const bPriority = COMBAT_SETS.alwaysAttack.has(b.mtype);
+			if (aPriority !== bPriority) return bPriority - aPriority;
+
+			return b.hp - a.hp;
+		});
+
+		const inRange = [], outOfRange = [], clumped = [];
+		for (const mob of sortedByHP) {
+			if (is_in_range(mob)) {
+				inRange.push(mob);
+				if (Math.hypot(mob.x - homeX, mob.y - homeY) <= clumpRadius) {
+					clumped.push(mob);
+				}
+			} else {
+				outOfRange.push(mob);
+			}
+		}
+
+		cache.targets = { sortedByHP, inRange, outOfRange, clumped };
+		cache.healTarget = findHealTarget();
+		cache.lastUpdate = now;
+	}
 };
 
 const findHealTarget = () => {
@@ -337,7 +579,7 @@ const findHealTarget = () => {
 // ============================================================================
 // MAIN TICK LOOP
 // ============================================================================
-const mainLoop = async () => {
+async function mainLoop() {
 	try {
 		if (is_disabled(character)) return setTimeout(mainLoop, 250);
 
@@ -354,18 +596,35 @@ const mainLoop = async () => {
 			}
 		}
 
-		shouldHandleEvents() ? handleEvents() :
-			CONFIG.movement.enabled && (!get_nearest_monster({ type: home }) ?
-				handleReturnHome() :
-				CONFIG.movement.circleWalk && walkInCircle());
+		// Dragold state machine runs first. If it says 'block', skip everything else
+		// this tick (we're in the middle of hopping or looting before a hop).
+		if (await dragold.tick() === 'block') {
+			return setTimeout(mainLoop, TICK_RATE.main);
+		}
+
+		// Normal event/movement flow. dragold in FIGHTING state returns 'continue',
+		// and handleEvents() will pick up dragold from EVENT_LOCATIONS naturally.
+		if (shouldHandleEvents()) {
+			handleEvents();
+		}
+		else if (CONFIG.movement.enabled) {
+			if (!get_nearest_monster({ type: home })) {
+				handleReturnHome();
+			} else if (CONFIG.movement.rangedKiting.enabled) {
+				await rangedKiting.kite();
+			} else if (CONFIG.movement.circleWalk) {
+				walkInCircle();
+			}
+		}
 	} catch (e) {
 		console.error('mainLoop error:', e);
 	}
+
 	setTimeout(mainLoop, TICK_RATE.main);
-};
+}
 
 // ============================================================================
-// ACTION LOOP - Attack and heal
+// ACTION LOOP
 // ============================================================================
 const actionLoop = async () => {
 	let delay = 5;
@@ -378,7 +637,7 @@ const actionLoop = async () => {
 		if (ms < character.ping / 10) {
 			if (cache.healTarget) {
 				equipSet('heal');
-				await attack(cache.healTarget);
+				await use_skill("attack", cache.healTarget);
 			} else await handleAttack();
 		} else {
 			delay = ms > 200 ? 50 : ms > 50 ? 20 : 5;
@@ -412,7 +671,7 @@ const handleAttack = async () => {
 		await use_skill('3shot', sortedByHP.slice(0, 3).map(e => e.id));
 	} else if (sortedByHP.length >= 1 && is_in_range(sortedByHP[0])) {
 		equipSet('single');
-		await attack(sortedByHP[0]);
+		await use_skill("attack", sortedByHP[0]);
 	}
 };
 
@@ -425,10 +684,10 @@ const skillLoop = async () => {
 		updateCache();
 
 		const { sortedByHP } = cache.targets;
-		if (!sortedByHP.length) return;
+		if (!sortedByHP.length) return setTimeout(skillLoop, 250);
 
 		const target = sortedByHP[0];
-		if (!target || !is_in_range(target)) return;
+		if (!target || !is_in_range(target)) return setTimeout(skillLoop, 250);
 
 		const msHunter = ms_to_next_skill('huntersmark');
 		const msSuper = ms_to_next_skill('supershot');
@@ -447,7 +706,10 @@ const skillLoop = async () => {
 		} else {
 			delay = minMs > 200 ? 100 : minMs > 50 ? 20 : 5;
 		}
-	} catch { delay = 1; }
+	} catch (e) {
+		console.error("skillLoop error:", e);
+		delay = 1;
+	}
 	setTimeout(skillLoop, delay);
 };
 
@@ -540,7 +802,7 @@ async function equipmentLoop() {
 		// Cape Swap
 		if (CONFIG.equipment.capeSwapEnabled && now - state.lastCapeSwap > swapCooldown) {
 			const chestCount = getNumChests();
-			const numTargets = getNumTargets('CrownPriest') || getNumTargets('CrownPal');
+			const numTargets = cache.priestTargets
 			const targetCapeSet = chestCount >= CONFIG.equipment.chestThreshold && numTargets < 6
 				? 'stealth'
 				: 'cape';
@@ -563,30 +825,30 @@ async function equipmentLoop() {
 			}
 		}
 
-		// XP Set Swap
-		if (CONFIG.equipment.xpSetSwapEnabled && now - state.lastXpSwap > swapCooldown && character.map === mobMap) {
-			const hasLowHpXpMob = Object.values(parent.entities).some(e =>
-				e?.type === 'monster' && !e.dead &&
-				CONFIG.equipment.xpMonsters.includes(e.mtype) &&
-				e.hp < CONFIG.equipment.xpMobHpThreshold
-			);
-			const targetXpSet = hasLowHpXpMob ? 'xp' : 'orb';
+		if (now - state.lastBossSetSwap > swapCooldown) {
+			if (activeBoss && activeBoss.data.hp <= CONFIG.equipment.bossHpThresholds[activeBoss.name]) {
+				// Boss is low —  luck set
+				if (!isSetEquipped('luck')) {
+					equipSet('luck');
+					state.lastBossSetSwap = now;
+				}
+			} else {
+				// Not in luck phase — dps  first
+				if (activeBoss || character.map === mobMap) {
+					if (!isSetEquipped('dps')) {
+						equipSet('dps');
+						state.lastBossSetSwap = now;
+					}
+				}
 
-			if (targetXpSet && !isSetEquipped(targetXpSet)) {
-				equipSet(targetXpSet);
-				state.lastXpSwap = now;
-			}
-		}
-
-		// Boss Set Swap
-		if (CONFIG.equipment.bossSetSwapEnabled && now - state.lastBossSetSwap > swapCooldown) {
-			const targetSet = activeBoss
-				? activeBoss.data.hp > CONFIG.equipment.bossHpThresholds[activeBoss.name] ? 'dps' : 'luck'
-				: (character.map === mobMap && 'dps');
-
-			if (targetSet && !isSetEquipped(targetSet)) {
-				equipSet(targetSet);
-				state.lastBossSetSwap = now;
+				// Now resolve orb independently: xp mob present → talkingskull, else → orbofdex
+				if (now - state.lastXpSwap > swapCooldown) {
+					const targetOrb = cache.hasLowHpXpMob ? 'xp' : 'orb';
+					if (!isSetEquipped(targetOrb)) {
+						equipSet(targetOrb);
+						state.lastXpSwap = now;
+					}
+				}
 			}
 		}
 
@@ -598,7 +860,6 @@ async function equipmentLoop() {
 
 	setTimeout(equipmentLoop, delay);
 }
-
 
 function findBoosterSlot() {
 	for (let i = 0; i < character.items.length; i++) {
@@ -614,26 +875,13 @@ function getNumChests() {
 	return Object.keys(get_chests()).length;
 }
 
-function getNumTargets(playerName) {
-	if (!playerName) return 0;
-	let targetCount = 0;
-
-	for (const id in parent.entities) {
-		const entity = parent.entities[id];
-		if (entity.type === 'monster' && entity.target === playerName) {
-			targetCount++;
-		}
-	}
-
-	return targetCount;
-}
-
 // ============================================================================
 // MOVEMENT FUNCTIONS
 // ============================================================================
 function shouldHandleEvents() {
 	const holidaySpirit = parent?.S?.holidayseason && !character?.s?.holidayspirit;
-	const hasHandleableEvent = EVENT_LOCATIONS.some(e => parent?.S?.[e.name]?.live);
+	const hasHandleableEvent = EVENT_LOCATIONS
+		.some(e => parent?.S?.[e.name]?.live);
 	return holidaySpirit || hasHandleableEvent;
 }
 
@@ -686,6 +934,8 @@ async function handleSpecificEvent(eventType, mapName, x, y) {
 }
 
 function handleReturnHome() {
+	if (distance(character, destination) < 20) return;
+
 	if (!smart.moving) {
 		smart_move(destination);
 	}
@@ -709,6 +959,161 @@ const walkInCircle = async () => {
 		await xmove(targetX, targetY);
 	}
 };
+
+const rangedKiting = {
+	lastMove: 0,
+
+	getTarget() {
+		return get_nearest_monster_v2({
+			type: CONFIG.movement.rangedKiting.targets,
+			max_distance: CONFIG.movement.rangedKiting.maxKiteRange
+		});
+	},
+
+	needsRepositioning(target) {
+		const dist = Math.hypot(target.real_x - character.real_x, target.real_y - character.real_y);
+		const cfg = CONFIG.movement.rangedKiting;
+
+		if (dist < cfg.minDistance) return { needed: true, reason: 'too_close', dist };
+
+		if (dist > cfg.maxDistance) return { needed: true, reason: 'too_far', dist };
+
+		const distFromOptimal = Math.abs(dist - cfg.optimalDistance);
+		if (distFromOptimal > cfg.repositionThreshold) {
+			return { needed: true, reason: 'optimize', dist };
+		}
+
+		return { needed: false, dist };
+	},
+
+	findBestPosition(target, reason, currentDist) {
+		const cfg = CONFIG.movement.rangedKiting;
+		let maxWeight = null;
+		let maxAngle = null;
+
+		for (let i = 0; i < Math.PI * 2; i += Math.PI / cfg.sampleAngles) {
+			const testX = character.real_x + cfg.moveDistance * Math.cos(i);
+			const testY = character.real_y + cfg.moveDistance * Math.sin(i);
+
+			if (!can_move_to(testX, testY)) continue;
+
+			const newDist = Math.hypot(target.real_x - testX, target.real_y - testY);
+			let weight = 0;
+
+			switch (reason) {
+				case 'too_close':
+					weight = newDist - currentDist;
+					break;
+
+				case 'too_far':
+					weight = currentDist - newDist;
+					break;
+
+				case 'optimize':
+					const currentDeviation = Math.abs(currentDist - cfg.optimalDistance);
+					const newDeviation = Math.abs(newDist - cfg.optimalDistance);
+					weight = currentDeviation - newDeviation;
+					break;
+			}
+
+			if (newDist < cfg.minDistance) weight -= 1000;
+			if (newDist > cfg.maxDistance) weight -= 1000;
+
+			if (maxWeight === null || weight > maxWeight) {
+				maxWeight = weight;
+				maxAngle = i;
+			}
+		}
+
+		return maxAngle;
+	},
+
+	async kite() {
+		if (!CONFIG.movement.rangedKiting.enabled) return false;
+		if (smart.moving) return false;
+
+		const target = this.getTarget();
+		if (!target) return false;
+
+		const { needed, reason, dist } = this.needsRepositioning(target);
+		if (!needed) return true;
+
+		const bestAngle = this.findBestPosition(target, reason, dist);
+		if (bestAngle === null) return true;
+
+		const now = performance.now();
+		if (now - this.lastMove > CONFIG.movement.rangedKiting.moveThrottle) {
+			const cfg = CONFIG.movement.rangedKiting;
+			const moveX = character.real_x + cfg.moveDistance * Math.cos(bestAngle);
+			const moveY = character.real_y + cfg.moveDistance * Math.sin(bestAngle);
+
+			await xmove(moveX, moveY);
+			this.lastMove = now;
+
+			if (cfg.debug) {
+				game_log(`Kiting: ${reason} (${Math.round(dist)} → ${Math.round(Math.hypot(target.real_x - moveX, target.real_y - moveY))})`, '#FFA500');
+			}
+		}
+
+		return true;
+	}
+};
+
+// ============================================================================
+// TEMPORAL SURGE COORDINATION
+// ============================================================================
+function getTemporalRotation() {
+	const stored = localStorage.getItem(CONFIG.equipment.temporal.storageKey);
+	if (!stored) {
+		const initial = {
+			lastUser: null,
+			nextIndex: 0,
+			lastKillTime: 0
+		};
+		localStorage.setItem(CONFIG.equipment.temporal.storageKey, JSON.stringify(initial));
+		return initial;
+	}
+	return JSON.parse(stored);
+}
+
+function updateTemporalRotation() {
+	const rotation = getTemporalRotation();
+	rotation.lastUser = character.name;
+	rotation.nextIndex = (rotation.nextIndex + 1) % CONFIG.equipment.temporal.characters.length;
+	rotation.lastKillTime = Date.now();
+	localStorage.setItem(CONFIG.equipment.temporal.storageKey, JSON.stringify(rotation));
+}
+
+function isMyTurnForTemporal() {
+	const rotation = getTemporalRotation();
+	const myIndex = CONFIG.equipment.temporal.characters.indexOf(character.name);
+
+	if (myIndex === -1) return false;
+
+	return rotation.lastUser === null || rotation.nextIndex === myIndex;
+}
+
+async function handleTemporalSurge() {
+	if (!CONFIG.equipment.temporal.enabled) return;
+	if (!isMyTurnForTemporal()) return;
+
+	const orbSlot = character.items.findIndex(i => i?.name === 'orboftemporal');
+	if (orbSlot === -1) {
+		game_log(`Missing ${CONFIG.equipment.temporal.orbName}!`, 'red');
+		return;
+	}
+
+	try {
+		equip(orbSlot, 'orb');
+		use_skill(CONFIG.equipment.temporal.skillName);
+		game_log(`⏰ Temporal Surge used on ${CONFIG.equipment.temporal.targetMob}!`, '#00FFFF');
+		updateTemporalRotation();
+		equip(orbSlot, 'orb');
+	} catch (e) {
+		game_log(`Temporal surge failed: ${e}`, 'red');
+		console.error('Temporal surge error:', e);
+	}
+}
 
 // ============================================================================
 // LOOTING
@@ -835,7 +1240,7 @@ const scare = () => {
 
 	if (shouldScare && !is_on_cooldown('scare') && slot !== -1) {
 		equip(slot);
-		use('scare');
+		use_skill('scare');
 		equip(slot);
 	}
 
@@ -897,7 +1302,7 @@ function teamStarter() {
 		}
 	}
 }
-setInterval(teamStarter, 5000);
+setInterval(teamStarter, 3000);
 
 // ============================================================================
 // LOCATION BROADCASTER
@@ -1053,6 +1458,24 @@ function pingButton() {
 setInterval(pingButton, 1000);
 
 function topButtons() {
+	add_top_button('ShowDragold', '🐉', () => {
+		const info = {
+			state: dragold.state,
+			targetShard: dragold.targetShard,
+			currentShard: dragold.currentShard(),
+			localDragoldLive: dragold.localDragoldLive(),
+			scanResults: dragold.scanResults
+				.slice()
+				.sort((a, b) => a.spawnTime - b.spawnTime)
+				.map(r => ({
+					shard: r.shard,
+					live: r.live,
+					spawnTime: new Date(r.spawnTime).toLocaleString()
+				}))
+		};
+		show_json(info);
+	});
+
 	add_top_button('Return', 'R&M', () => {
 		send_cm(['CrownPriest', 'CrownMage', 'CrownTown'], {
 			message: 'location',
@@ -1182,10 +1605,15 @@ const equipBatch = async data => {
 	}
 };
 
-const isSetEquipped = name =>
-	equipmentSets[name]?.every(({ itemName, slot, level }) =>
-		character.slots[slot]?.name === itemName && character.slots[slot]?.level === level
-	) ?? false;
+function isSetEquipped(setName) {
+	const set = equipmentSets[setName];
+	if (!set) return false;
+
+	return set.every(item =>
+		character.slots[item.slot]?.name === item.itemName &&
+		character.slots[item.slot]?.level === item.level
+	);
+}
 
 const equipSet = name => equipmentSets[name] && equipBatch(equipmentSets[name]);
 
@@ -1293,35 +1721,16 @@ mainLoop();
 actionLoop();
 skillLoop();
 equipmentLoop();
+dragold.startScanning();
 maintenanceLoop();
 potionLoop();
 
 // ============================================================================
 // UI Stuff
 // ============================================================================
-function updateMonsterButton() {
-	let totalMonsters = 0;
-	let poisonedMonsters = 0;
-
-	for (const id in parent.entities) {
-		const entity = parent.entities[id];
-		if (entity.type === "monster" && (entity.target === "CrownPriest" || entity.target === "CrownPal")) {
-			totalMonsters++;
-			if (entity.s && entity.s.poisoned) {
-				poisonedMonsters++;
-			}
-		}
-	}
-
-	add_top_button("mon_status", `${totalMonsters} | ${poisonedMonsters} poisoned`);
-}
-
-// Call this function periodically to update the button
-//setInterval(updateMonsterButton, 250);
-
 // ============= CONFIGURATION =============
-const DISCORD_WEBHOOK_URL = "DISCORD WEBHOOK URL HERE";
-const MENTION_USER_ID = "*********************";  // Set to null or "" to disable pings
+const DISCORD_WEBHOOK_URL = "**********************";
+const MENTION_USER_ID = "******************";  // Set to null or "" to disable pings
 const BOT_USERNAME = "Lootbot";
 const OUTPUT_SIZE = 50; // Scale image size
 // =========================================
@@ -1402,7 +1811,8 @@ const TILE_SIZE = 20;
 
 function generateItemImage(itemID) {
 	return new Promise(async (resolve, reject) => {
-		const coords = G.positions[itemID];
+		const skin = G.items[itemID]?.skin || itemID;
+		const coords = G.positions[skin];
 		if (!coords) {
 			reject(`No sprite data for ${itemID}`);
 			return;
@@ -1884,123 +2294,6 @@ function trackGoldAcquisition() {
 
 setInterval(trackGoldAcquisition, 1000);  // Check every second	
 //////////////////////////////////////////////////////////////////////////
-function initscoopMeter() {
-	let $ = parent.$;
-	let brc = $('#bottomrightcorner');
-
-	brc.find('#scoopmeter').remove();
-
-	let scoopmeter_container = $('<div id="scoopmeter"></div>').css({
-		fontSize: '20px',
-		color: 'white',
-		textAlign: 'center',
-		display: 'table',
-		overflow: 'hidden',
-		marginBottom: '-3px',
-		width: "100%",
-		backgroundColor: 'rgba(0, 0, 0, 0.7)',
-	});
-
-	let scoopmeter_content = $('<div id="scoopmetercontent"></div>').css({
-		display: 'table-cell',
-		verticalAlign: 'middle',
-		backgroundColor: 'rgba(0, 0, 0, 0)',
-		padding: '2px',
-		border: '4px solid grey',
-	}).appendTo(scoopmeter_container);
-
-	brc.children().first().after(scoopmeter_container);
-}
-
-function updatescoopMeterUI() {
-	try {
-		let $ = parent.$;
-		let scoopDisplay = $('#scoopmetercontent');
-
-		if (scoopDisplay.length === 0) return;
-
-		let entitiesWithscoop = [];
-
-		if (character?.s?.coop?.p !== undefined) {
-			entitiesWithscoop.push({
-				name: character.name,
-				scoop: character.s.coop.p,
-				classType: character.ctype
-			});
-		}
-
-		for (let id in parent.entities) {
-			let entity = parent.entities[id];
-			if (!entity.npc && entity.s && entity.s.coop && entity.s.coop.p !== undefined) {
-				entitiesWithscoop.push({
-					name: entity.name || entity.mtype,
-					scoop: entity.s.coop.p,
-					classType: entity.ctype
-				});
-			}
-		}
-
-		entitiesWithscoop.sort((a, b) => b.scoop - a.scoop);
-
-		let highestscoop = entitiesWithscoop[0].scoop || 1;
-
-		let listString = '<div>👑 Boss Contribution 👑</div>';
-		listString += '<table border="1" style="width:100%;">';
-
-		let maxRows = 6;
-		let totalPlayers = entitiesWithscoop.length;
-		let numColumns = Math.ceil(totalPlayers / maxRows);
-
-		let columnWidth = (100 / numColumns).toFixed(2) + '%';
-
-		for (let row = 0; row < maxRows; row++) {
-			listString += '<tr>';
-			for (let col = 0; col < numColumns; col++) {
-				let index = row + col * maxRows;
-				if (index >= totalPlayers) break;
-
-				let entity = entitiesWithscoop[index];
-				const playerClass = entity.classType.toLowerCase();
-				const nameColor = classColors[playerClass] || '#FFFFFF';
-
-				let entityScoop = Number(entity.scoop) || 0;
-				let highestScoop = Number(highestscoop) || 1;
-				let percentBarWidth = (entityScoop / highestScoop) * 100;
-				percentBarWidth = Math.min(100, +percentBarWidth.toFixed(1));
-
-				let progressBar = `<div style="width: 100%; background-color: gray; border-radius: 5px; overflow: hidden; position: relative;">
-					<div style="width: ${percentBarWidth}%; background-color: ${nameColor}; height: 10px;"></div>
-					<span style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); margin-top: -1px; color: black; font-size: 16px; font-weight: bold;">
-${getFormattedscoop(entity.scoop)}
-</span>
-				</div>`;
-
-				listString += `<td style="color: ${nameColor}; width: ${columnWidth};">${entity.name} ${progressBar}</td>`;
-			}
-			listString += '</tr>';
-		}
-
-		listString += '</table>';
-		scoopDisplay.html(listString);
-
-	} catch (error) {
-		//console.error('Error updating scoop meter UI:', error);
-	}
-}
-
-function getFormattedscoop(scoop) {
-	try {
-		let roundedscoop = Math.round(scoop); // Round to the nearest whole number
-		return roundedscoop.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-	} catch (error) {
-		console.error('Formatting scoop error:', error);
-		return 'N/A';
-	}
-}
-
-initscoopMeter();
-setInterval(updatescoopMeterUI, 250);
-////////////////////////////////////////////
 /**
  * Modifies the game log window appearance with fixed width
  * @returns {boolean} True if successful, false if gamelog not found
@@ -2145,7 +2438,7 @@ function removeChatWithParty() {
 }
 
 setTimeout(removeChatWithParty, 40000);
-//////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 function loadChestMap() {
 	const data = get(CHEST_STORAGE_KEY);
 	return (data && typeof data === "object" && !Array.isArray(data))
@@ -2179,395 +2472,471 @@ function swapDivs() {
 
 swapDivs();
 /////////////////////////////////////////////////////////////////////////////////////////////////
+if (parent.party_style_prepared) parent.$('#style-party-frames').remove();
 
-if (parent.party_style_prepared) {
-	parent.$('#style-party-frames').remove();
-}
-
-let css = `
-		.party-container {
-			position: absolute;
-			top: 55px;
-			left: -15%;
-			width: 1000px; 
-			height: 300px;
-			transform: translate(0%, 0);
-			fontFamily: 'pixel';
-		}
-	`;
-parent.$('head').append(`<style id="style-party-frames">${css}</style>`);
+parent.$('head').append(`<style id="style-party-frames">
+.party-container {position: absolute; top: 55px; left: -25%; width: 1000px; height: 300px; font-family: 'pixel';}
+</style>`);
 parent.party_style_prepared = true;
 
-const includeThese = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'name', 'xp', 'level', 'share', 'cc'];
-const partyFrameWidth = 80;
+const DISPLAY_BARS = ['hp', 'mp', 'xp', 'cc']; // <-- Add 'cc', 'ping', 'share' as needed
+const FRAME_WIDTH = 80;
+const INCLUDE = ['mp', 'max_mp', 'hp', 'max_hp', 'name', 'max_xp', 'xp', 'level', 'share', 'cc', 'max_cc'];
+const SHOW_IMG = true;
 
-function updatePartyData() {
-	let myInfo = Object.fromEntries(Object.entries(character).filter(current => { return character.read_only.includes(current[0]) || includeThese.includes(current[0]); }));
-	myInfo.lastSeen = Date.now();
-	set(character.name + '_newparty_info', myInfo);
-}
-
-setInterval(updatePartyData, 200);
-
-function getIFramedCharacter(name) {
-	for (const iframe of top.$('iframe')) {
-		const char = iframe.contentWindow.character;
-		if (!char) continue;
-		if (char.name == name) return char;
-	}
-	return null;
-}
-
-let show_party_frame_property = {
-	img: true,
-	hp: true,
-	mp: true,
-	xp: true,
-	cc: true,
-	ping: true,
-	share: true
+const extractInfo = (char) => {
+	const info = {};
+	for (const key of INCLUDE) if (key in char) info[key] = char[key];
+	for (const key of character.read_only) if (key in char) info[key] = char[key];
+	return info;
 };
 
-function get_toggle_text(key) {
-	return key.toUpperCase() + (show_party_frame_property[key] ? '✔️' : '❌');
-}
+setInterval(() => set(character.name + '_newparty_info', { ...extractInfo(character), lastSeen: Date.now() }), 200);
 
-function update_toggle_text(key) {
-	const toggle = parent.document.getElementById('party-props-toggles-' + key);
-	toggle.textContent = get_toggle_text(key);
-}
-
-function addPartyFramePropertiesToggles() {
-	if (parent.document.getElementById('party-props-toggles')) {
-		return;
+const getIFramedChar = (name) => {
+	for (const iframe of top.$('iframe')) {
+		const char = iframe.contentWindow.character;
+		if (char?.name === name) return char;
 	}
+};
 
-	const toggles = parent.document.createElement('div');
-	toggles.id = 'party-props-toggles';
-	toggles.classList.add('hidden');
-	toggles.style = `
-	display: flex; 
-	flex-wrap: wrap;
-	width: 100%;
-	max-width: 480px;
-	background-color: black;
-	margin-top: 2px;
-`;
-
-	function create_toggle(key) {
-		const toggle = parent.document.createElement('button');
-		toggle.id = 'party-props-toggles-' + key;
-		toggle.setAttribute('data-key', key);
-		toggle.style = `
-		border: 1px #ccc solid; 
-		background-color: #000; 
-		color: #ccc;
-		width: 20%;
-		margin: 0px;
-		font-size: 9px;
-		padding: 5px;
-		cursor: pointer;
-	`;
-		toggle.setAttribute(
-			'onclick',
-			`parent.code_eval(show_party_frame_property['${key}'] = !show_party_frame_property['${key}']; update_toggle_text('${key}'));`
-		);
-		toggle.appendChild(parent.document.createTextNode(get_toggle_text(key)));
-		return toggle;
-	}
-
-	for (let key of ['img', 'hp', 'mp', 'xp', 'cc']) {
-		toggles.appendChild(create_toggle(key));
-	}
-
-	const rightBottomMenu = parent.document.getElementById("bottomrightcorner");
-	const gameLogUi = parent.document.getElementById("gamelog");
-	//rightBottomMenu.insertBefore(toggles, gameLogUi);
-}
-
-function updatePartyFrames() {
-	let $ = parent.$;
-	let partyFrame = $('#newparty');
-	partyFrame.addClass('party-container');
-
-	if (partyFrame) {
-		addPartyFramePropertiesToggles();
-
-		for (let x = 0; x < partyFrame.children().length; x++) {
-			let party_member_name = Object.keys(parent.party)[x];
-			let info = get(party_member_name + '_newparty_info');
-			if (!info || Date.now() - info.lastSeen > 1000) {
-				let iframed_party_member = getIFramedCharacter(party_member_name);
-				if (iframed_party_member) {
-					info = Object.fromEntries(Object.entries(iframed_party_member).filter(current => { return character.read_only.includes(current[0]) || includeThese.includes(current[0]); }));
-				} else {
-					let party_member = get_player(party_member_name);
-					if (party_member) {
-						info = Object.fromEntries(Object.entries(party_member).filter(current => { return includeThese.includes(current[0]); }));
-					} else {
-						info = { name: party_member_name };
-					}
-				}
-			}
-
-			let infoHTML = `<div style="width: ${partyFrameWidth}px; height: 20px; margin-top: 3px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">${info.name}</div>`;
-
-			info.max_cc = 200;
-
-			let hpWidth = 0;
-			let mpWidth = 0;
-			let hp = '??';
-			let mp = '??';
-			if (info.hp !== undefined) {
-				hpWidth = info.hp / info.max_hp * 100;
-				mpWidth = info.mp / info.max_mp * 100;
-				hp = info.hp;
-				mp = info.mp;
-			}
-
-			let xpWidth = 0;
-			let xp = '??';
-			if (info.xp !== undefined) {
-				let lvl = info.level;
-				let max_xp = G.levels[lvl];
-				xpWidth = info.xp / max_xp * 100;
-				xp = xpWidth.toFixed(2) + '%';
-			}
-
-			let ccWidth = 0;
-			let cc = '??';
-			if (info.cc !== undefined) {
-				ccWidth = info.cc / info.max_cc * 100;
-				cc = info.cc.toFixed(2);
-			}
-
-			let pingWidth = 0;
-			let ping = '??';
-			if (character.ping !== undefined) {
-				pingWidth = -10;
-				ping = character.ping.toFixed(0);
-			}
-
-			let shareWidth = 0;
-			let share = '??';
-			if (parent.party[party_member_name] && parent.party[party_member_name].share !== undefined) {
-				shareWidth = parent.party[party_member_name].share * 100;
-				share = (parent.party[party_member_name].share * 100).toFixed(2) + '%';
-			}
-
-			let data = {
-				hp: hp,
-				hpWidth: hpWidth,
-				hpColor: 'red',
-				mp: mp,
-				mpWidth: mpWidth,
-				mpColor: 'blue',
-				xp: xp,
-				xpWidth: xpWidth,
-				xpColor: 'green',
-				cc: cc,
-				ccWidth: ccWidth,
-				ccColor: 'grey',
-				ping: ping,
-				pingWidth: pingWidth,
-				pingColor: 'black',
-				share: share,
-				shareWidth: shareWidth * 3,
-				shareColor: 'teal',
-			};
-
-			for (let key of ['hp', 'mp', 'xp', 'cc']) {
-				const text = key.toUpperCase();
-				const value = data[key];
-				const width = data[key + 'Width'];
-				const color = data[key + 'Color'];
-				if (show_party_frame_property[key]) {
-					infoHTML += `<div style="position: relative; width: 100%; height: 20px; text-align: center; margin-top: 3px;">
-	<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; font-size: 17px; z-index: 1; white-space: nowrap; text-shadow: -1px 0 black, 0 2px black, 2px 0 black, 0 -1px black;">${text}: ${value}</div>
-	<div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: ${color}; width: ${width}%; height: 20px; transform: translate(0, 0); border: 1px solid grey;"></div>
+const barHTML = (text, val, width, color) =>
+	`<div style="position:relative;width:100%;height:20px;text-align:center;margin-top:3px;">
+<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-weight:bold;font-size:17px;z-index:1;white-space:nowrap;text-shadow:-1px 0 black,0 2px black,2px 0 black,0 -1px black;">${text}: ${val}</div>
+<div style="position:absolute;top:0;left:0;right:0;bottom:0;background-color:${color};width:${width}%;height:20px;border:1px solid grey;"></div>
 </div>`;
-				}
-			}
 
-			let party_member_frame = partyFrame.find(partyFrame.children()[x]);
-			party_member_frame.children().first().css('display', show_party_frame_property['img'] ? 'inherit' : 'none');
-			party_member_frame.children().last().html(`<div style="font-size: 22px;" onclick='pcs(event); party_click("${party_member_name}\");'>${infoHTML}</div>`);
+const barConfigs = {
+	hp: { color: 'red', calc: (i) => ({ val: i.hp, width: i.hp / i.max_hp * 100 }) },
+	mp: { color: 'blue', calc: (i) => ({ val: i.mp, width: i.mp / i.max_mp * 100 }) },
+	xp: {
+		color: 'green', calc: (i) => {
+			const pct = i.xp / G.levels[i.level] * 100;
+			return { val: pct.toFixed(2) + '%', width: pct };
+		}
+	},
+	cc: { color: 'grey', calc: (i) => ({ val: i.cc?.toFixed(2) ?? i.cc, width: i.cc / (i.max_cc || 200) * 100 }) },
+	ping: { color: 'black', calc: () => ({ val: character.ping?.toFixed(0) ?? '??', width: 0 }) },
+	share: {
+		color: 'teal', calc: (i, partyData) => {
+			const share = partyData?.share;
+			return share != null ? { val: (share * 100).toFixed(2) + '%', width: share * 300 } : { val: '??', width: 0 };
 		}
 	}
-}
+};
+
+setInterval(() => {
+	const partyFrame = parent.$('#newparty').addClass('party-container');
+	if (!partyFrame.length) return;
+
+	const members = Object.keys(parent.party);
+	partyFrame.children().each((x, el) => {
+		const name = members[x];
+		let info = get(name + '_newparty_info');
+
+		if (!info || Date.now() - info.lastSeen > 1000) {
+			const iframed = getIFramedChar(name);
+			info = iframed ? extractInfo(iframed) : (get_player(name) || { name });
+		}
+
+		const partyData = parent.party[name];
+		let html = `<div style="width:${FRAME_WIDTH}px;height:20px;margin-top:3px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">${info.name}</div>`;
+
+		for (const key of DISPLAY_BARS) {
+			const cfg = barConfigs[key];
+			const { val, width } = cfg.calc(info, partyData);
+			if (val !== undefined && val !== '??') {
+				html += barHTML(key.toUpperCase(), val, width, cfg.color);
+			}
+		}
+
+		parent.$(el).children().first().css('display', SHOW_IMG ? 'inherit' : 'none');
+		parent.$(el).children().last().html(`<div style="font-size:22px;" onclick='pcs(event);party_click("${name}");'>${html}</div>`);
+	});
+}, 250);
 
 parent.$('#party-props-toggles').remove();
-
-setInterval(updatePartyFrames, 500);
-///////////////////////////////////////////////////////////////////////////////////////
-const ALDATA_KEY = "*********************";
-
-function updateTrackerData() {
-	parent.socket.once("tracker", (data) => {
-		const url = `https://aldata.earthiverse.ca/achievements/${character.id}/${ALDATA_KEY}`;
-		const settings = {
-			method: "PUT",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ max: data.max, monsters: data.monsters }),
-		};
-		fetch(url, settings).then((response) => console.log(response.status));
-	});
-}
 parent.socket.emit("tracker");
-function hideTracker() {
-	parent.hide_modal()
-}
-setTimeout(hideTracker, 1000);
-setInterval(updateTrackerData, 1000 * 60 * 10);
+setTimeout(() => parent.hide_modal(), 1000);
 
-/**
- * Adds a Stats tab to the default tracker window
- * Shows achievement progress for stat bonuses earned from monster kills
- */
+const KH = {
+	_s: null,
+	get s() {
+		if (!this._s) {
+			try { this._s = JSON.parse(localStorage.killHistory); } catch { }
+			if (!this._s || typeof this._s.d !== 'object') this._s = { d: {} };
+		}
+		return this._s;
+	},
+	save() { localStorage.killHistory = JSON.stringify(this._s); }
+};
+
+parent.KH = KH;
+
+function saveKills() {
+	const day = Math.floor(Date.now() / 86400000);
+	const d = KH.s.d;
+	let dirty = false;
+	const monsters = parent.tracker?.monsters || {};
+	const maxM = parent.tracker?.max?.monsters || {};
+	const allTypes = new Set([...Object.keys(monsters), ...Object.keys(maxM)]);
+	for (const mtype of allTypes) {
+		const kills = monsters[mtype] | 0;
+		const score = maxM[mtype]?.[0] | 0 || 0;
+		if (!kills && !score) continue;
+		const arr = d[mtype] ??= [];
+		const last = arr[arr.length - 1];
+		if (!last) { arr.push([day, kills, score]); dirty = true; continue; }
+		if (last[1] === kills && last[2] === score) continue;
+		if (last[0] === day) { last[1] = kills; last[2] = score; }
+		else arr.push([day, kills, score]);
+		dirty = true;
+	}
+	if (dirty) KH.save();
+}
+
+saveKills();
+setInterval(saveKills, 10 * 60 * 1000);
+
 function modify_tracker() {
 	const tracker_function = function () {
 		this.render_tracker = function () {
-			let html = "";
+			let html = "<div style='font-size:32px'>"
+				+ "<div style='background-color:#575983;border:2px solid #9F9FB0;display:inline-block;margin:2px;padding:6px' class='clickable' onclick='pcs(event);$(\".trackers\").hide();$(\".trackerm\").show()'>Monsters</div>"
+				+ "<div style='background-color:#575983;border:2px solid #9F9FB0;display:inline-block;margin:2px;padding:6px' class='clickable' onclick='pcs(event);$(\".trackers\").hide();$(\".trackere\").show()'>Exchanges and Quests</div>"
+				+ "<div style='background-color:#575983;border:2px solid #9F9FB0;display:inline-block;margin:2px;padding:6px' class='clickable' onclick='pcs(event);$(\".trackers\").hide();$(\".trackerx\").show()'>Stats</div>"
+				+ "<div style='background-color:#575983;border:2px solid #9F9FB0;display:inline-block;margin:2px;padding:6px' class='clickable' onclick='pcs(event);$(\".trackers\").hide();$(\".trackerg\").show()'>Graphs</div>"
+				+ "</div>";
 
-			// Tab buttons
-			html += "<div style='font-size: 32px'>";
-			html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackerm\").show();'>Monsters</div>";
-			html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackere\").show();'>Exchanges and Quests</div>";
-			html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; display: inline-block; margin: 2px; padding: 6px;' class='clickable' onclick='pcs(event); $(\".trackers\").hide(); $(\".trackerx\").show();'>Stats</div>";
-			html += "</div>";
-
-			// Monsters tab (default game code)
+			// Monsters tab
 			html += "<div class='trackers trackerm'>";
 			object_sort(G.monsters, "hpsort").forEach(function (e) {
 				if (e[1].cute && !e[1].achievements || e[1].unlist) return;
-				let count = (tracker.monsters[e[0]] || 0) + (tracker.monsters_diff[e[0]] || 0);
-				let color = "#50ADDD";
-				if (tracker.max.monsters[e[0]] && tracker.max.monsters[e[0]][0] > count) {
-					count = tracker.max.monsters[e[0]][0];
-					color = "#DCC343";
-				}
-				html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; position: relative; display: inline-block; margin: 2px;' class='clickable' onclick='pcs(event); render_monster_info(\"" + e[0] + "\")'>";
-				html += sprite(e[0], { scale: 1.5 });
-				if (count) {
-					html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:" + color + "; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(count) + "</div>";
-				}
-				if (tracker.drops && tracker.drops[e[0]] && tracker.drops[e[0]].length) {
-					html += "<div style='background-color:#FD79B0; border: 2px solid #9F9FB0; position: absolute; bottom: -2px; right: -2px; display: inline-block; padding: 1px 1px 1px 1px; height: 2px; width: 2px'></div>";
-				}
+				let count = (tracker.monsters[e[0]] || 0) + (tracker.monsters_diff[e[0]] || 0), color = "#50ADDD";
+				if (tracker.max.monsters[e[0]] && tracker.max.monsters[e[0]][0] > count) { count = tracker.max.monsters[e[0]][0]; color = "#DCC343"; }
+				html += "<div style='background-color:#575983;border:2px solid #9F9FB0;position:relative;display:inline-block;margin:2px' class='clickable' onclick='pcs(event);render_monster_info(\"" + e[0] + "\")'>"
+					+ sprite(e[0], { scale: 1.5 });
+				if (count) html += "<div style='background-color:#575983;border:2px solid #9F9FB0;position:absolute;top:-2px;left:-2px;color:" + color + ";display:inline-block;padding:1px 1px 1px 3px'>" + to_shrinked_num(count) + "</div>";
+				if (tracker.drops?.[e[0]]?.length) html += "<div style='background-color:#FD79B0;border:2px solid #9F9FB0;position:absolute;bottom:-2px;right:-2px;display:inline-block;padding:1px;height:2px;width:2px'></div>";
 				html += "</div>";
 			});
 			html += "</div>";
 
-			// Exchanges tab (default game code)
-			html += "<div class='trackers trackere hidden' style='margin-top: 3px'>";
+			// Exchanges tab
+			html += "<div class='trackers trackere hidden' style='margin-top:3px'>";
 			object_sort(G.items).forEach(function (e) {
-				if (e[1].e && !e[1].ignore) {
-					let list = [[e[0], e[0], undefined]];
-					if (e[1].upgrade || e[1].compound) {
-						list = [];
-						for (let i = 0; i < 13; i++) {
-							if (G.drops[e[0] + i]) list.push([e[0], e[0] + i, i]);
-						}
-					}
-					list.forEach(function (d) {
-						html += "<div style='margin-right: 3px; margin-bottom: 3px; display: inline-block; position: relative;'";
-						if (G.drops[d[1]]) {
-							html += " class='clickable' onclick='pcs(event); render_exchange_info(\"" + d[1] + "\"," + (tracker.exchanges[d[1]] || 0) + ")'>";
-						} else {
-							html += ">";
-						}
-						html += item_container({ skin: G.items[d[0]].skin }, { name: d[0], level: d[2] });
-						if (tracker.exchanges[d[1]]) {
-							html += "<div style='background-color:#575983; border: 2px solid #9F9FB0; position: absolute; top: -2px; left: -2px; color:#ED901C; font-size: 16px; display: inline-block; padding: 1px 1px 1px 3px;'>" + to_shrinked_num(tracker.exchanges[d[1]]) + "</div>";
-						}
-						html += "</div>";
-					});
-				}
+				if (!e[1].e || e[1].ignore) return;
+				let list = [[e[0], e[0], undefined]];
+				if (e[1].upgrade || e[1].compound) { list = []; for (let i = 0; i < 13; i++) if (G.drops[e[0] + i]) list.push([e[0], e[0] + i, i]); }
+				list.forEach(function (d) {
+					html += "<div style='margin-right:3px;margin-bottom:3px;display:inline-block;position:relative'" + (G.drops[d[1]] ? " class='clickable' onclick='pcs(event);render_exchange_info(\"" + d[1] + "\"," + (tracker.exchanges[d[1]] || 0) + ")'" : "") + ">"
+						+ item_container({ skin: G.items[d[0]].skin }, { name: d[0], level: d[2] });
+					if (tracker.exchanges[d[1]]) html += "<div style='background-color:#575983;border:2px solid #9F9FB0;position:absolute;top:-2px;left:-2px;color:#ED901C;font-size:16px;display:inline-block;padding:1px 1px 1px 3px'>" + to_shrinked_num(tracker.exchanges[d[1]]) + "</div>";
+					html += "</div>";
+				});
 			});
 			html += "</div>";
 
 			// Stats tab
-			html += "<div class='trackers trackerx hidden' style='margin-top: 3px; padding: 10px;'>";
-			const kills = parent.tracker.max.monsters;
-			const achievements = {};
+			html += "<div class='trackers trackerx hidden' style='margin-top:3px;padding:10px'><div style='font-size:24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px'>";
 
+			const ac = {}, kills = parent.tracker.max.monsters;
 			for (const mtype in kills) {
-				if (!(mtype in G.monsters) || !G.monsters[mtype].achievements) continue;
-				const killCount = kills[mtype][0];
-
-				for (const achievement of G.monsters[mtype].achievements) {
-					const [needed, type, reward, amount] = achievement;
+				if (!G.monsters[mtype]?.achievements) continue;
+				const n = kills[mtype][0];
+				for (const [needed, type, reward, amount] of G.monsters[mtype].achievements) {
 					if (type !== "stat") continue;
-
-					if (!achievements[reward]) {
-						achievements[reward] = { value: 0, maxvalue: 0, monsters: [] };
-					}
-
-					if (killCount >= needed) {
-						achievements[reward].value += amount;
-					} else {
-						achievements[reward].value += 0;
-					}
-					achievements[reward].maxvalue += amount;
-					achievements[reward].monsters.push({ mtype, needed, amount });
+					(ac[reward] ??= { value: 0, maxvalue: 0, monsters: [] }).monsters.push({ mtype, needed, amount });
+					ac[reward].maxvalue += amount;
+					if (n >= needed) ac[reward].value += amount;
 				}
 			}
 
-			// Sort achievements alphabetically
-			const sortedAchievements = Object.entries(achievements)
-				.sort(([a], [b]) => a.localeCompare(b))
-				.reduce((obj, [key, value]) => {
-					obj[key] = value;
-					return obj;
-				}, {});
-
-			html += "<div style='font-size: 24px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px;'>";
-
-			for (const ac in sortedAchievements) {
-				const achievement = sortedAchievements[ac];
-				const percentage = ((achievement.value / achievement.maxvalue) * 100).toFixed(1);
-				const borderColor = achievement.value >= achievement.maxvalue ? '#22c725' : '#9F9FB0';
-
-				html += "<div style='background-color:#575983; border: 2px solid " + borderColor + "; padding: 5px; text-align: center; cursor: pointer; position: relative;' onclick='toggleDropdown(\"" + ac + "\")'>";
-				html += "<div style='font-weight: bold; font-size: 28px; margin-bottom: 3px;'>" + ac + "</div>";
-				html += "<div style='font-size: 25px; margin-bottom: 1px;'>" + achievement.value.toFixed(2) + " / " + achievement.maxvalue.toFixed(2) + "</div>";
-				html += "<div style='font-size: 22px; color: #DCC343;'>(" + percentage + "%)</div>";
-
-				html += "<div id='dropdown-" + ac + "' class='dropdown-content' style='display: none; background-color:#1a1a1a; border: 2px solid #9F9FB0; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 600px; max-height: 70vh; overflow-y: auto; padding: 15px; z-index: 10000; box-shadow: 0 0 20px rgba(0,0,0,0.8);'>";
-				html += "<div style='position: sticky; top: 0; background-color:#1a1a1a; padding-bottom: 10px; margin-bottom: 10px; border-bottom: 2px solid #9F9FB0; font-size: 22px; font-weight: bold;'>" + ac + " Progress</div>";
-
-				// Sort monsters by needed value, then alphabetically
-				achievement.monsters.sort((a, b) => {
-					if (a.needed !== b.needed) return a.needed - b.needed;
-					return a.mtype.localeCompare(b.mtype);
-				}).forEach(monster => {
-					const currentKills = tracker.max.monsters[monster.mtype] ? Math.floor(tracker.max.monsters[monster.mtype][0]) : 0;
-					const isCompleted = currentKills >= monster.needed;
-					const bgColor = isCompleted ? '#1a3d1a' : '#2a2a3a';
-					const fontColor = isCompleted ? '#22c725' : 'white';
-
-					html += "<div style='background-color: " + bgColor + "; margin: 5px 0; padding: 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;'>";
-					html += "<div style='color: " + fontColor + "; flex: 1;'>" + monster.mtype + "</div>";
-					html += "<div style='color: " + fontColor + "; font-size: 19px;'>" + currentKills.toLocaleString() + " / " + monster.needed.toLocaleString() + " (+" + monster.amount.toLocaleString() + ")</div>";
-					html += "</div>";
-				});
-
-				html += "</div>";
-				html += "</div>";
+			for (const key of Object.keys(ac).sort()) {
+				const a = ac[key], pct = (a.value / a.maxvalue * 100).toFixed(1);
+				html += "<div style='background-color:#575983;border:2px solid " + (a.value >= a.maxvalue ? '#22c725' : '#9F9FB0') + ";padding:5px;text-align:center;cursor:pointer;position:relative' onclick='toggleDropdown(\"" + key + "\")'>"
+					+ "<div style='font-weight:bold;font-size:28px;margin-bottom:3px'>" + key + "</div>"
+					+ "<div style='font-size:25px;margin-bottom:1px'>" + a.value.toFixed(2) + " / " + a.maxvalue.toFixed(2) + "</div>"
+					+ "<div style='font-size:22px;color:#DCC343'>(" + pct + "%)</div>"
+					+ "<div id='dropdown-" + key + "' style='display:none;background-color:#1a1a1a;border:2px solid #9F9FB0;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:600px;max-height:70vh;overflow-y:auto;padding:15px;z-index:10000;box-shadow:0 0 20px rgba(0,0,0,.8)'>"
+					+ "<div style='position:sticky;top:0;background-color:#1a1a1a;padding-bottom:10px;margin-bottom:10px;border-bottom:2px solid #9F9FB0;font-size:22px;font-weight:bold'>" + key + " Progress</div>";
+				for (const m of a.monsters.sort((x, y) => x.needed - y.needed || x.mtype.localeCompare(y.mtype))) {
+					const cur = kills[m.mtype] ? Math.floor(kills[m.mtype][0]) : 0, done = cur >= m.needed;
+					html += "<div style='background-color:" + (done ? '#1a3d1a' : '#2a2a3a') + ";margin:5px 0;padding:8px;border-radius:4px;display:flex;justify-content:space-between;align-items:center'>"
+						+ "<div style='color:" + (done ? '#22c725' : 'white') + ";flex:1'>" + m.mtype + "</div>"
+						+ "<div style='color:" + (done ? '#22c725' : 'white') + ";font-size:19px'>" + cur.toLocaleString() + " / " + m.needed.toLocaleString() + " (+" + m.amount.toLocaleString() + ")</div>"
+						+ "</div>";
+				}
+				html += "</div></div>";
 			}
-
 			html += "</div></div>";
 
+			// Graphs tab
+			html += "<div class='trackers trackerg hidden' style='margin-top:3px;'>";
+			html += "<div id='tkr-graph-grid'>";
+			object_sort(G.monsters, "hpsort").forEach(function (e) {
+				if (e[1].cute && !e[1].achievements || e[1].unlist) return;
+				const kh = parent.KH?.s?.d?.[e[0]];
+				if (!kh?.length) return;
+				html += "<div style='background-color:#575983;border:2px solid #9F9FB0;position:relative;display:inline-block;margin:2px' class='clickable' onclick='pcs(event);tkrShowGraph(\"" + e[0] + "\")'>"
+					+ sprite(e[0], { scale: 1.5 })
+					+ "</div>";
+			});
+			html += "</div>";
+			html += "<div id='tkr-graph-panel' style='display:none;margin-top:6px;'>"
+				+ "<div style='display:flex;align-items:center;gap:6px;margin-bottom:6px;'>"
+				+ "<div id='tkr-graph-back' style='background-color:#575983;border:2px solid #9F9FB0;padding:4px 10px;cursor:pointer;font-size:22px' class='clickable' onclick='pcs(event);tkrShowGrid()'>← Back</div>"
+				+ "<div id='tkr-graph-title' style='font-size:26px;font-weight:bold;color:#DCC343;white-space:nowrap'></div>"
+				+ "<div style='display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:2px;'>"
+				+ "<div id='tkr-stat-kills' style='font-size:20px;color:#50ADDD;text-align:center'></div>"
+				+ "<div id='tkr-stat-score' style='font-size:20px;color:#DCC343;text-align:center'></div>"
+				+ "</div>"
+				+ "<div style='display:flex;gap:4px'>"
+				+ "<div id='tkr-range-all' style='background-color:#575983;border:2px solid #DCC343;padding:4px 10px;cursor:pointer;font-size:20px' class='clickable' onclick='pcs(event);tkrSetRange(\"all\")'>All</div>"
+				+ "<div id='tkr-range-year' style='background-color:#575983;border:2px solid #9F9FB0;padding:4px 10px;cursor:pointer;font-size:20px' class='clickable' onclick='pcs(event);tkrSetRange(\"year\")'>Year</div>"
+				+ "<div id='tkr-range-month' style='background-color:#575983;border:2px solid #9F9FB0;padding:4px 10px;cursor:pointer;font-size:20px' class='clickable' onclick='pcs(event);tkrSetRange(\"month\")'>Month</div>"
+				+ "<div id='tkr-range-week' style='background-color:#575983;border:2px solid #9F9FB0;padding:4px 10px;cursor:pointer;font-size:20px' class='clickable' onclick='pcs(event);tkrSetRange(\"week\")'>Week</div>"
+				+ "</div></div>"
+				+ "<div style='display:flex;gap:12px;font-size:18px;margin-bottom:4px;'>"
+				+ "<span style='color:#50ADDD'>— Kills</span>"
+				+ "<span style='color:#DCC343'>— Max Score</span>"
+				+ "</div>"
+				+ "<canvas id='tkr-graph-canvas' style='width:100%;height:600px;background:rgba(0,0,0,0.3);border:2px solid #9F9FB0;border-radius:4px;display:block;'></canvas>"
+				+ "</div>";
+			html += "</div>";
+
 			show_modal(html, { wwidth: 578, hideinbackground: true });
-			window.toggleDropdown = function (achievement) {
-				const dropdown = document.getElementById('dropdown-' + achievement);
-				dropdown.style.display = (dropdown.style.display === 'none' || dropdown.style.display === '') ? 'block' : 'none';
+
+			// Graph tab logic
+			let tkrMtype = null, tkrRange = 'all';
+			const tkrModal = parent.document.querySelector('.imodal');
+			const tkrOriginalWidth = tkrModal ? tkrModal.style.width : '';
+
+			const TKR_PAD = [30, 15, 50, 95]; // T R B L
+
+			const tkrNiceMax = raw => {
+				if (raw <= 0) return 1;
+				const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+				const n = raw / mag;
+				if (n <= 1.2) return 1.2 * mag;
+				if (n <= 1.5) return 1.5 * mag;
+				if (n <= 2) return 2 * mag;
+				if (n <= 2.5) return 2.5 * mag;
+				if (n <= 3) return 3 * mag;
+				if (n <= 4) return 4 * mag;
+				if (n <= 5) return 5 * mag;
+				if (n <= 8) return 8 * mag;
+				return 10 * mag;
 			};
+
+			const tkrFmt = v => {
+				const a = Math.abs(v);
+				const fmt = (n, s) => { const str = n.toFixed(1); return (str.endsWith('.0') ? n.toFixed(0) : str) + s; };
+				if (a >= 1e9) return fmt(v / 1e9, 'B');
+				if (a >= 1e6) return fmt(v / 1e6, 'M');
+				if (a >= 1e3) return fmt(v / 1e3, 'K');
+				return v.toLocaleString();
+			};
+
+			window.tkrSetRange = r => {
+				tkrRange = r;
+				['all', 'year', 'month', 'week'].forEach(x => {
+					const el = document.getElementById('tkr-range-' + x);
+					if (el) el.style.borderColor = x === r ? '#DCC343' : '#9F9FB0';
+				});
+				tkrDrawGraph();
+			};
+
+			window.tkrShowGrid = () => {
+				document.getElementById('tkr-graph-grid').style.display = '';
+				document.getElementById('tkr-graph-panel').style.display = 'none';
+				tkrMtype = null;
+				if (tkrModal) tkrModal.style.width = tkrOriginalWidth;
+			};
+
+			window.tkrShowGraph = mtype => {
+				tkrMtype = mtype;
+				document.getElementById('tkr-graph-grid').style.display = 'none';
+				document.getElementById('tkr-graph-panel').style.display = '';
+				document.getElementById('tkr-graph-title').textContent = mtype;
+				if (tkrModal) tkrModal.style.width = '1200px';
+				tkrDrawGraph();
+			};
+
+			const tkrDrawGraph = () => {
+				if (!tkrMtype) return;
+				const all = parent.KH?.s?.d?.[tkrMtype] || [];
+				const canvas = document.getElementById('tkr-graph-canvas');
+				if (!canvas) return;
+				const ctx = canvas.getContext('2d');
+				const rect = canvas.getBoundingClientRect();
+				if (canvas.width !== rect.width || canvas.height !== rect.height) { canvas.width = rect.width; canvas.height = rect.height; }
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+				const nowDay = Math.floor(Date.now() / 86400000);
+				const cutoff = ({ all: 0, year: nowDay - 365, month: nowDay - 30, week: nowDay - 7 })[tkrRange] ?? 0;
+				const data = all.filter(r => r[0] >= cutoff);
+
+				if (data.length < 2) {
+					ctx.fillStyle = '#9F9FB0'; ctx.font = '18px pixel,monospace'; ctx.textAlign = 'center';
+					ctx.fillText('Not enough data for this range', canvas.width / 2, canvas.height / 2);
+					return;
+				}
+
+				const [PT, PR, PB, PL] = TKR_PAD;
+				const cw = canvas.width - PL - PR, ch = canvas.height - PT - PB;
+				const firstDay = data[0][0], lastDay = data[data.length - 1][0];
+				const span = Math.max(1, lastDay - firstDay);
+				const xd = d => PL + cw * (d - firstDay) / span;
+				const yMax = tkrNiceMax(Math.max(data[data.length - 1][1], data[data.length - 1][2]) * 1.08);
+				const yv = v => PT + ch - ch * v / yMax;
+
+				// Grid + Y labels
+				ctx.font = '18px pixel,monospace';
+				for (let i = 0; i <= 8; i++) {
+					const y = PT + ch * i / 8;
+					ctx.strokeStyle = i % 2 === 0 ? 'rgba(159,159,176,0.2)' : 'rgba(159,159,176,0.08)';
+					ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(PL + cw, y); ctx.stroke();
+					if (i % 2 === 0) {
+						ctx.fillStyle = 'rgba(159,159,176,0.8)'; ctx.textAlign = 'right';
+						ctx.fillText(tkrFmt(yMax * (8 - i) / 8), PL - 6, y + 5);
+					}
+				}
+
+				// X labels
+				ctx.fillStyle = 'rgba(159,159,176,0.8)'; ctx.font = '18px pixel,monospace'; ctx.textAlign = 'center';
+				const totalDays = lastDay - firstDay || 1;
+				let tickInterval;
+				if (tkrRange === 'week') tickInterval = 1;
+				else if (tkrRange === 'month') tickInterval = 3;
+				else if (tkrRange === 'year') tickInterval = 30;
+				else tickInterval = Math.ceil(totalDays / 10 / 30) * 30 || 30;
+
+				const tickStart = Math.ceil(firstDay / tickInterval) * tickInterval;
+				for (let t = tickStart; t <= lastDay; t += tickInterval) {
+					const x = xd(t);
+					const dt = new Date(t * 86400000);
+					const lbl = tkrRange === 'week' || tkrRange === 'month'
+						? (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate()
+						: (dt.getUTCMonth() + 1) + '/' + dt.getUTCFullYear().toString().slice(2);
+					ctx.fillText(lbl, x, PT + ch + 18);
+					ctx.strokeStyle = 'rgba(159,159,176,0.15)'; ctx.lineWidth = 1;
+					ctx.beginPath(); ctx.moveTo(x, PT); ctx.lineTo(x, PT + ch); ctx.stroke();
+				}
+
+				// Axes
+				ctx.strokeStyle = 'rgba(159,159,176,0.5)'; ctx.lineWidth = 1;
+				ctx.beginPath(); ctx.moveTo(PL, PT); ctx.lineTo(PL, PT + ch); ctx.lineTo(PL + cw, PT + ch); ctx.stroke();
+
+				// Area + line — kills
+				const gradK = ctx.createLinearGradient(0, PT, 0, PT + ch);
+				gradK.addColorStop(0, 'rgba(80,173,221,0.25)'); gradK.addColorStop(1, 'rgba(80,173,221,0.02)');
+				ctx.fillStyle = gradK;
+				ctx.beginPath();
+				ctx.moveTo(xd(data[0][0]), PT + ch);
+				for (const r of data) ctx.lineTo(xd(r[0]), yv(r[1]));
+				ctx.lineTo(xd(data[data.length - 1][0]), PT + ch);
+				ctx.closePath(); ctx.fill();
+
+				ctx.strokeStyle = '#50ADDD'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+				ctx.beginPath();
+				for (let i = 0; i < data.length; i++) i === 0 ? ctx.moveTo(xd(data[i][0]), yv(data[i][1])) : ctx.lineTo(xd(data[i][0]), yv(data[i][1]));
+				ctx.stroke();
+
+				// Area + line — max score
+				const gradM = ctx.createLinearGradient(0, PT, 0, PT + ch);
+				gradM.addColorStop(0, 'rgba(220,195,67,0.18)'); gradM.addColorStop(1, 'rgba(220,195,67,0.01)');
+				ctx.fillStyle = gradM;
+				ctx.beginPath();
+				ctx.moveTo(xd(data[0][0]), PT + ch);
+				for (const r of data) ctx.lineTo(xd(r[0]), yv(r[2]));
+				ctx.lineTo(xd(data[data.length - 1][0]), PT + ch);
+				ctx.closePath(); ctx.fill();
+
+				ctx.strokeStyle = '#DCC343'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.setLineDash([6, 3]);
+				ctx.beginPath();
+				for (let i = 0; i < data.length; i++) i === 0 ? ctx.moveTo(xd(data[i][0]), yv(data[i][2])) : ctx.lineTo(xd(data[i][0]), yv(data[i][2]));
+				ctx.stroke(); ctx.setLineDash([]);
+
+				// Dots if sparse
+				if (data.length <= 60) {
+					for (const r of data) {
+						ctx.fillStyle = '#50ADDD'; ctx.beginPath(); ctx.arc(xd(r[0]), yv(r[1]), 3, 0, 6.283); ctx.fill();
+						ctx.fillStyle = '#DCC343'; ctx.beginPath(); ctx.arc(xd(r[0]), yv(r[2]), 3, 0, 6.283); ctx.fill();
+					}
+				}
+
+				canvas._tkrDraw = tkrDrawGraph;
+				canvas._tkrData = data;
+				canvas._tkrMeta = { xd, yv, PL, PR, PT, PB, cw, ch, span, firstDay };
+
+				// Stats in header
+				const statEl1 = document.getElementById('tkr-stat-kills');
+				const statEl2 = document.getElementById('tkr-stat-score');
+				if (statEl1 && statEl2 && data.length >= 2) {
+					const spanD = Math.max(1, data[data.length - 1][0] - data[0][0]);
+					const killDelta = data[data.length - 1][1] - data[0][1];
+					const scoreDelta = data[data.length - 1][2] - data[0][2];
+					const rangeLabel = { all: 'All Time', year: 'Past Year', month: 'Past Month', week: 'Past Week' }[tkrRange];
+					const divisor = { all: 365, year: 30, month: 7, week: 1 }[tkrRange];
+					const unit = { all: '/yr', year: '/mo', month: '/wk', week: '/day' }[tkrRange];
+					const avg = v => tkrFmt(((v / spanD) * divisor) | 0);
+					statEl1.textContent = 'Kills (' + rangeLabel + '): avg ' + avg(killDelta) + unit;
+					statEl2.textContent = 'Score (' + rangeLabel + '): avg ' + avg(scoreDelta) + unit;
+				}
+			};
+
+			// Tooltip on hover
+			const ghCanvas = document.getElementById('tkr-graph-canvas');
+			if (ghCanvas) {
+				ghCanvas.onmousemove = function (e) {
+					const data = this._tkrData, meta = this._tkrMeta;
+					if (!data || !meta) return;
+					tkrDrawGraph();
+					const rect = this.getBoundingClientRect();
+					const mx = (e.clientX - rect.left) * (this.width / rect.width);
+					const { xd, yv, PL, PT, cw, ch } = meta;
+					let near = null, nd = Infinity;
+					for (const r of data) { const dx = Math.abs(mx - xd(r[0])); if (dx < nd) { nd = dx; near = r; } }
+					if (!near || nd > cw / data.length * 1.5) return;
+
+					const ctx = this.getContext('2d');
+					const x = xd(near[0]);
+
+					ctx.strokeStyle = 'rgba(159,159,176,0.4)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+					ctx.beginPath(); ctx.moveTo(x, PT); ctx.lineTo(x, PT + ch); ctx.stroke(); ctx.setLineDash([]);
+
+					ctx.fillStyle = '#50ADDD'; ctx.beginPath(); ctx.arc(x, yv(near[1]), 5, 0, 6.283); ctx.fill();
+					ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2; ctx.stroke();
+					ctx.fillStyle = '#DCC343'; ctx.beginPath(); ctx.arc(x, yv(near[2]), 5, 0, 6.283); ctx.fill();
+					ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 2; ctx.stroke();
+
+					const dt = new Date(near[0] * 86400000);
+					const l1 = (dt.getUTCMonth() + 1) + '/' + dt.getUTCDate() + '/' + dt.getUTCFullYear();
+					const l2 = 'Kills: ' + near[1].toLocaleString(), l3 = 'Max: ' + near[2].toLocaleString();
+					ctx.font = 'bold 18px pixel,monospace';
+					const tw = Math.max(ctx.measureText(l1).width, ctx.measureText(l2).width, ctx.measureText(l3).width) + 24;
+					let tx = x + 12, ty = yv(near[1]) - 50;
+					if (tx + tw > this.width - 15) tx = x - tw - 12;
+					if (ty < PT) ty = PT;
+
+					ctx.fillStyle = 'rgba(20,20,30,0.95)'; ctx.strokeStyle = '#9F9FB0'; ctx.lineWidth = 1;
+					ctx.beginPath(); ctx.roundRect(tx, ty, tw, 85, 4); ctx.fill(); ctx.stroke();
+
+					ctx.textAlign = 'left';
+					ctx.fillStyle = 'rgba(159,159,176,0.9)'; ctx.fillText(l1, tx + 10, ty + 24);
+					ctx.fillStyle = '#50ADDD'; ctx.fillText(l2, tx + 10, ty + 50);
+					ctx.fillStyle = '#DCC343'; ctx.fillText(l3, tx + 10, ty + 70);
+				};
+				ghCanvas.onmouseleave = () => tkrDrawGraph();
+			}
+
+			window.toggleDropdown = key => { const d = document.getElementById('dropdown-' + key); d.style.display = d.style.display === 'block' ? 'none' : 'block'; };
 		};
 	};
 
-	const full_text = tracker_function.toString();
-	parent.smart_eval(full_text.slice(full_text.indexOf("{") + 1, full_text.lastIndexOf("}")));
+	const s = tracker_function.toString();
+	parent.smart_eval(s.slice(s.indexOf('{') + 1, s.lastIndexOf('}')));
 }
 
 modify_tracker();
@@ -2594,6 +2963,10 @@ let mobKills = {};
 let killInterval = 'day';
 const killHistory = {};
 
+// Co-op tracking state
+const coopHistory = {};
+let lastCoopUpdate = 0;
+
 // Multi-select damage types - default to DPS only
 let selectedDamageTypes = ['DPS'];
 
@@ -2611,14 +2984,15 @@ let lastKillUpdate = 0;
 
 const classColors = {
 	mage: '#3FC7EB', paladin: '#F48CBA', priest: '#FFFFFF',
-	ranger: '#AAD372', rogue: '#FFF468', warrior: '#C69B6D'
+	ranger: '#AAD372', rogue: '#FFF468', warrior: '#C69B6D', default: '#FFFFFF'
 };
 
 const sectionColors = {
 	gold: { primary: '#FFD700', rgba: 'rgba(255, 215, 0, 0.3)', axis: 'rgba(255, 215, 0, 0.1)' },
 	xp: { primary: '#87CEEB', rgba: 'rgba(135, 206, 235, 0.3)', axis: 'rgba(135, 206, 235, 0.2)' },
 	dps: { primary: '#FF6B6B', rgba: 'rgba(255, 107, 107, 0.3)', axis: 'rgba(255, 107, 107, 0.2)' },
-	kills: { primary: '#9D4EDD', rgba: 'rgba(157, 78, 221, 0.3)', axis: 'rgba(157, 78, 221, 0.1)' }
+	kills: { primary: '#9D4EDD', rgba: 'rgba(157, 78, 221, 0.3)', axis: 'rgba(157, 78, 221, 0.1)' },
+	coop: { primary: '#FF9500', rgba: 'rgba(255, 149, 0, 0.3)', axis: 'rgba(255, 149, 0, 0.1)' }
 };
 
 // Mob type colors
@@ -2715,6 +3089,7 @@ function calculateTotalDamageType(damageType, now) {
 const createMetricsDashboard = () => {
 	const $ = parent.$;
 	$('#metricsDashboard').remove();
+	$('#metricsBackdrop').remove();
 
 	const metricCard = (label, valueId) =>
 		`<div class="metric-card"><div class="metric-label">${label}</div><div class="metric-value" id="${valueId}">0</div></div>`;
@@ -2724,6 +3099,17 @@ const createMetricsDashboard = () => {
 
 	const damageButtons = (buttons) =>
 		buttons.map(b => `<button class="damage-type-btn ${b.active ? 'active' : ''}" data-damage-type="${b.type}" data-color="${b.color}">${b.label}</button>`).join('');
+
+	const backdrop = $('<div id="metricsBackdrop"></div>').css({
+		position: 'fixed',
+		top: 0,
+		left: 0,
+		width: '100%',
+		height: '100%',
+		background: 'rgba(0, 0, 0, 0.5)',
+		zIndex: 9998,
+		display: 'none'
+	});
 
 	const dashboard = $(`
 		<div id="metricsDashboard">
@@ -2806,6 +3192,15 @@ const createMetricsDashboard = () => {
 					<canvas id="killChart" class="metric-chart"></canvas>
 					<div id="mobBreakdown"></div>
 				</div>
+
+				<div class="metrics-section" data-section="coop">
+					<h3>Boss Contribution</h3>
+					<div class="metrics-grid">
+						${metricCard('Party Total', 'partyCoop')}
+						${metricCard('Party Total %', 'yourCoopPct')}
+					</div>
+					<canvas id="coopChart" class="metric-chart"></canvas>
+				</div>
 			</div>
 		</div>
 	`).css({
@@ -2816,6 +3211,7 @@ const createMetricsDashboard = () => {
 		fontFamily: $('#bottomrightcorner').css('font-family') || 'pixel'
 	});
 
+	$('body').append(backdrop);
 	$('body').append(dashboard);
 	applyStyles($);
 	attachEventHandlers($);
@@ -2881,7 +3277,22 @@ const applyStyles = ($) => {
 };
 
 const attachEventHandlers = ($) => {
-	$('#closeBtn').on('click', () => $('#metricsDashboard').hide());
+	const closeDashboard = () => {
+		$('#metricsDashboard').hide();
+		$('#metricsBackdrop').hide();
+		if (updateInterval) {
+			clearInterval(updateInterval);
+			updateInterval = null;
+		}
+	}
+
+	$('#closeBtn').on('click', closeDashboard);
+	$('#metricsBackdrop').on('click', closeDashboard);
+	parent.$(parent.document).on('keydown.metricsDashboard', function (e) {
+		if (e.key === 'Escape' && $('#metricsDashboard').is(':visible')) {
+			closeDashboard();
+		}
+	});
 
 	$('.interval-btn').on('click', function () {
 		const type = $(this).data('type');
@@ -2948,6 +3359,7 @@ let $goldRate, $jackpotValue, $totalGold, $goldLabel;
 let $xpRate, $totalXP, $timeToLevel, $xpLabel;
 let $partyDPS, $yourDPS, $sessionTime;
 let $killRate, $totalKillCount, $mobBreakdown;
+let $yourCoop, $partyCoop, $yourCoopPct;
 
 const updateMetricsDashboard = () => {
 	const $ = parent.$;
@@ -2971,6 +3383,10 @@ const updateMetricsDashboard = () => {
 		$killRate = $('#killRate');
 		$totalKillCount = $('#totalKillCount');
 		$mobBreakdown = $('#mobBreakdown');
+
+		$yourCoop = $('#yourCoop');
+		$partyCoop = $('#partyCoop');
+		$yourCoopPct = $('#yourCoopPct');
 	}
 
 	const avgGold = calculateAverageGold();
@@ -3058,11 +3474,173 @@ const updateMetricsDashboard = () => {
 	}
 
 	updateMobBreakdown($);
+	updateCoopMetrics($, now);
 
 	drawChart('goldChart', [{ history: goldHistory, color: sectionColors.gold.primary }], sectionColors.gold.primary);
 	drawChart('xpChart', [{ history: xpHistory, color: sectionColors.xp.primary }], sectionColors.xp.primary);
 	drawDPSBarChart();
 	drawKillBarChart();
+	drawCoopBarChart();
+};
+
+// ========== CO-OP TRACKING ==========
+const updateCoopMetrics = ($, now) => {
+	const yourDmg = character?.s?.coop?.p || 0;
+	let partyTotal = yourDmg;
+	let overallTotal = yourDmg;
+
+	const partyIds = new Set(parent.party_list);
+
+	for (let id in parent.entities) {
+		const e = parent.entities[id];
+		if (!e.npc && e.s?.coop?.p) {
+			overallTotal += e.s.coop.p;
+			if (partyIds.has(id)) {
+				partyTotal += e.s.coop.p;
+			}
+		}
+	}
+
+	const partySharePct = overallTotal > 0 ? (partyTotal / overallTotal) * 100 : 0;
+
+	$yourCoop.text((yourDmg | 0).toLocaleString('en'));
+	$partyCoop.text((partyTotal | 0).toLocaleString('en'));
+	$yourCoopPct.text(partySharePct.toFixed(2) + '%');
+
+	if (now - lastCoopUpdate >= HISTORY_INTERVAL) {
+		if (!coopHistory[character.id]) coopHistory[character.id] = [];
+		coopHistory[character.id].push({ time: now, value: yourDmg });
+		if (coopHistory[character.id].length > MAX_HISTORY) coopHistory[character.id].shift();
+
+		for (let id in parent.entities) {
+			const e = parent.entities[id];
+			if (!e.npc && e.s?.coop?.p) {
+				if (!coopHistory[id]) coopHistory[id] = [];
+				coopHistory[id].push({ time: now, value: e.s.coop.p });
+				if (coopHistory[id].length > MAX_HISTORY) coopHistory[id].shift();
+			}
+		}
+
+		lastCoopUpdate = now;
+	}
+};
+
+const drawCoopBarChart = () => {
+	const $ = parent.$;
+	const canvas = parent.document.getElementById('coopChart');
+	if (!canvas || !$('#metricsDashboard').is(':visible')) return;
+
+	const ctx = canvas.getContext('2d');
+	const rect = canvas.getBoundingClientRect();
+
+	if (canvas.width !== rect.width || canvas.height !== rect.height) {
+		canvas.width = rect.width;
+		canvas.height = rect.height;
+	}
+
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+	let entities = [], max = 1, total = 0;
+
+	if (character?.s?.coop?.p) {
+		let p = character.s.coop.p;
+		entities.push({ id: character.id, name: character.name, dmg: p, ctype: character.ctype });
+		if (p > max) max = p;
+		total += p;
+	}
+
+	for (let id in parent.entities) {
+		let e = parent.entities[id];
+		if (!e.npc && e.s?.coop?.p) {
+			let p = e.s.coop.p;
+			entities.push({ id, name: e.name || e.mtype, dmg: p, ctype: e.ctype });
+			if (p > max) max = p;
+			total += p;
+		}
+	}
+
+	if (!entities.length) {
+		ctx.fillStyle = '#999';
+		ctx.font = '24px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText('No boss damage yet...', canvas.width / 2, canvas.height / 2);
+		return;
+	}
+
+	entities.sort((a, b) => b.dmg - a.dmg);
+	max *= 1.1;
+
+	const padding = 60;
+	const labelHeight = 40;
+	const chartHeight = canvas.height - padding - labelHeight;
+	const chartWidth = canvas.width - 2 * padding;
+
+	ctx.strokeStyle = sectionColors.coop.axis;
+	ctx.lineWidth = 1;
+	for (let i = 0; i <= 5; i++) {
+		const y = padding + chartHeight * (1 - i / 5);
+		ctx.beginPath();
+		ctx.moveTo(padding, y);
+		ctx.lineTo(canvas.width - padding, y);
+		ctx.stroke();
+
+		ctx.fillStyle = sectionColors.coop.primary;
+		ctx.font = '16px pixel, monospace';
+		ctx.textAlign = 'right';
+		const value = Math.round(max * i / 5);
+		ctx.fillText(value.toLocaleString(), padding - 10, y + 5);
+	}
+
+	const groupWidth = chartWidth / entities.length;
+	const barWidth = Math.min(groupWidth - 20, 80);
+
+	for (let i = 0; i < entities.length; i++) {
+		const e = entities[i];
+		const groupX = padding + i * groupWidth;
+		const color = classColors[e.ctype.toLowerCase()] || classColors.default;
+
+		const barHeight = (e.dmg / max) * chartHeight;
+		const barX = groupX + (groupWidth - barWidth) / 2;
+		const barY = padding + chartHeight - barHeight;
+
+		const gradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+		gradient.addColorStop(0, color);
+		gradient.addColorStop(1, color + '80');
+		ctx.fillStyle = gradient;
+		ctx.fillRect(barX, barY, barWidth, barHeight);
+
+		ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+		ctx.lineWidth = 2;
+		ctx.strokeRect(barX, barY, barWidth, barHeight);
+
+		const pct = ((e.dmg / total) * 100).toFixed(1);
+		const dmgText = (e.dmg | 0).toLocaleString();
+		const pctText = `${pct}%`;
+
+		// Draw percentage above bar (always visible)
+		ctx.font = '22px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.lineWidth = 3;
+		ctx.strokeStyle = 'black';
+		ctx.strokeText(pctText, barX + barWidth / 2, barY - 5);
+		ctx.fillStyle = color;
+		ctx.fillText(pctText, barX + barWidth / 2, barY - 5);
+
+		// Draw damage value inside bar (if tall enough)
+		if (barHeight > 20) {
+			ctx.font = '16px pixel, monospace';
+			ctx.lineWidth = 3;
+			ctx.strokeStyle = 'black';
+			ctx.strokeText(dmgText, barX + barWidth / 2, barY + 18);
+			ctx.fillStyle = 'white';
+			ctx.fillText(dmgText, barX + barWidth / 2, barY + 18);
+		}
+
+		ctx.fillStyle = color;
+		ctx.font = '16px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.fillText(e.name, groupX + groupWidth / 2, canvas.height - 20);
+	}
 };
 
 // ========== CHART DRAWING ==========
@@ -3590,11 +4168,13 @@ const toggleMetricsDashboard = () => {
 
 	if (dashboard.is(':visible')) {
 		dashboard.hide();
+		$('#metricsBackdrop').hide();
 		if (updateInterval) {
 			clearInterval(updateInterval);
 			updateInterval = null;
 		}
 	} else {
+		$('#metricsBackdrop').show();
 		dashboard.show();
 		updateMetricsDashboard();
 		if (!updateInterval) {
@@ -3660,40 +4240,22 @@ parent.socket.on('hit', data => {
 	}
 });
 
-/*
-game.on('death', data => {
-	const mob = parent.entities[data.id];
-	if (!mob?.cooperative) return;
-
-	const mobTarget = mob.target;
-	const party = get_party();
-	const partyMembers = party ? Object.keys(party) : [];
-
-	if (mobTarget === character.name || partyMembers.includes(mobTarget)) {
-
-		totalKills++;
-		const mobType = (mob.mtype || 'unknown').charAt(0).toUpperCase() + (mob.mtype || 'unknown').slice(1);
-		mobKills[mobType] = (mobKills[mobType] || 0) + 1;
-		getMobColor(mobType);
-	}
-});
-*/
-parent.socket.on("game_log", data => {
-	if (typeof data !== "string") return;
-
-	const match = data.match(/killed (.+)$/);
-	if (!match) return;
-
-	let mobType = match[1].trim().replace(/^(a |an |the )/i, '');
-	mobType = mobType.charAt(0).toUpperCase() + mobType.slice(1);
+parent.socket.on("kill_credit", async (data) => {
+	const { mtype } = data;
+	if (!mtype) return;
 
 	totalKills++;
-	mobKills[mobType] = (mobKills[mobType] || 0) + 1;
-	getMobColor(mobType);
+	mobKills[mtype] = (mobKills[mtype] || 0) + 1;
+	getMobColor(mtype);
+
+	if (CONFIG.equipment.temporal.enabled && mtype === CONFIG.equipment.temporal.targetMob) {
+		if (!is_on_cooldown("temporalsurge")) {
+			await handleTemporalSurge();
+		}
+	}
 });
 
 character.on("loot", (data) => {
-
 	if (data.gold && typeof data.gold === 'number' && !Number.isNaN(data.gold)) {
 		const count = Object.keys(parent.party).filter(name =>
 			name === character.name || parent.entities[name]?.owner === character.owner

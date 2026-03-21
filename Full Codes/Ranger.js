@@ -124,7 +124,6 @@ const CONFIG = {
 
 	dragold: {
 		enabled: true,
-		// How far before spawn time we're willing to hop to a shard
 		preSpawnBuffer: 5000,
 	}
 };
@@ -263,22 +262,12 @@ const equipmentSets = {
 // ============================================================================
 // DRAGOLD SERVER HOPPING — STATE MACHINE
 // ============================================================================
-// States:
-//   IDLE      — no dragold to chase, normal play
-//   HOPPING   — changing server toward a dragold shard (blocks mainLoop movement)
-//   FIGHTING  — on the dragold shard, dragold is live here (lets handleEvents run)
-//   RETURNING — dragold here is dead, heading back to homeServer
-//
-// Critical rule: once FIGHTING, we stay until parent.S.dragold confirms dead locally.
-// Scan data NEVER causes us to leave a shard we're actively fighting on.
-// ============================================================================
 const dragold = {
-	state: 'IDLE',          // current state machine state
-	targetShard: null,      // shard we're hopping toward (or fighting on)
-	scanResults: [],        // latest scan data, updated by socket callbacks
-	hopping: false,         // true while change_server call is in flight (prevents re-entry)
+	state: 'IDLE',
+	targetShard: null,
+	scanResults: [],
+	hopping: false,
 
-	// Called once at boot. Opens one socket per server; callbacks update scanResults forever.
 	startScanning() {
 		if (!CONFIG.dragold.enabled) return;
 		const servers = parent?.X?.servers;
@@ -299,33 +288,27 @@ const dragold = {
 		}
 	},
 
-	// Returns the current shard identifier string (e.g. "USIII")
 	currentShard() {
 		return parent.server_region + parent.server_identifier;
 	},
 
-	// Is dragold live on THIS server right now? Uses local authoritative data, not scan.
 	localDragoldLive() {
 		return parent?.S?.dragold?.live === true;
 	},
 
-	// Pick the best shard to hop to from scan results.
-	// Returns shard string or null if nothing worth chasing.
 	pickTargetShard() {
 		const now = Date.now();
 		const cur = this.currentShard();
 		let best = null;
 
 		for (const r of this.scanResults) {
-			if (r.shard === cur) continue; // don't hop to ourselves
+			if (r.shard === cur) continue;
 
 			if (r.live) {
-				// Live dragold on another shard — immediate priority
 				best = r;
 				break;
 			}
 
-			// Not live yet — only consider if spawn is coming soon
 			const untilSpawn = r.spawnTime - now;
 			if (untilSpawn > 0 && untilSpawn <= CONFIG.dragold.preSpawnBuffer) {
 				if (!best || r.spawnTime < best.spawnTime) best = r;
@@ -335,19 +318,16 @@ const dragold = {
 		return best?.shard ?? null;
 	},
 
-	// Loot all pending chests before we leave. Returns true if still looting (block hop).
 	async lootBeforeHop() {
 		const chests = Object.keys(get_chests());
 		if (chests.length === 0) return false;
 
-		// Loot each chest by ID, one at a time
 		for (const id of chests) {
-			try { await loot(id); } catch (e) { /* chest may already be gone */ }
+			try { await loot(id); } catch (e) { }
 		}
-		return true; // we looted this tick, let it settle before hopping
+		return true;
 	},
 
-	// Parse a shard string like "USIII" into { region: "US", name: "III" }
 	parseShard(shard) {
 		for (const region of REGIONS) {
 			if (shard.startsWith(region)) return { region, name: shard.slice(region.length) };
@@ -355,7 +335,6 @@ const dragold = {
 		return null;
 	},
 
-	// Execute the actual server change. Returns true on success.
 	async changeServer(shard) {
 		const parsed = this.parseShard(shard);
 		if (!parsed) {
@@ -366,8 +345,6 @@ const dragold = {
 		this.hopping = true;
 		try {
 			change_server(parsed.region, parsed.name);
-			// change_server triggers a full reconnect; script will re-run on new shard.
-			// We set hopping=true so that if somehow tick fires before reconnect, we don't double-call.
 			return true;
 		} catch (e) {
 			game_log(`dragold: server change failed — ${e}`, 'red');
@@ -376,84 +353,60 @@ const dragold = {
 		}
 	},
 
-	// Main tick. Called every mainLoop iteration.
-	// Returns 'block' if mainLoop should skip movement/events this tick,
-	// or 'continue' if normal flow should proceed.
 	async tick() {
 		if (!CONFIG.dragold.enabled) return 'continue';
-		if (this.hopping) return 'block'; // change_server in flight, wait for reconnect
+		if (this.hopping) return 'block';
 
 		const cur = this.currentShard();
 
 		switch (this.state) {
-			// ─── IDLE ─────────────────────────────────────────────────────────
-			// Normal play. Watch scan for a dragold worth chasing.
 			case 'IDLE': {
-				// If we happen to be on a shard with a live dragold (e.g. it spawned
-				// while we were here), jump straight to FIGHTING.
 				if (this.localDragoldLive()) {
 					this.state = 'FIGHTING';
 					this.targetShard = cur;
 					game_log('🐉 Dragold live here — entering FIGHTING', '#FFD700');
-					return 'continue'; // let handleEvents navigate to it
+					return 'continue';
 				}
 
 				const target = this.pickTargetShard();
 				if (target) {
 					this.state = 'HOPPING';
 					this.targetShard = target;
-					// fall through to HOPPING on this same tick
 				} else {
 					return 'continue';
 				}
 			}
-			// falls through intentionally when a target is found
 
-			// ─── HOPPING ──────────────────────────────────────────────────────
-			// Heading to a dragold shard. Loot chests first, then change server.
 			case 'HOPPING': {
-				// If we already arrived (script re-ran on new shard), transition.
 				if (cur === this.targetShard) {
 					if (this.localDragoldLive()) {
 						this.state = 'FIGHTING';
 						game_log('🐉 Arrived — dragold is live, FIGHTING', '#FFD700');
 						return 'continue';
 					}
-					// Arrived but dragold isn't live (killed before we got here, or pre-spawn hasn't fired)
+
 					game_log('🐉 Arrived but dragold not live here — back to IDLE', '#FFD700');
 					this.state = 'IDLE';
 					this.targetShard = null;
 					return 'continue';
 				}
 
-				// Still on old shard — loot chests then hop
-				if (await this.lootBeforeHop()) return 'block'; // looted this tick, wait
+				if (await this.lootBeforeHop()) return 'block';
 
 				await this.changeServer(this.targetShard);
 				return 'block';
 			}
 
-			// ─── FIGHTING ─────────────────────────────────────────────────────
-			// On the dragold shard. Stay here until dragold is confirmed dead LOCALLY.
-			// We deliberately ignore scan data here — parent.S.dragold is authoritative.
 			case 'FIGHTING': {
 				if (this.localDragoldLive()) {
-					return 'continue'; // still alive, let handleEvents do the fight
+					return 'continue';
 				}
-				// Dragold is dead on this shard. Time to leave.
 				game_log('🐉 Dragold dead — RETURNING home', '#FFD700');
 				this.state = 'RETURNING';
 				this.targetShard = null;
-				// fall through to RETURNING on same tick
 			}
-			// falls through intentionally
 
-			// ─── RETURNING ────────────────────────────────────────────────────
-			// Dragold here is dead. Head back to homeServer unless a new LIVE dragold
-			// popped somewhere (pre-spawn only is not enough — we want to go home first).
 			case 'RETURNING': {
-				// Check if a live dragold appeared elsewhere while we're returning.
-				// Only react to actually-live ones, not pre-spawn timers.
 				const liveShard = this.scanResults.find(
 					r => r.shard !== cur && r.live
 				)?.shard;
@@ -462,18 +415,15 @@ const dragold = {
 					this.state = 'HOPPING';
 					this.targetShard = liveShard;
 					game_log(`🐉 New live dragold on ${liveShard} — diverting`, '#FFD700');
-					// fall through to HOPPING handled next tick
 					return 'block';
 				}
 
-				// No live dragold elsewhere. Are we home yet?
 				if (cur === homeServer) {
 					this.state = 'IDLE';
 					this.targetShard = null;
-					return 'continue'; // we're home, resume normal
+					return 'continue';
 				}
 
-				// Not home yet — hop home
 				if (await this.lootBeforeHop()) return 'block';
 
 				await this.changeServer(homeServer);
@@ -596,18 +546,14 @@ async function mainLoop() {
 			}
 		}
 
-		// Dragold state machine runs first. If it says 'block', skip everything else
-		// this tick (we're in the middle of hopping or looting before a hop).
 		if (await dragold.tick() === 'block') {
 			return setTimeout(mainLoop, TICK_RATE.main);
 		}
 
-		// Normal event/movement flow. dragold in FIGHTING state returns 'continue',
-		// and handleEvents() will pick up dragold from EVENT_LOCATIONS naturally.
+
 		if (shouldHandleEvents()) {
 			handleEvents();
-		}
-		else if (CONFIG.movement.enabled) {
+		} else if (CONFIG.movement.enabled) {
 			if (!get_nearest_monster({ type: home })) {
 				handleReturnHome();
 			} else if (CONFIG.movement.rangedKiting.enabled) {
@@ -1729,8 +1675,8 @@ potionLoop();
 // UI Stuff
 // ============================================================================
 // ============= CONFIGURATION =============
-const DISCORD_WEBHOOK_URL = "**********************";
-const MENTION_USER_ID = "******************";  // Set to null or "" to disable pings
+const DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1384621785772986479/kOkWjISThVdoxAL32ONqiq2z9Ach8XJbOduuZFGXXAgkXmiuMMRqWPZtpEoVFG-w89KM";
+const MENTION_USER_ID = "212506590950064130";  // Set to null or "" to disable pings
 const BOT_USERNAME = "Lootbot";
 const OUTPUT_SIZE = 50; // Scale image size
 // =========================================
@@ -2274,7 +2220,7 @@ function displayXP() {
 }
 
 initXP();
-//setInterval(displayXP, 1000);
+setInterval(displayXP, 1000);
 //////////////////////////////////////////////////
 let lastGoldCheck = character.gold;
 let totalGoldAcquired = 0;

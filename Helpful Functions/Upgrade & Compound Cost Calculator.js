@@ -302,8 +302,8 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, d
 		item: itemName, base_item_value: fmtGold(itemValue), from_level: 0, to_level: targetLevel,
 		total_expected_cost: fmtGold(cumCost),
 		total_items_needed: Math.ceil(path.reduce((p, s) => p * s.expected_attempts, 1)),
-		expected_scrolls: Object.fromEntries(Object.entries(scrollTotals).map(([k, v]) => [k, Math.round(v)])),
-		expected_offerings: Object.fromEntries(Object.entries(offeringTotals).map(([k, v]) => [k, Math.round(v)])),
+		expected_scrolls: Object.fromEntries(Object.entries(scrollTotals).filter(([, v]) => v > 0).map(([k, v]) => [k, Math.round(v)])),
+		expected_offerings: Object.fromEntries(Object.entries(offeringTotals).filter(([k, v]) => k !== "none" && v > 0).map(([k, v]) => [k, Math.round(v)])),
 		upgrade_steps: path.map(s => ({
 			upgrade: `+${s.from_level} → +${s.to_level}`, scroll: SCROLL_NAMES.upgrade[s.scroll],
 			offering: OFFERING_NAMES[s.offering], primstacks: s.primstacks,

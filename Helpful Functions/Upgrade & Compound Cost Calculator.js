@@ -287,10 +287,23 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, d
 		cumCost = s.expected_cost;
 	}
 
+	const scrollTotals = { scroll0: 0, scroll1: 0, scroll2: 0, scroll3: 0, scroll4: 0 };
+	const offeringTotals = { none: 0, offeringp: 0, offering: 0, offeringx: 0 };
+	let suffixMult = 1;
+	for (let i = path.length - 1; i >= 0; i--) {
+		const s = path[i];
+		suffixMult *= s.expected_attempts;
+		scrollTotals[SCROLL_NAMES.upgrade[s.scroll]] += suffixMult;
+		offeringTotals[OFFERING_NAMES[s.offering]] += suffixMult;
+		offeringTotals.offeringp += s.primstacks * (suffixMult / s.expected_attempts);
+	}
+
 	const output = {
 		item: itemName, base_item_value: fmtGold(itemValue), from_level: 0, to_level: targetLevel,
 		total_expected_cost: fmtGold(cumCost),
 		total_items_needed: Math.ceil(path.reduce((p, s) => p * s.expected_attempts, 1)),
+		expected_scrolls: Object.fromEntries(Object.entries(scrollTotals).map(([k, v]) => [k, Math.round(v)])),
+		expected_offerings: Object.fromEntries(Object.entries(offeringTotals).map(([k, v]) => [k, Math.round(v)])),
 		upgrade_steps: path.map(s => ({
 			upgrade: `+${s.from_level} → +${s.to_level}`, scroll: SCROLL_NAMES.upgrade[s.scroll],
 			offering: OFFERING_NAMES[s.offering], primstacks: s.primstacks,
@@ -307,9 +320,21 @@ function compoundCost(itemName, itemValue, targetLevel = 7, optimizeItem = false
 	if (!G.items[itemName]) return null;
 
 	const result = calculateCompoundPath(itemValue, itemName, 0, targetLevel, optimizeItem);
+
+	const scrollTotals = { cscroll0: 0, cscroll1: 0, cscroll2: 0, cscroll3: 0, cscroll4: 0 };
+	const offeringTotals = { none: 0, offeringp: 0, offering: 0, offeringx: 0 };
+	let itemMult = 1;
+	for (const s of result.path) {
+		scrollTotals[SCROLL_NAMES.compound[s.scroll]] += s.expected_attempts * itemMult;
+		offeringTotals[OFFERING_NAMES[s.offering]] += s.expected_attempts * itemMult;
+		itemMult *= s.expected_attempts * 3;
+	}
+
 	const output = {
 		item: itemName, base_item_value: fmtGold(itemValue), from_level: 0, to_level: targetLevel,
 		total_expected_cost: fmtGold(result.total_expected_cost), total_items_needed: Math.ceil(result.total_items_needed),
+		expected_scrolls: Object.fromEntries(Object.entries(scrollTotals).map(([k, v]) => [k, Math.round(v)])),
+		expected_offerings: Object.fromEntries(Object.entries(offeringTotals).map(([k, v]) => [k, Math.round(v)])),
 		compound_steps: result.path.map(s => ({
 			compound: `+${s.from_level} → +${s.to_level}`, scroll: SCROLL_NAMES.compound[s.scroll],
 			offering: OFFERING_NAMES[s.offering], success_chance: `${(s.chance * 100).toFixed(2)}%`,

@@ -68,6 +68,7 @@ const OFFERING_NAMES = ["none", "offeringp", "offering", "offeringx"];
 
 const gradeCache = {};
 const getZeroGrade = n => gradeCache[n] ?? (gradeCache[n] = item_grade({ name: n, level: 0 }));
+const fmtGold = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
 const getUpgradeChance = (item, scroll_def, offering_def) => {
 	let grace = item.grace || 0, new_grace = grace;

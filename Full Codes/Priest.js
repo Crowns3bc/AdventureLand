@@ -1,0 +1,1536 @@
+// autorerun
+// ============================================================================
+// CONFIGURATION - Toggle features here instead of editing code
+// ============================================================================
+const home = 'bigbird';
+const mobMap = 'main';
+const allBosses = ['bscorpion', 'bscorpion', 'crabxx', 'dragold', 'franky', 'greenjr', 'grinch', 'icegolem', 'jr', 'mrgreen', 'mrpumpkin', 'phoenix', 'rgoo', 'wabbit'];
+
+const CONFIG = {
+	combat: {
+		curse: false,
+		zapper: true,
+		zapSwap: true,
+		zapperMobs: [...allBosses, home, 'sparkbot', 'spider', 'scorpion'],
+		targetPriority: ['CrownPriest'],
+		allBosses,
+	},
+
+	movement: {
+		enabled: true,
+		circleWalk: false,
+		circleSpeed: 1.8,
+		circleRadius: 25,
+		kiting: {
+			enabled: false,
+			avoidTypes: ['bscorpion'],
+			avoidRadius: 300,
+			rangeBuffer: 65,
+			boundaryBox: [-650, -1385, -220, -1165], // [x1, y1, x2, y2]
+
+			// Movement tuning
+			moveThrottle: 50,  // ms between moves
+			moveDistance: 50, // how far to move per step
+			sampleAngles: 120, // directions to test (more = smoother)
+
+			// Weighting
+			goalWeight: 0.1, // how much to prefer moving toward goal
+			safetyWeight: 1.0, // how much to prefer moving away from danger
+			debug: true
+		},
+	},
+
+	healing: {
+		partyHealThreshold: 0.65,
+		healOthers: true,
+		healOthersThresh: 0.8,
+		partyHealMinMp: 2000,
+		absorb: true,
+		darkBlessing: true
+	},
+
+	looting: {
+		lootSet: "maxLuck",
+		enabled: true,
+		chestThreshold: 20,
+		targetCount: 55,
+		equipGoldGear: true,
+		lootCooldown: 3000
+	},
+
+	equipment: {
+		autoSwapSets: true,
+		bossLuckSwitch: true,
+		bossHpThresholds: {
+			mrpumpkin: 300000,
+			mrgreen: 300000,
+			bscorpion: 75000,
+			crabxx: 40000,
+			dragold: 200000,
+		},
+		temporal: {
+			enabled: true,
+			targetMob: 'bscorpion',
+			orbName: 'orboftemporal',
+			skillName: 'temporalsurge',
+			characters: ['CrownPriest', 'CrownsAnal', 'CrownTown'], // Rotation order
+			storageKey: 'temporal_surge_rotation'
+		}
+	},
+
+	potions: {
+		autoBuy: true,
+		hpThreshold: 400,
+		mpThreshold: 500,
+		minStock: 1000
+	},
+
+	party: {
+		autoManage: true,
+		groupMembers: ['CrownsAnal', 'CrownTown', 'CrownPriest']
+	},
+};
+
+// ============================================================================
+// CONSTANTS - Named values instead of magic numbers
+// ============================================================================
+const TICK_RATE = {
+	main: 100,         // Main game loop
+	action: 1,         // Combat/skill actions
+	maintenance: 2000  // Inventory, potions, etc
+};
+
+const COOLDOWNS = {
+	equipSwap: 300,
+	zapperSwap: 100,
+	cc: 125
+};
+
+const EVENT_LOCATIONS = [
+	{ name: 'dragold', map: 'cave', x: 1150, y: -850 },
+	//{ name: 'crabxx', map: 'main', x: -961, y: 1780, join: true },
+	{ name: 'mrgreen', map: 'spookytown', x: 610, y: 1000 },
+	{ name: 'mrpumpkin', map: 'halloween', x: -222, y: 720 }
+];
+
+const getDynamicEvents = () => {
+	const events = [...EVENT_LOCATIONS];
+	const w = parent.S?.wabbit;
+	if (w?.live) events.push({ name: 'wabbit', map: w.map, x: w.x, y: w.y });
+	return events;
+};
+
+const CACHE_TTL = 50; // Cache validity in ms
+
+// ============================================================================
+// STATE & CACHE
+// ============================================================================
+const state = {
+	current: 'idle', // idle, looting, moving
+	skinReady: false,
+	lastEquipTime: 0,
+	lastLootTime: 0,
+	angle: 0,
+	lastAngleUpdate: performance.now()
+};
+
+const cache = {
+	target: null,
+	healTarget: null,
+	zapTargets: [],
+	partyMembers: [],
+	nearestBoss: null,
+	lastUpdate: 0,
+
+	isValid() {
+		return performance.now() - this.lastUpdate < CACHE_TTL;
+	},
+
+	invalidate() {
+		this.lastUpdate = 0;
+	}
+};
+
+// ============================================================================
+// LOCATION & EQUIPMENT DATA
+// ============================================================================
+const locations = {
+	bat: [{ x: 1200, y: -782 }],
+	bigbird: [{ x: 1258, y: -69 }],
+	bluefairy: [{ x: -357, y: -675 }],
+	bscorpion: [{ x: -555, y: -1158 }],
+	boar: [{ x: 19, y: -1109 }],
+	cgoo: [{ x: -221, y: -274 }],
+	crab: [{ x: -11840, y: -37 }],
+	dryad: [{ x: 403, y: -347 }],
+	ent: [{ x: -420, y: -1960 }],
+	fireroamer: [{ x: 222, y: -827 }],
+	ghost: [{ x: -405, y: -1642 }],
+	gscorpion: [{ x: 390, y: -1422 }],
+	iceroamer: [{ x: 823, y: -45 }],
+	mechagnome: [{ x: 0, y: 0 }],
+	mole: [{ x: 14, y: -1072 }],
+	mummy: [{ x: 256, y: -1417 }],
+	odino: [{ x: -52, y: 756 }],
+	oneeye: [{ x: -255, y: 176 }],
+	pinkgoblin: [{ x: 485, y: 157 }],
+	poisio: [{ x: -121, y: 1360 }],
+	prat: [{ x: 11, y: 84 }],
+	pppompom: [{ x: 292, y: -189 }],
+	plantoid: [{ x: -780, y: -387 }],
+	rat: [{ x: 6, y: 430 }],
+	scorpion: [{ x: -495, y: 685 }],
+	stoneworm: [{ x: 830, y: 7 }],
+	sparkbot: [{ x: -544, y: -275 }],
+	spider: [{ x: 895, y: -145 }],
+	squig: [{ x: -1175, y: 422 }],
+	targetron: [{ x: -544, y: -275 }],
+	wolf: [{ x: 433, y: -2745 }],
+	wolfie: [{ x: 113, y: -2014 }],
+	xscorpion: [{ x: -495, y: 685 }]
+};
+
+
+const destination = {
+	map: mobMap,
+	x: locations[home][0].x,
+	y: locations[home][0].y
+};
+
+const equipmentSets = {
+	zapOn: [
+		{ itemName: "zapper", slot: "ring2", level: 2, l: "u" }
+	],
+	zapOff: [
+		{ itemName: "ringofluck", slot: "ring2", level: 2, l: "l" }
+	],
+	luck: [
+		{ itemName: "xhelmet", slot: "helmet", level: 9, l: "l" },
+		{ itemName: "vattire", slot: "chest", level: 8, l: "l" },
+		//{ itemName: "tshirt88", slot: "chest", level: 4, l: "l" },
+		{ itemName: "starkillers", slot: "pants", level: 9, l: "l" },
+		{ itemName: "wingedboots", slot: "shoes", level: 9, l: "l" },
+		{ itemName: "mpxgloves", slot: "gloves", level: 7, l: "l" },
+		{ itemName: "sbelt", slot: "belt", level: 2, l: "l" },
+		{ itemName: "lmace", slot: "mainhand", level: 9, l: "l" },
+		{ itemName: "mshield", slot: "offhand", level: 10, l: "l" },
+		{ itemName: "ringofluck", slot: "ring1", level: 2, l: "u" },
+		{ itemName: "ringofluck", slot: "ring2", level: 2, l: "l" },
+		{ itemName: "rabbitsfoot", slot: "orb", level: 3, l: "l" },
+		//{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
+		{ itemName: "spookyamulet", slot: "amulet", level: 3, l: "l" },
+		{ itemName: "bcape", slot: "cape", level: 8, l: "l" },
+		{ itemName: "mearring", slot: "earring1", level: 2, l: "l" },
+		{ itemName: "mearring", slot: "earring2", level: 1, l: "u" }
+	],
+	maxLuck: [
+		{ itemName: "eears", slot: "helmet", level: 8, l: "l" },
+		{ itemName: "tshirt88", slot: "chest", level: 4, l: "l" },
+		{ itemName: "xmaspants", slot: "pants", level: 9, l: "l" },
+		{ itemName: "wingedboots", slot: "shoes", level: 9, l: "l" },
+		{ itemName: "mpxgloves", slot: "gloves", level: 7, l: "l" },
+		{ itemName: "santasbelt", slot: "belt", level: 3, l: "l" },
+		{ itemName: "lmace", slot: "mainhand", level: 9, l: "l" },
+		{ itemName: "mshield", slot: "offhand", level: 10, l: "l" },
+		{ itemName: "ringofluck", slot: "ring1", level: 2, l: "u" },
+		{ itemName: "ringofluck", slot: "ring2", level: 2, l: "l" },
+		{ itemName: "rabbitsfoot", slot: "orb", level: 3, l: "l" },
+		//{ itemName: "spookyamulet", slot: "amulet", level: 3, l: "l" },
+		{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
+		{ itemName: "ecape", slot: "cape", level: 8, l: "l" },
+		{ itemName: "mearring", slot: "earring1", level: 2, l: "l" },
+		{ itemName: "mearring", slot: "earring2", level: 1, l: "u" }
+	],
+	gold: [
+		{ itemName: "wcap", slot: "helmet", level: 6, l: "l" },
+		{ itemName: "wattire", slot: "chest", level: 6, l: "l" },
+		{ itemName: "wbreeches", slot: "pants", level: 6, l: "l" },
+		{ itemName: "wshoes", slot: "shoes", level: 6, l: "l" },
+		{ itemName: "handofmidas", slot: "gloves", level: 9, l: "l" },
+		{ itemName: "goldring", slot: "ring1", level: 1, l: "l" },
+		{ itemName: "goldring", slot: "ring2", level: 1, l: "u" },
+		{ itemName: "spookyamulet", slot: "amulet", level: 3, l: "l" },
+		{ itemName: "horsecapeg", slot: "cape", level: 9, l: "l" },
+	],
+	dps: [
+		{ itemName: "spikedhelmet", slot: "helmet", level: 9, l: "l" },
+		{ itemName: "coat", slot: "chest", level: 10, l: "l" },
+		{ itemName: "starkillers", slot: "pants", level: 9, l: "l" },
+		{ itemName: "wingedboots", slot: "shoes", level: 10, l: "l" },
+		{ itemName: "mpxgloves", slot: "gloves", level: 7, l: "l" },
+		{ itemName: "intbelt", slot: "belt", level: 6, l: "l" },
+		{ itemName: "firestaff", slot: "mainhand", level: 9, l: "s" },
+		{ itemName: "wbook0", slot: "offhand", level: 6, l: "l" },
+		{ itemName: "zapper", slot: "ring1", level: 2, l: "l" },
+		{ itemName: "zapper", slot: "ring2", level: 2, l: "u" },
+		{ itemName: "jacko", slot: "orb", level: 5, l: "l" },
+		{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
+		{ itemName: "bcape", slot: "cape", level: 8, l: "l" },
+		{ itemName: "cearring", slot: "earring1", level: 4, l: "l" },
+		{ itemName: "cearring", slot: "earring2", level: 4, l: "u" }
+	],
+};
+
+// ============================================================================
+// CORE UTILITIES
+// ============================================================================
+function updateCache() {
+	if (!cache.isValid()) {
+		cache.target = findBestTarget();
+		cache.zapTargets = findZapTargets();
+		cache.nearestBoss = findNearestBoss();
+		cache.partyMembers = getPartyMembers();
+		cache.lastUpdate = performance.now();
+	}
+
+	cache.healTarget = findHealTarget();
+}
+
+function findBestTarget() {
+	for (const bossType of CONFIG.combat.allBosses) {
+		const boss = get_nearest_monster_v2({
+			type: bossType,
+			max_distance: character.range
+		});
+		if (boss) return boss;
+	}
+
+	for (const name of CONFIG.combat.targetPriority) {
+		const target = get_nearest_monster_v2({
+			target: name,
+			statusEffects: ['cursed'],
+			max_distance: character.range
+		});
+		if (target) return target;
+	}
+
+	for (const name of CONFIG.combat.targetPriority) {
+		const target = get_nearest_monster_v2({
+			target: name,
+			max_distance: character.range
+		});
+		if (target) return target;
+	}
+
+	return null;
+}
+
+function findHealTarget() {
+	let lowest = character;
+	let lowestPct = character.hp / character.max_hp;
+	let lowestOutsider = null;
+	let lowestOutsiderPct = 1;
+
+	const partyNames = Object.keys(get_party() || {});
+
+	for (const name of partyNames) {
+		const ally = get_player(name);
+		if (!ally || ally.rip) continue;
+
+		const pct = ally.hp / ally.max_hp;
+		if (pct < lowestPct) {
+			lowestPct = pct;
+			lowest = ally;
+		}
+	}
+
+	if (CONFIG.healing.healOthers && lowestPct >= CONFIG.healing.healOthersThresh) {
+		for (const id in parent.entities) {
+			const entity = parent.entities[id];
+			if (entity.type !== 'character' || entity.rip || entity.npc) continue;
+			if (partyNames.includes(entity.name)) continue;
+			if (!is_in_range(entity, 'heal')) continue;
+
+			const pct = entity.hp / entity.max_hp;
+			if (pct < lowestOutsiderPct) {
+				lowestOutsiderPct = pct;
+				lowestOutsider = entity;
+			}
+		}
+
+		if (lowestOutsider && lowestOutsiderPct < CONFIG.healing.healOthersThresh) {
+			return lowestOutsider;
+		}
+	}
+
+	return lowest;
+}
+
+function findZapTargets() {
+	if (!CONFIG.combat.zapper) return [];
+
+	return Object.values(parent.entities).filter(e =>
+		e &&
+		e.type === 'monster' &&
+		!e.target &&
+		CONFIG.combat.zapperMobs.includes(e.mtype) &&
+		is_in_range(e, 'zapperzap') &&
+		e.visible &&
+		!e.dead
+	);
+}
+
+function getPartyMembers() {
+	return Object.keys(get_party() || {});
+}
+
+function findNearestBoss() {
+	for (const bossType of CONFIG.combat.allBosses) {
+		const boss = get_nearest_monster_v2({ type: bossType });
+		if (boss) return { mob: boss, type: bossType };
+	}
+	return null;
+}
+
+// ============================================================================
+// MAIN TICK LOOP - Handles state updates, caching, movement
+// ============================================================================
+async function mainLoop() {
+	try {
+		if (is_disabled(character)) {
+			return setTimeout(mainLoop, 250);
+		}
+
+		updateCache();
+
+		if (shouldLoot()) {
+			await handleLooting();
+		}
+		if (shouldHandleEvents()) {
+			handleEvents();
+		}
+		else if (CONFIG.movement.enabled) {
+			if (!get_nearest_monster({ type: home })) {
+				handleReturnHome();
+			} else if (CONFIG.movement.kiting.enabled) {
+				await kiter();
+			} else if (CONFIG.movement.circleWalk) {
+				walkInCircle();
+			}
+		}
+
+		if (CONFIG.equipment.autoSwapSets && state.skinReady) {
+			handleEquipmentSwap();
+		}
+
+	} catch (e) {
+		console.error('mainLoop error:', e);
+	}
+
+	setTimeout(mainLoop, TICK_RATE.main);
+}
+
+// ============================================================================
+// ACTION LOOP - Combat and healing only
+// ============================================================================
+async function actionLoop() {
+	let delay = 10;
+
+	try {
+		if (is_disabled(character)) {
+			return setTimeout(actionLoop, 25);
+		}
+
+		updateCache();
+
+		const msUntilAttack = ms_to_next_skill('attack');
+
+		if (msUntilAttack < character.ping / 10) {
+			const healed = await tryHeal();
+
+			if (!healed) {
+				const target = cache.target;
+				if (target && is_in_range(target) && !smart.moving) {
+					await use_skill("attack", target);
+				}
+			}
+		}
+
+		if (msUntilAttack > 200) delay = 40;
+		else if (msUntilAttack > 60) delay = 20;
+		else delay = 5;
+
+	} catch (e) {
+		//console.error('priest actionLoop error:', e);
+		delay = 1;
+	}
+
+	setTimeout(actionLoop, delay);
+}
+
+// ============================================================================
+// SKILL LOOP - Independent skill management
+// ============================================================================
+async function skillLoop() {
+	const delay = 40;
+
+	try {
+		if (is_disabled(character)) {
+			return setTimeout(skillLoop, 250);
+		}
+
+		updateCache();
+
+		const penalty = character.s?.penalty_cd?.ms || 0;
+
+		if (CONFIG.combat.curse) {
+			await handleCurse();
+		}
+
+		if (CONFIG.healing.absorb && penalty < 500) {
+			await handleAbsorb();
+		}
+
+		if (character.party) {
+			await handlePartyHeal();
+		}
+
+		if (CONFIG.healing.darkBlessing && !is_on_cooldown('darkblessing')) {
+			await use_skill('darkblessing');
+		}
+
+		if (CONFIG.combat.zapper && state.current === 'idle') {
+			await handleZapper();
+		}
+
+	} catch (e) {
+		console.error('skillLoop error:', e);
+	}
+
+	setTimeout(skillLoop, delay);
+}
+
+async function tryHeal() {
+	const healTarget = cache.healTarget;
+	if (!healTarget) return false;
+
+	const healThreshold = healTarget.max_hp - character.heal / 1.33;
+
+	if (healTarget.hp < healThreshold && is_in_range(healTarget)) {
+		await use_skill("heal", healTarget);
+		return true;
+	}
+
+	return false;
+}
+
+async function handleCurse() {
+	if (is_on_cooldown('curse') || smart.moving) return;
+
+	const X = locations[home][0].x;
+	const Y = locations[home][0].y;
+
+	let target = null;
+
+	for (const b of CONFIG.combat.allBosses) {
+		const mb = get_nearest_monster_v2({ type: b });
+		if (mb) {
+			target = mb;
+			break;
+		}
+	}
+
+	if (!target) {
+		target = get_nearest_monster_v2({
+			type: CONFIG.combat.zapperMobs,
+			check_max_hp: true,
+			max_distance: 175,
+			point_for_distance_check: [X, Y]
+		});
+	}
+
+	if (target && target.hp >= target.max_hp * 0.01 && !target.immune && is_in_range(target, 'curse')) {
+		await use_skill('curse', target);
+	}
+}
+
+async function handleAbsorb() {
+	if (is_on_cooldown('absorb')) return;
+
+	const mapsToExclude = ['level2n', 'level2w'];
+	if (mapsToExclude.includes(character.map)) return;
+
+	const boss = get_nearest_monster_v2({ type: CONFIG.combat.allBosses });
+	if (boss?.target && boss.target !== character.name) {
+		const targetPlayer = get_player(boss.target);
+		if (targetPlayer) {
+			await use_skill('absorb', boss.target);
+			game_log(`Boss Absorb → ${boss.mtype} from ${boss.target}`, '#FF3333');
+			return;
+		}
+	}
+
+	if (!character.party) return;
+
+	const partyNames = Object.keys(get_party());
+	const allies = partyNames.filter(n => n !== character.name);
+	if (!allies.length) return;
+
+	for (let id in parent.entities) {
+		const entity = parent.entities[id];
+		if (!entity || entity.type !== 'monster' || entity.dead) continue;
+
+		if (entity.target && allies.includes(entity.target) && entity.target !== character.name) {
+			await use_skill('absorb', entity.target);
+			game_log(`Absorbing ${entity.target}`, '#FFA600');
+			return;
+		}
+	}
+}
+
+async function handlePartyHeal() {
+	const threshold = character.map !== mobMap ? 0.99 : CONFIG.healing.partyHealThreshold;
+
+	if (character.mp <= CONFIG.healing.partyHealMinMp || is_on_cooldown('partyheal')) return;
+
+	for (const name of cache.partyMembers) {
+		const ally = get_player(name);
+		if (!ally || ally.rip || ally.hp >= ally.max_hp * threshold) continue;
+
+		await use_skill('partyheal');
+		break;
+	}
+}
+
+async function handleZapper() {
+	const now = performance.now();
+	const hasZapper = character.slots.ring2?.name === 'zapper';
+	const canSwap = now - state.lastEquipTime > COOLDOWNS.zapperSwap;
+	const hasEnoughMp = character.mp > (G?.skills?.zapperzap?.mp || 0) + 1950;
+
+	if (smart.moving || character.cc > COOLDOWNS.cc) return;
+
+	if (CONFIG.combat.zapSwap && findZapTargets().length > 0 && !hasZapper && canSwap && hasEnoughMp && character.map === mobMap) {
+		try {
+			await equipSet('zapOn');
+			state.lastEquipTime = now;
+		} catch (e) {
+			console.error('Failed to equip zapper:', e);
+		}
+	}
+
+	if (findZapTargets().length > 0 && hasZapper && hasEnoughMp && !is_on_cooldown('zapperzap')) {
+		for (const entity of findZapTargets()) {
+			if (is_on_cooldown('zapperzap')) break;
+
+			try {
+				await use_skill('zapperzap', entity);
+			} catch (e) {
+				console.error('handleZapper error:', e);
+			}
+		}
+	}
+	if (CONFIG.combat.zapSwap && findZapTargets().length === 0 && hasZapper && canSwap && character.map === mobMap) {
+		try {
+			await equipSet('zapOff');
+			state.lastEquipTime = now;
+		} catch (e) {
+			console.error('Failed to unequip zapper:', e);
+		}
+	}
+}
+
+// ============================================================================
+// MAINTENANCE LOOP - Inventory, potions, party management
+// ============================================================================
+async function maintenanceLoop() {
+	try {
+		if (CONFIG.potions.autoBuy) {
+			autoBuyPotions();
+		}
+
+		if (CONFIG.party.autoManage) {
+			partyMaker();
+		}
+
+		clearInventory();
+		inventorySorter();
+		elixirUsage();
+
+		if (character.rip && locate_item('xptome') !== -1) {
+			respawn();
+		}
+
+	} catch (e) {
+		console.error('maintenanceLoop error:', e);
+	}
+
+	setTimeout(maintenanceLoop, TICK_RATE.maintenance);
+}
+
+// ============================================================================
+// POTION HANDLER - Separate from maintenance for faster response
+// ============================================================================
+async function potionLoop() {
+	let delay = 100;
+
+	try {
+		const hpThreshold = character.max_hp - CONFIG.potions.hpThreshold;
+		const mpThreshold = character.max_mp - CONFIG.potions.mpThreshold;
+
+		if (character.mp < mpThreshold && !is_on_cooldown('use_mp')) {
+			use_skill('use_mp');
+			reduce_cooldown('use_mp', character.ping * 0.95);
+			delay = ms_to_next_skill('use_mp');
+		} else if (character.hp < hpThreshold && !is_on_cooldown('use_hp')) {
+			use_skill('use_hp');
+			reduce_cooldown('use_hp', character.ping * 0.95);
+			delay = ms_to_next_skill('use_hp');
+		}
+	} catch (e) {
+		console.error('potionLoop error:', e);
+	}
+
+	setTimeout(potionLoop, delay || 2000);
+}
+
+// ============================================================================
+// MOVEMENT FUNCTIONS
+// ============================================================================
+function shouldHandleEvents() {
+	const holidaySpirit = parent?.S?.holidayseason && !character?.s?.holidayspirit;
+	const hasHandleableEvent = getDynamicEvents().some(e => parent?.S?.[e.name]?.live);
+	return holidaySpirit || hasHandleableEvent;
+}
+
+function handleEvents() {
+	if (parent?.S?.holidayseason && !character?.s?.holidayspirit) {
+		if (!smart.moving) {
+			smart_move({ to: 'town' }, () => {
+				parent.socket.emit('interaction', { type: 'newyear_tree' });
+			});
+		}
+		return;
+	}
+
+	const aliveSorted = getDynamicEvents()
+		.map(e => ({ ...e, data: parent.S[e.name] }))
+		.filter(e => e.data?.live)
+		.sort((a, b) =>
+			(a.data.hp / a.data.max_hp) - (b.data.hp / b.data.max_hp)
+		);
+
+	if (!aliveSorted.length) return;
+
+	const target = aliveSorted[0];
+
+	if (target.join === true && character.map !== target.map) {
+		parent.socket.emit('join', { name: target.name });
+		return;
+	}
+
+	if (!smart.moving) {
+		handleSpecificEvent(target.name, target.map, target.x, target.y);
+	}
+}
+
+const MOVING_BOSSES = new Set(allBosses);
+
+async function handleSpecificEvent(eventType, mapName, x, y) {
+	if (!parent?.S?.[eventType]?.live) return;
+
+	const monster = get_nearest_monster({ type: eventType });
+	if (!monster) {
+		smart_move({ x, y, map: mapName });
+		return;
+	}
+
+	if (MOVING_BOSSES.has(eventType)) {
+		if (!is_in_range(monster) && !smart.moving) {
+			const dx = monster.x - character.x;
+			const dy = monster.y - character.y;
+			const dist = Math.hypot(dx, dy);
+			const targetDist = character.range * 0.8;
+			await xmove(
+				character.x + dx * (1 - targetDist / dist),
+				character.y + dy * (1 - targetDist / dist)
+			);
+		}
+		return;
+	}
+
+	const halfway_x = character.x + (monster.x - character.x) / 2;
+	const halfway_y = character.y + (monster.y - character.y) / 2;
+	if (!is_in_range(monster, 'attack') && !smart.moving) {
+		await xmove(halfway_x, halfway_y);
+	}
+}
+
+function handleReturnHome() {
+	if (distance(character, destination) < 20) return;
+
+	if (!smart.moving) {
+		smart_move(destination);
+	}
+}
+
+async function walkInCircle() {
+	if (smart.moving) return;
+
+	const center = locations[home][0];
+	const radius = CONFIG.movement.circleRadius;
+
+	const currentTime = performance.now();
+	const deltaTime = currentTime - state.lastAngleUpdate;
+	state.lastAngleUpdate = currentTime;
+
+	const deltaAngle = CONFIG.movement.circleSpeed * (deltaTime / 1000);
+	state.angle = (state.angle + deltaAngle) % (2 * Math.PI);
+
+	const offsetX = Math.cos(state.angle) * radius;
+	const offsetY = Math.sin(state.angle) * radius;
+	const targetX = center.x + offsetX;
+	const targetY = center.y + offsetY;
+
+	if (!character.moving) {
+		await xmove(targetX, targetY);
+	}
+}
+
+// ============================================================================
+// TEMPORAL SURGE COORDINATION
+// ============================================================================
+function getTemporalRotation() {
+	const stored = localStorage.getItem(CONFIG.equipment.temporal.storageKey);
+	if (!stored) {
+		const initial = {
+			lastUser: null,
+			nextIndex: 0,
+			lastKillTime: 0
+		};
+		localStorage.setItem(CONFIG.equipment.temporal.storageKey, JSON.stringify(initial));
+		return initial;
+	}
+	return JSON.parse(stored);
+}
+
+function updateTemporalRotation() {
+	const rotation = getTemporalRotation();
+	rotation.lastUser = character.name;
+	rotation.nextIndex = (rotation.nextIndex + 1) % CONFIG.equipment.temporal.characters.length;
+	rotation.lastKillTime = Date.now();
+	localStorage.setItem(CONFIG.equipment.temporal.storageKey, JSON.stringify(rotation));
+}
+
+function isMyTurnForTemporal() {
+	const rotation = getTemporalRotation();
+	const myIndex = CONFIG.equipment.temporal.characters.indexOf(character.name);
+
+	if (myIndex === -1) return false;
+
+	return rotation.lastUser === null || rotation.nextIndex === myIndex;
+}
+
+async function handleTemporalSurge() {
+	if (!CONFIG.equipment.temporal.enabled) return;
+	if (!isMyTurnForTemporal()) return;
+
+	const orbSlot = character.items.findIndex(i => i?.name === 'orboftemporal');;
+	if (orbSlot === -1) {
+		game_log(`Missing ${CONFIG.equipment.temporal.orbName}!`, 'red');
+		return;
+	}
+
+	try {
+		equip(orbSlot, 'orb');
+		use_skill(CONFIG.equipment.temporal.skillName);
+		game_log(`⏰ Temporal Surge used on ${CONFIG.equipment.temporal.targetMob}!`, '#00FFFF');
+		updateTemporalRotation();
+		equip(orbSlot, 'orb');
+	} catch (e) {
+		game_log(`Temporal surge failed: ${e}`, 'red');
+		console.error('Temporal surge error:', e);
+	}
+}
+
+parent.socket.on('kill_credit', async (data) => {
+	if (!CONFIG.equipment.temporal.enabled) return;
+	if (data.mtype !== CONFIG.equipment.temporal.targetMob) return;
+
+	if (!is_on_cooldown("temporalsurge")) {
+		await handleTemporalSurge();
+	}
+});
+
+// ============================================================================
+// KITING SYSTEM 
+// ============================================================================
+let lastMove = 0;
+const TWO_PI = Math.PI * 2;
+const ANGLE_STEP = Math.PI / CONFIG.movement.kiting.sampleAngles;
+
+function kiter() {
+	const cfg = CONFIG.movement.kiting;
+	if (!cfg || !cfg.enabled) return;
+
+	if (cfg.debug) {
+		const [x1, y1, x2, y2] = cfg.boundaryBox;
+		clear_drawings();
+		draw_line(x1, y1, x1, y2, 2, 0xfc031c);
+		draw_line(x2, y1, x2, y2, 2, 0xfc031c);
+		draw_line(x1, y2, x2, y2, 2, 0xfc031c);
+		draw_line(x1, y1, x2, y1, 2, 0xfc031c);
+	}
+
+	avoidMobs();
+}
+
+function avoidMobs() {
+	const cx = character.real_x;
+	const cy = character.real_y;
+	const cfg = CONFIG.movement.kiting;
+
+	const monsters = getMonstersInRadius(cx, cy);
+	if (monsters.length === 0) return;
+
+	const avoidRanges = getAnglesToAvoid(monsters, cx, cy);
+
+	let inDanger = false;
+	for (const m of monsters) {
+		const r = getRange(m);
+		if (distanceSq(cx, cy, m.real_x, m.real_y) < r * r) {
+			inDanger = true;
+			break;
+		}
+	}
+	if (!inDanger) return;
+
+	let maxWeight = -Infinity;
+	let maxAngle = 0;
+	const box = cfg.boundaryBox;
+
+	for (let i = 0; i < TWO_PI; i += ANGLE_STEP) {
+		const cos = Math.cos(i);
+		const sin = Math.sin(i);
+		const px = cx + 75 * cos;
+		const py = cy + 75 * sin;
+
+		if (px < box[0] || px > box[2] || py < box[1] || py > box[3]) continue;
+		if (!can_move_to(px, py)) continue;
+
+		let weight = 0;
+
+		for (const m of monsters) {
+			const r = getRange(m);
+			const mx = m.real_x;
+			const my = m.real_y;
+
+			const dx = cx - mx;
+			const dy = cy - my;
+			const distSqChar = dx * dx + dy * dy;
+
+			if (distSqChar < r * r) {
+				const dpx = px - mx;
+				const dpy = py - my;
+				const distSqPos = dpx * dpx + dpy * dpy;
+
+				if (distSqPos > distSqChar) {
+					weight += Math.sqrt(distSqPos) - Math.sqrt(distSqChar);
+				}
+			}
+		}
+
+		if (!angleIntersectsMonsters(avoidRanges, i) && weight > maxWeight) {
+			maxWeight = weight;
+			maxAngle = i;
+		}
+	}
+
+	const cos = Math.cos(maxAngle);
+	const sin = Math.sin(maxAngle);
+	const moveX = cx + 25 * cos;
+	const moveY = cy + 25 * sin;
+
+	const now = performance.now();
+	if (now - lastMove > cfg.moveThrottle) {
+		lastMove = now;
+		move(moveX, moveY);
+	}
+
+	if (cfg.debug) {
+		draw_line(cx, cy, moveX, moveY, 2, 0xF20D0D);
+	}
+}
+
+function getRange(m) {
+	return parent.G.monsters[m.mtype].range + CONFIG.movement.kiting.rangeBuffer;
+}
+
+function getMonstersInRadius(cx, cy) {
+	const cfg = CONFIG.movement.kiting;
+	const R2 = cfg.avoidRadius * cfg.avoidRadius;
+	const types = cfg.avoidTypes;
+	const monsters = [];
+
+	for (const id in parent.entities) {
+		const e = parent.entities[id];
+		if (e.type !== "monster") continue;
+		if (!types.includes(e.mtype)) continue;
+
+		const dx = cx - e.real_x;
+		const dy = cy - e.real_y;
+		if (dx * dx + dy * dy < R2) monsters.push(e);
+	}
+
+	return monsters;
+}
+
+function getAnglesToAvoid(monsters, cx, cy) {
+	const cfg = CONFIG.movement.kiting;
+	const avoidRanges = [];
+
+	for (const m of monsters) {
+		const r = getRange(m);
+		const tangents = findTangents(cx, cy, m.real_x, m.real_y, r);
+
+		if (tangents) {
+			const a1 = Math.atan2(cy - tangents[0].y, cx - tangents[0].x) + Math.PI;
+			const a2 = Math.atan2(cy - tangents[1].y, cx - tangents[1].x) + Math.PI;
+
+			if (a1 < a2) avoidRanges.push([a1, a2]);
+			else avoidRanges.push([a2, a1]);
+
+			if (cfg.debug) {
+				draw_line(cx, cy, tangents[0].x, tangents[0].y, 1, 0x17F20D);
+				draw_line(cx, cy, tangents[1].x, tangents[1].y, 1, 0x17F20D);
+			}
+		}
+
+		if (cfg.debug) draw_circle(m.real_x, m.real_y, r, 1, 0x17F20D);
+	}
+
+	return avoidRanges;
+}
+
+function angleIntersectsMonsters(ranges, angle) {
+	for (const r of ranges) {
+		if (isBetween(r[1], r[0], angle)) return true;
+	}
+	return false;
+}
+
+function isBetween(angle1, angle2, target) {
+	if (angle1 <= angle2) {
+		if (angle2 - angle1 <= Math.PI) return target >= angle1 && target <= angle2;
+		return target >= angle2 || target <= angle1;
+	}
+	if (angle1 - angle2 <= Math.PI) return target >= angle2 && target <= angle1;
+	return target >= angle1 || target <= angle2;
+}
+
+function findTangents(px, py, cx, cy, r) {
+	const dx = cx - px;
+	const dy = cy - py;
+	const dd = Math.hypot(dx, dy);
+
+	if (dd <= r) return null;
+
+	const a = Math.asin(r / dd);
+	const b = Math.atan2(dy, dx);
+
+	const t1 = b - a;
+	const t2 = b + a;
+
+	return [
+		{ x: cx + r * Math.sin(t1), y: cy - r * Math.cos(t1) },
+		{ x: cx - r * Math.sin(t2), y: cy + r * Math.cos(t2) }
+	];
+}
+
+function distanceSq(x1, y1, x2, y2) {
+	const dx = x1 - x2;
+	const dy = y1 - y2;
+	return dx * dx + dy * dy;
+}
+
+// ============================================================================
+// LOOTING
+// ============================================================================
+function shouldLoot() {
+	if (!CONFIG.looting.enabled || !state.skinReady || character.cc > COOLDOWNS.cc) return false;
+
+	const now = performance.now();
+	const storedChestCount = Object.keys(loadChestMap()).length;
+	const penalty = character.s?.penalty_cd?.ms || 0;
+	const cooldownPass = now - state.lastLootTime > CONFIG.looting.lootCooldown;
+
+	return (
+		storedChestCount >= CONFIG.looting.chestThreshold &&
+		character.targets < CONFIG.looting.targetCount &&
+		cooldownPass &&
+		penalty === 0 &&
+		state.current !== 'looting'
+	);
+}
+
+async function handleLooting() {
+	state.lastLootTime = performance.now();
+	state.current = 'looting';
+
+	try {
+		if (CONFIG.looting.equipGoldGear && !isSetEquipped('gold')) {
+			equipSet('gold');
+			swapBooster('luckbooster', 'goldbooster');
+			await sleep(150);
+		}
+
+		let looted = 0;
+		const maxLoots = CONFIG.looting.chestThreshold * 5;
+
+		const storedChests = loadChestMap();
+		for (const chestId in storedChests) {
+			if (looted >= maxLoots) break;
+			parent.open_chest(chestId);
+			looted++;
+		}
+
+		await sleep(75);
+
+		if (CONFIG.looting.equipGoldGear) {
+			swapBooster('goldbooster', 'luckbooster');
+		}
+	} catch (e) {
+		console.error('Looting error:', e);
+	} finally {
+		state.current = 'idle';
+	}
+}
+
+const CHEST_STORAGE_KEY = "loot_chest_ids";
+function loadChestMap() {
+	const data = get(CHEST_STORAGE_KEY);
+	return typeof data === "object" && data !== null ? data : {};
+}
+
+function removeChestId(id) {
+	const stored = loadChestMap();
+	if (stored[id]) {
+		delete stored[id];
+		saveChestMap(stored);
+	}
+}
+
+function saveChestMap(map) {
+	set(CHEST_STORAGE_KEY, map);
+}
+// ============================================================================
+// EQUIPMENT MANAGEMENT
+// ============================================================================
+function handleEquipmentSwap() {
+	if (!CONFIG.equipment.autoSwapSets || character.cc > COOLDOWNS.cc) return;
+	if (findZapTargets().length > 0) return;
+
+	const now = performance.now();
+	if (now - state.lastEquipTime < COOLDOWNS.equipSwap) return;
+
+	let targetSet = CONFIG.looting.lootSet;
+
+	if (CONFIG.equipment.bossLuckSwitch && cache.nearestBoss) {
+		const { mob, type } = cache.nearestBoss;
+		const threshold = CONFIG.equipment.bossHpThresholds[type] || 0;
+		targetSet = mob.hp < threshold ? 'maxLuck' : CONFIG.looting.lootSet;
+	}
+
+	if (!isSetEquipped(targetSet)) {
+		state.lastEquipTime = now;
+		equipSet(targetSet);
+	}
+}
+
+function isSetEquipped(setName) {
+	const set = equipmentSets[setName];
+	if (!set) return false;
+
+	return set.every(item =>
+		character.slots[item.slot]?.name === item.itemName &&
+		character.slots[item.slot]?.level === item.level
+	);
+}
+
+function equipSet(setName) {
+	const set = equipmentSets[setName];
+	if (set) {
+		equipBatch(set);
+	}
+}
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+function clearInventory() {
+	let lootMule = get_player('CrownsAnal') || get_player('CrownMerch');
+	if (!lootMule) return;
+
+	if (character.gold > 5000000) {
+		send_gold(lootMule, character.gold - 5000000);
+	}
+
+	const itemsToExclude = ['hpot1', 'mpot1', 'luckbooster', 'goldbooster', 'xpbooster', 'elixirluck', 'xptome', 'essenceoflife'];
+
+	for (let i = 0; i < character.items.length; i++) {
+		const item = character.items[i];
+		if (item && !itemsToExclude.includes(item.name) && !item.l && !item.s) {
+			if (is_in_range(lootMule, 300)) {
+				send_item(lootMule.id, i, item.q ?? 1);
+			}
+		}
+	}
+}
+
+function inventorySorter() {
+	const slotMap = {
+		tracker: 0,
+		computer: 1,
+		hpot1: 2,
+		mpot1: 3,
+		luckbooster: 4,
+		elixirluck: 5,
+		xptome: 6
+	};
+
+	for (let i = 0; i < character.items.length; i++) {
+		const item = character.items[i];
+		if (!item) continue;
+
+		const targetSlot = slotMap[item.name];
+		if (targetSlot !== undefined && i !== targetSlot) {
+			swap(i, targetSlot);
+		}
+	}
+}
+
+
+function autoBuyPotions() {
+	if (quantity('hpot1') < CONFIG.potions.minStock) buy('hpot1', CONFIG.potions.minStock);
+	if (quantity('mpot1') < CONFIG.potions.minStock) buy('mpot1', CONFIG.potions.minStock);
+	if (quantity('xptome') < 1) buy('xptome', 1);
+}
+
+function elixirUsage() {
+	const required = 'elixirluck';
+	const currentElixir = character.slots.elixir?.name;
+	const currentQty = quantity(required);
+
+	if (currentElixir !== required) {
+		const slot = locate_item(required);
+		if (slot !== -1) use(slot);
+	}
+
+	if (currentQty < 2) {
+		buy(required, 2 - currentQty);
+	}
+}
+
+function swapBooster(current, target) {
+	const slot = locate_item(current);
+	if (slot !== -1) shift(slot, target);
+}
+
+function partyMaker() {
+	if (!CONFIG.party.autoManage) return;
+
+	const group = CONFIG.party.groupMembers;
+	const partyLead = get_entity(group[0]);
+	const currentParty = character.party;
+	const healer = get_entity('CrownPriest');
+
+	if (character.name === group[0]) {
+		for (let i = 1; i < group.length; i++) {
+			send_party_invite(group[i]);
+		}
+	} else {
+		if (currentParty && currentParty !== group[0] && healer) {
+			leave_party();
+		}
+
+		if (!currentParty && partyLead) {
+			send_party_request(group[0]);
+		}
+	}
+}
+
+function sleep(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function suicide() {
+	if (!character.rip && character.hp < 2000) {
+		parent.socket.emit('harakiri');
+		game_log("Harakiri");
+	}
+
+	if (character.rip && locate_item("xptome") !== -1) {
+		respawn();
+	}
+}
+setInterval(suicide, 50);
+
+setInterval(() => {
+	if (character?.afk && !parent?.paused) pause();
+	else if (!character?.afk && parent?.paused) pause();
+}, 50);
+
+// ============================================================================
+// ESSENTIAL HELPER FUNCTIONS
+// ============================================================================
+
+function get_nearest_monster_v2(args = {}) {
+	let min_d = 999999;
+	let target = null;
+	let optimal_hp = args.check_max_hp ? 0 : 999999999;
+
+	for (let id in parent.entities) {
+		let current = parent.entities[id];
+		if (current.type !== 'monster' || !current.visible || current.dead) continue;
+
+		if (args.type) {
+			if (Array.isArray(args.type)) {
+				if (!args.type.includes(current.mtype)) continue;
+			} else {
+				if (current.mtype !== args.type) continue;
+			}
+		}
+
+		if (args.min_level !== undefined && current.level < args.min_level) continue;
+		if (args.max_level !== undefined && current.level > args.max_level) continue;
+		if (args.target && !args.target.includes(current.target)) continue;
+		if (args.no_target && current.target && current.target !== character.name) continue;
+		if (args.statusEffects && !args.statusEffects.every(effect => current.s[effect])) continue;
+		if (args.min_xp !== undefined && current.xp < args.min_xp) continue;
+		if (args.max_xp !== undefined && current.xp > args.max_xp) continue;
+		if (args.max_att !== undefined && current.attack > args.max_att) continue;
+		if (args.path_check && !can_move_to(current)) continue;
+
+		let c_dist = args.point_for_distance_check
+			? Math.hypot(args.point_for_distance_check[0] - current.x, args.point_for_distance_check[1] - current.y)
+			: parent.distance(character, current);
+
+		if (args.max_distance !== undefined && c_dist > args.max_distance) continue;
+
+		if (args.check_min_hp || args.check_max_hp) {
+			let c_hp = current.hp;
+			if ((args.check_min_hp && c_hp < optimal_hp) || (args.check_max_hp && c_hp > optimal_hp)) {
+				optimal_hp = c_hp;
+				target = current;
+			}
+			continue;
+		}
+
+		if (c_dist < min_d) {
+			min_d = c_dist;
+			target = current;
+		}
+	}
+
+	return target;
+}
+
+function ms_to_next_skill(skill) {
+	const next_skill = parent.next_skill[skill];
+	if (next_skill === undefined) return 0;
+	const ping = parent.pings?.length ? Math.min(...parent.pings) : 0;
+	const ms = next_skill.getTime() - Date.now() - ping;
+	return ms < 0 ? 0 : ms;
+}
+
+async function equipBatch(data) {
+	if (!Array.isArray(data)) {
+		return Promise.reject({ reason: 'invalid', message: 'Not an array' });
+	}
+	if (data.length > 15) {
+		return Promise.reject({ reason: 'invalid', message: 'Too many items' });
+	}
+
+	let validItems = [];
+
+	for (let i = 0; i < data.length; i++) {
+		let itemName = data[i].itemName;
+		let slot = data[i].slot;
+		let level = data[i].level;
+		let l = data[i].l;
+
+		if (!itemName) continue;
+
+		let found = false;
+		if (parent.character.slots[slot]) {
+			let slotItem = parent.character.items[parent.character.slots[slot]];
+			if (slotItem && slotItem.name === itemName && slotItem.level === level && slotItem.l === l) {
+				found = true;
+			}
+		}
+
+		if (found) continue;
+
+		for (let j = 0; j < parent.character.items.length; j++) {
+			const item = parent.character.items[j];
+			if (item && item.name === itemName && item.level === level && item.l === l) {
+				validItems.push({ num: j, slot: slot });
+				break;
+			}
+		}
+	}
+
+	if (validItems.length === 0) return;
+
+	try {
+		parent.socket.emit('equip_batch', validItems);
+		await parent.push_deferred('equip_batch');
+	} catch (error) {
+		console.error('equipBatch error:', error);
+		return Promise.reject({ reason: 'invalid', message: 'Failed to equip' });
+	}
+}
+
+// ============================================================================
+// SKIN CHANGER
+// ============================================================================
+
+const skinConfigs = {
+	priest: {
+		skin: 'tm_white',
+		skinRing: { name: 'tristone', level: 0, locked: 'l' },
+		normalRing: { name: 'ringofluck', level: 2, locked: 'u' }
+	},
+};
+
+function skinNeeded(ringName, ringLevel, slot = 'ring1', locked = 'l', ccThreshold = 135) {
+	if (character.cc <= ccThreshold) {
+		if (character.slots[slot]?.name !== ringName || character.slots[slot]?.level !== ringLevel) {
+			equipIfNeeded(ringName, slot, ringLevel, locked);
+		}
+		parent.socket.emit('activate', { slot });
+	}
+}
+
+async function equipIfNeeded(itemName, slotName, level, l) {
+	let name = null;
+
+	if (typeof itemName === 'object') {
+		name = itemName.name;
+		level = itemName.level;
+		l = itemName.l;
+	} else {
+		name = itemName;
+	}
+
+	if (character.slots[slotName] != null) {
+		let slotItem = character.slots[slotName];
+		if (slotItem.name === name && slotItem.level === level && slotItem.l === l) {
+			return;
+		}
+	}
+
+	for (let i = 0; i < character.items.length; i++) {
+		const item = character.items[i];
+		if (item != null && item.name === name && item.level === level && item.l === l) {
+			return equip(i, slotName);
+		}
+	}
+}
+
+async function skinChanger() {
+	const config = skinConfigs[character.ctype];
+	if (!config) {
+		console.warn(`No skin config for type: ${character.ctype}`);
+		state.skinReady = true;
+		return;
+	}
+
+	if (character.skin !== config.skin) {
+		console.log(`Applying skinRing: ${config.skinRing.name} lvl ${config.skinRing.level}`);
+		skinNeeded(config.skinRing.name, config.skinRing.level, 'ring1', config.skinRing.locked);
+		await sleep(500);
+		return skinChanger();
+	}
+
+	const slot = character.slots.ring1;
+	if (slot?.name !== config.normalRing.name || slot?.level !== config.normalRing.level) {
+		console.log(`Equipping normalRing: ${config.normalRing.name} lvl ${config.normalRing.level}`);
+		equipIfNeeded(config.normalRing.name, 'ring1', config.normalRing.level, config.normalRing.locked);
+		await sleep(500);
+		return skinChanger();
+	}
+
+	state.skinReady = true;
+	console.log(`Skin ready! ${character.ctype} has skin ${character.skin} and ring ${slot.name}`);
+}
+
+skinChanger();
+
+// ============================================================================
+// EVENT HANDLERS
+// ============================================================================
+
+function on_cm(name, data) {
+	if (name == "CrownsAnal") {
+		if (data.message == "location") {
+			respawn();
+			smart_move({ x: data.x, y: data.y, map: data.map });
+			game_log("Repsawning & Moving");
+		}
+	}
+	if (name == "CrownMerch") {
+		if (data.message == "Heal Merch") {
+			use_skill("partyheal");
+			game_log("Party Healing CrownMerch");
+		}
+	}
+}
+
+function on_party_request(name) {
+	if (CONFIG.party.groupMembers.includes(name)) {
+		console.log('Accepting party request from ' + name);
+		accept_party_request(name);
+	}
+}
+
+function on_party_invite(name) {
+	if (CONFIG.party.groupMembers.includes(name)) {
+		console.log('Accepting party invite from ' + name);
+		accept_party_invite(name);
+	}
+}
+
+game.on('death', data => {
+	const mob = parent.entities[data.id];
+	if (!mob) return;
+
+	const mobName = mob.mtype;
+	const mobTarget = mob.target;
+
+	const partyMembers = Object.keys(get_party() || {});
+
+	if (mobTarget === character.name || partyMembers.includes(mobTarget)) {
+		const luckDisplay = mob.cooperative ? character.luckm : data.luckm;
+		const msg = `${mobName} died with ${luckDisplay} luck`;
+		game_log(msg, '#96a4ff');
+		//console.log(msg);
+	}
+});
+
+character.on('loot', data => {
+	if (data.id) {
+		console.log(`${data.opener} looted chest goldm: ${data.goldm}`);
+		game_log(`${data.opener} looted chest goldm: ${data.goldm}`, 'gold');
+
+
+		setTimeout(() => {
+			removeChestId(data.id);
+		}, 2000);
+	}
+});
+
+function sendUpdates() {
+	parent.socket.emit('send_updates', {});
+}
+setInterval(sendUpdates, 20000);
+
+// ============================================================================
+// START ALL LOOPS
+// ============================================================================
+
+mainLoop();
+actionLoop();
+skillLoop();
+maintenanceLoop();
+potionLoop();

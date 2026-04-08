@@ -435,9 +435,11 @@ const attachEventHandlers = ($) => {
 
 		canvas.addEventListener('mousedown', e => {
 			const rect = canvas.getBoundingClientRect();
-			const scrollBarH = 12, labelHeight = 70;
-			const trackY = canvas.height - labelHeight - scrollBarH + 4;
-			if (e.clientY - rect.top >= trackY && e.clientY - rect.top <= trackY + scrollBarH) {
+			const scrollBarH = 12, labelHeight = 50;
+			const scaleY = canvas.height / rect.height;
+			const localY = (e.clientY - rect.top) * scaleY;
+			const trackY = canvas.height - labelHeight - scrollBarH - 2;
+			if (localY >= trackY && localY <= trackY + scrollBarH) {
 				dragStartX = e.clientX;
 				dragStartOffset = getOffset();
 			}
@@ -446,12 +448,15 @@ const attachEventHandlers = ($) => {
 		parent.document.addEventListener('mousemove', e => {
 			if (dragStartX === null) return;
 			const names = getNames();
+			const rect = canvas.getBoundingClientRect();
+			const scaleX = canvas.width / rect.width;
 			const chartWidth = canvas.width - 120;
 			const visibleCount = Math.floor(chartWidth / 80);
 			const maxOffset = Math.max(0, names.length - visibleCount);
-			const pxPerBar = chartWidth / names.length;
+			const pxPerBar = (chartWidth / names.length) / scaleX;
 			const delta = Math.round((e.clientX - dragStartX) / pxPerBar);
 			setOffset(Math.max(0, Math.min(maxOffset, dragStartOffset + delta)));
+			updateMetricsDashboard();
 		});
 
 		parent.document.addEventListener('mouseup', () => { dragStartX = null; });

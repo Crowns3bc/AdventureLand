@@ -18,14 +18,17 @@ let totalKills = 0;
 let mobKills = {};
 let killInterval = 'day';
 const killHistory = {};
+let killChartOffset = 0;
 
 const itemStartTime = performance.now();
 let itemCounts = {};
 const itemHistory = {};
 let lastItemUpdate = 0;
+let itemChartOffset = 0;
 
 const coopHistory = {};
 let lastCoopUpdate = 0;
+let coopChartOffset = 0;
 
 let selectedDamageTypes = ['DPS'];
 
@@ -260,7 +263,7 @@ const createMetricsDashboard = () => {
 				<div class="metrics-section" data-section="items">
 					<h3>Item Tracking</h3>
 					<div class="metrics-grid">
-						${metricCard('Most Looted', 'topItem')}
+						${metricCard('Total Looted', 'topItem')}
 						${metricCard('Unique Items', 'uniqueItems')}
 					</div>
 					<canvas id="itemChart" class="metric-chart"></canvas>
@@ -425,6 +428,43 @@ const attachEventHandlers = ($) => {
 		function () { $(this).css('background', 'rgba(99, 102, 241, 0.3)'); },
 		function () { $(this).css('background', 'rgba(255, 255, 255, 0.1)'); }
 	);
+	const setupScrollableChart = (canvasId, getOffset, setOffset, getNames) => {
+		const canvas = parent.document.getElementById(canvasId);
+		if (!canvas) return;
+		let dragStartX = null, dragStartOffset = null;
+
+		canvas.addEventListener('mousedown', e => {
+			const rect = canvas.getBoundingClientRect();
+			const scrollBarH = 12, labelHeight = 70;
+			const trackY = canvas.height - labelHeight - scrollBarH + 4;
+			if (e.clientY - rect.top >= trackY && e.clientY - rect.top <= trackY + scrollBarH) {
+				dragStartX = e.clientX;
+				dragStartOffset = getOffset();
+			}
+		});
+
+		parent.document.addEventListener('mousemove', e => {
+			if (dragStartX === null) return;
+			const names = getNames();
+			const chartWidth = canvas.width - 120;
+			const visibleCount = Math.floor(chartWidth / 80);
+			const maxOffset = Math.max(0, names.length - visibleCount);
+			const pxPerBar = chartWidth / names.length;
+			const delta = Math.round((e.clientX - dragStartX) / pxPerBar);
+			setOffset(Math.max(0, Math.min(maxOffset, dragStartOffset + delta)));
+		});
+
+		parent.document.addEventListener('mouseup', () => { dragStartX = null; });
+	};
+
+	setupScrollableChart('itemChart', () => itemChartOffset, v => itemChartOffset = v, () => Object.keys(itemCounts));
+	setupScrollableChart('killChart', () => killChartOffset, v => killChartOffset = v, () => Object.keys(mobKills));
+	setupScrollableChart('coopChart', () => coopChartOffset, v => coopChartOffset = v, () => {
+		const ids = [];
+		if (character?.s?.coop?.p) ids.push(character.id);
+		for (const id in parent.entities) if (!parent.entities[id].npc && parent.entities[id].s?.coop?.p) ids.push(id);
+		return ids;
+	});
 };
 
 // ========== UPDATE LOGIC ==========
@@ -554,8 +594,8 @@ const updateMetricsDashboard = () => {
 	updateCoopMetrics($, now);
 
 	const itemEntries = Object.entries(itemCounts);
-	const topEntry = itemEntries.reduce((best, e) => e[1] > (best?.[1] ?? 0) ? e : best, null);
-	$topItem.text(topEntry ? `${topEntry[0]} (${topEntry[1]})` : '--');
+	const totalItemsLooted = itemEntries.reduce((sum, e) => sum + e[1], 0);
+	$topItem.text(totalItemsLooted.toLocaleString('en'));
 	$uniqueItems.text(itemEntries.length);
 
 	if (now - lastItemUpdate >= HISTORY_INTERVAL) {
@@ -652,11 +692,21 @@ const drawItemBarChart = () => {
 
 	const padding = 60;
 	const labelHeight = 50;
-	const chartHeight = canvas.height - padding - labelHeight;
+	const scrollBarH = 12;
+	const chartHeight = canvas.height - padding - labelHeight - scrollBarH - 6;
 	const chartWidth = canvas.width - 2 * padding;
 
+	const BAR_GROUP_W = 80;
+	const barWidth = 50;
+	const visibleCount = Math.floor(chartWidth / BAR_GROUP_W);
+	const maxOffset = Math.max(0, itemData.length - visibleCount);
+	itemChartOffset = Math.min(itemChartOffset, maxOffset);
+
+	const visible = itemData.slice(itemChartOffset, itemChartOffset + visibleCount);
+	const centerOffset = visible.length < visibleCount ? (chartWidth - visible.length * BAR_GROUP_W) / 2 : 0;
+
 	let maxRawItem = 1;
-	for (const d of itemData) if (d.rate > maxRawItem) maxRawItem = d.rate;
+	for (const d of visible) if (d.rate > maxRawItem) maxRawItem = d.rate;
 	const maxValue = niceMax(maxRawItem * 1.1);
 
 	ctx.strokeStyle = sectionColors.items.axis;
@@ -674,15 +724,12 @@ const drawItemBarChart = () => {
 		ctx.fillText(fmtVal(maxValue * i / 5), padding - 10, y + 5);
 	}
 
-	const groupWidth = chartWidth / itemData.length;
-	const barWidth = Math.min(groupWidth - 20, 60);
-
-	for (let i = 0; i < itemData.length; i++) {
-		const d = itemData[i];
+	for (let i = 0; i < visible.length; i++) {
+		const d = visible[i];
 		const color = getItemColor(d.name);
-		const groupX = padding + i * groupWidth;
+		const groupX = padding + centerOffset + i * BAR_GROUP_W;
 		const barHeight = (d.rate / maxValue) * chartHeight;
-		const barX = groupX + (groupWidth - barWidth) / 2;
+		const barX = groupX + (BAR_GROUP_W - barWidth) / 2;
 		const barY = padding + chartHeight - barHeight;
 
 		const gradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
@@ -708,25 +755,49 @@ const drawItemBarChart = () => {
 			ctx.fillText(rateText, x, y);
 		}
 
-		const xCenter = groupX + groupWidth / 2;
-		const labelY0 = canvas.height - 30;
-		const labelY1 = canvas.height - 10;
-		const alt = itemData.length > 20 && (i & 1) ? 8 : 0;
+		const xCenter = groupX + BAR_GROUP_W / 2;
+		const labelY0 = padding + chartHeight + scrollBarH + 14;
+		const labelY1 = padding + chartHeight + scrollBarH + 30;
 
 		ctx.fillStyle = color;
 		ctx.font = '16px pixel, monospace';
 		ctx.textAlign = 'center';
-		ctx.fillText(d.name, xCenter, labelY0 - alt);
+		ctx.fillText(d.name, xCenter, labelY0);
 
 		ctx.fillStyle = 'rgba(255,255,255,0.6)';
 		ctx.font = '14px pixel, monospace';
-		ctx.fillText(d.count.toLocaleString(), xCenter, labelY1 - alt);
+		ctx.fillText(d.count.toLocaleString(), xCenter, labelY1);
+	}
+
+	// scrollbar
+	if (itemData.length > visibleCount) {
+		const trackY = padding + chartHeight + 4;
+		const trackW = chartWidth;
+		const thumbW = Math.max(30, (visibleCount / itemData.length) * trackW);
+		const thumbX = padding + (itemChartOffset / itemData.length) * trackW;
+
+		ctx.fillStyle = 'rgba(255,255,255,0.1)';
+		ctx.beginPath();
+		ctx.roundRect(padding, trackY, trackW, scrollBarH, 6);
+		ctx.fill();
+
+		ctx.fillStyle = sectionColors.items.primary + 'AA';
+		ctx.beginPath();
+		ctx.roundRect(thumbX, trackY, thumbW, scrollBarH, 6);
+		ctx.fill();
 	}
 
 	ctx.fillStyle = sectionColors.items.primary;
-	ctx.font = '16px pixel, monospace';
+	ctx.font = '18px pixel, monospace';
 	ctx.textAlign = 'left';
 	ctx.fillText('predicted /day', padding, padding - 8);
+
+	if (itemData.length > visibleCount) {
+		ctx.fillStyle = 'rgba(255,255,255,0.4)';
+		ctx.font = '18px pixel, monospace';
+		ctx.textAlign = 'right';
+		ctx.fillText(`${itemChartOffset + 1}–${itemChartOffset + visible.length} of ${itemData.length}`, canvas.width - padding, padding - 8);
+	}
 };
 
 const drawCoopBarChart = () => {
@@ -744,22 +815,19 @@ const drawCoopBarChart = () => {
 
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-	let entities = [], max = 1, total = 0;
+	let entities = [], total = 0;
 
 	if (character?.s?.coop?.p) {
-		let p = character.s.coop.p;
+		const p = character.s.coop.p;
 		entities.push({ id: character.id, name: character.name, dmg: p, ctype: character.ctype });
-		if (p > max) max = p;
 		total += p;
 	}
 
-	for (let id in parent.entities) {
-		let e = parent.entities[id];
+	for (const id in parent.entities) {
+		const e = parent.entities[id];
 		if (!e.npc && e.s?.coop?.p) {
-			let p = e.s.coop.p;
-			entities.push({ id, name: e.name || e.mtype, dmg: p, ctype: e.ctype });
-			if (p > max) max = p;
-			total += p;
+			entities.push({ id, name: e.name || e.mtype, dmg: e.s.coop.p, ctype: e.ctype });
+			total += e.s.coop.p;
 		}
 	}
 
@@ -772,12 +840,25 @@ const drawCoopBarChart = () => {
 	}
 
 	entities.sort((a, b) => b.dmg - a.dmg);
-	const maxValue = niceMax(max * 1.1);
 
 	const padding = 60;
-	const labelHeight = 40;
-	const chartHeight = canvas.height - padding - labelHeight;
+	const labelHeight = 50;
+	const scrollBarH = 12;
+	const chartHeight = canvas.height - padding - labelHeight - scrollBarH - 6;
 	const chartWidth = canvas.width - 2 * padding;
+
+	const BAR_GROUP_W = 80;
+	const barWidth = 50;
+	const visibleCount = Math.floor(chartWidth / BAR_GROUP_W);
+	const maxOffset = Math.max(0, entities.length - visibleCount);
+	coopChartOffset = Math.min(coopChartOffset, maxOffset);
+
+	const visible = entities.slice(coopChartOffset, coopChartOffset + visibleCount);
+	const centerOffset = visible.length < visibleCount ? (chartWidth - visible.length * BAR_GROUP_W) / 2 : 0;
+
+	let max = 1;
+	for (const e of visible) if (e.dmg > max) max = e.dmg;
+	const maxValue = niceMax(max * 1.1);
 
 	ctx.strokeStyle = sectionColors.coop.axis;
 	ctx.lineWidth = 1;
@@ -794,16 +875,12 @@ const drawCoopBarChart = () => {
 		ctx.fillText(fmtVal(maxValue * i / 5), padding - 10, y + 5);
 	}
 
-	const groupWidth = chartWidth / entities.length;
-	const barWidth = Math.min(groupWidth - 20, 80);
-
-	for (let i = 0; i < entities.length; i++) {
-		const e = entities[i];
-		const groupX = padding + i * groupWidth;
-		const color = classColors[e.ctype.toLowerCase()] || classColors.default;
-
+	for (let i = 0; i < visible.length; i++) {
+		const e = visible[i];
+		const groupX = padding + centerOffset + i * BAR_GROUP_W;
+		const color = classColors[e.ctype?.toLowerCase()] || classColors.default;
 		const barHeight = (e.dmg / maxValue) * chartHeight;
-		const barX = groupX + (groupWidth - barWidth) / 2;
+		const barX = groupX + (BAR_GROUP_W - barWidth) / 2;
 		const barY = padding + chartHeight - barHeight;
 
 		const gradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
@@ -812,23 +889,21 @@ const drawCoopBarChart = () => {
 		ctx.fillStyle = gradient;
 		ctx.fillRect(barX, barY, barWidth, barHeight);
 
-		ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+		ctx.strokeStyle = 'rgba(255,255,255,0.4)';
 		ctx.lineWidth = 2;
 		ctx.strokeRect(barX, barY, barWidth, barHeight);
 
 		const pct = ((e.dmg / total) * 100).toFixed(1);
-		const dmgText = (e.dmg | 0).toLocaleString();
-		const pctText = `${pct}%`;
-
 		ctx.font = '22px pixel, monospace';
 		ctx.textAlign = 'center';
 		ctx.lineWidth = 3;
 		ctx.strokeStyle = 'black';
-		ctx.strokeText(pctText, barX + barWidth / 2, barY - 5);
+		ctx.strokeText(`${pct}%`, barX + barWidth / 2, barY - 5);
 		ctx.fillStyle = color;
-		ctx.fillText(pctText, barX + barWidth / 2, barY - 5);
+		ctx.fillText(`${pct}%`, barX + barWidth / 2, barY - 5);
 
 		if (barHeight > 20) {
+			const dmgText = (e.dmg | 0).toLocaleString();
 			ctx.font = '16px pixel, monospace';
 			ctx.lineWidth = 3;
 			ctx.strokeStyle = 'black';
@@ -837,11 +912,35 @@ const drawCoopBarChart = () => {
 			ctx.fillText(dmgText, barX + barWidth / 2, barY + 18);
 		}
 
-		const alt = entities.length > 20 && (i & 1) ? 8 : 0;
+		const xCenter = groupX + BAR_GROUP_W / 2;
+		const labelY0 = padding + chartHeight + scrollBarH + 14;
+
 		ctx.fillStyle = color;
 		ctx.font = '16px pixel, monospace';
 		ctx.textAlign = 'center';
-		ctx.fillText(e.name, groupX + groupWidth / 2, canvas.height - 20 - alt);
+		ctx.fillText(e.name, xCenter, labelY0);
+	}
+
+	if (entities.length > visibleCount) {
+		const trackY = padding + chartHeight + 4;
+		const trackW = chartWidth;
+		const thumbW = Math.max(30, (visibleCount / entities.length) * trackW);
+		const thumbX = padding + (coopChartOffset / entities.length) * trackW;
+
+		ctx.fillStyle = 'rgba(255,255,255,0.1)';
+		ctx.beginPath();
+		ctx.roundRect(padding, trackY, trackW, scrollBarH, 6);
+		ctx.fill();
+
+		ctx.fillStyle = sectionColors.coop.primary + 'AA';
+		ctx.beginPath();
+		ctx.roundRect(thumbX, trackY, thumbW, scrollBarH, 6);
+		ctx.fill();
+
+		ctx.fillStyle = 'rgba(255,255,255,0.4)';
+		ctx.font = '14px pixel, monospace';
+		ctx.textAlign = 'right';
+		ctx.fillText(`${coopChartOffset + 1}–${coopChartOffset + visible.length} of ${entities.length}`, canvas.width - padding, padding - 8);
 	}
 };
 
@@ -1042,14 +1141,12 @@ const drawKillBarChart = () => {
 	ctx.clearRect(0, 0, canvas.width, canvas.height);
 
 	const mobData = [];
-	const allMobTypes = Object.keys(mobKills);
-
-	for (const mobType of allMobTypes) {
+	for (const mobType of Object.keys(mobKills)) {
 		const value = calculateAverageKills(mobType);
 		mobData.push({ type: mobType, displayName: mobType.charAt(0).toUpperCase() + mobType.slice(1), value });
 	}
 
-	if (mobData.length === 0) {
+	if (!mobData.length) {
 		ctx.fillStyle = '#999';
 		ctx.font = '24px pixel, monospace';
 		ctx.textAlign = 'center';
@@ -1060,14 +1157,22 @@ const drawKillBarChart = () => {
 	mobData.sort((a, b) => b.value - a.value);
 
 	const padding = 60;
-	const labelHeight = 40;
-	const chartHeight = canvas.height - padding - labelHeight;
+	const labelHeight = 50;
+	const scrollBarH = 12;
+	const chartHeight = canvas.height - padding - labelHeight - scrollBarH - 6;
 	const chartWidth = canvas.width - 2 * padding;
 
+	const BAR_GROUP_W = 80;
+	const barWidth = 50;
+	const visibleCount = Math.floor(chartWidth / BAR_GROUP_W);
+	const maxOffset = Math.max(0, mobData.length - visibleCount);
+	killChartOffset = Math.min(killChartOffset, maxOffset);
+
+	const visible = mobData.slice(killChartOffset, killChartOffset + visibleCount);
+	const centerOffset = visible.length < visibleCount ? (chartWidth - visible.length * BAR_GROUP_W) / 2 : 0;
+
 	let maxRawKills = 1;
-	for (const mob of mobData) {
-		if (mob.value > maxRawKills) maxRawKills = mob.value;
-	}
+	for (const mob of visible) if (mob.value > maxRawKills) maxRawKills = mob.value;
 	const maxValue = niceMax(maxRawKills * 1.1);
 
 	ctx.strokeStyle = sectionColors.kills.axis;
@@ -1085,47 +1190,64 @@ const drawKillBarChart = () => {
 		ctx.fillText(fmtVal(maxValue * i / 5), padding - 10, y + 5);
 	}
 
-	const groupWidth = chartWidth / mobData.length;
-	const barWidth = Math.min(groupWidth - 20, 60);
-
-	for (let i = 0; i < mobData.length; i++) {
-		const mob = mobData[i];
-		const groupX = padding + i * groupWidth;
+	for (let i = 0; i < visible.length; i++) {
+		const mob = visible[i];
+		const groupX = padding + centerOffset + i * BAR_GROUP_W;
 		const mobColor = getMobColor(mob.type);
-
-		const value = mob.value;
-		const barHeight = (value / maxValue) * chartHeight;
-		const barX = groupX + (groupWidth - barWidth) / 2;
+		const barHeight = (mob.value / maxValue) * chartHeight;
+		const barX = groupX + (BAR_GROUP_W - barWidth) / 2;
 		const barY = padding + chartHeight - barHeight;
 
 		ctx.fillStyle = mobColor;
 		ctx.fillRect(barX, barY, barWidth, barHeight);
 
-		ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+		ctx.strokeStyle = 'rgba(255,255,255,0.3)';
 		ctx.lineWidth = 1;
 		ctx.strokeRect(barX, barY, barWidth, barHeight);
 
 		if (barHeight > 30) {
-			ctx.font = '18px pixel, monospace';
-			ctx.textAlign = 'center';
-
-			const text = Math.round(value).toLocaleString();
+			const text = Math.round(mob.value).toLocaleString();
 			const x = barX + barWidth / 2;
 			const y = barY + 15;
-
+			ctx.font = '18px pixel, monospace';
+			ctx.textAlign = 'center';
 			ctx.lineWidth = 3;
 			ctx.strokeStyle = 'black';
 			ctx.strokeText(text, x, y);
-
 			ctx.fillStyle = 'white';
 			ctx.fillText(text, x, y);
 		}
 
+		const xCenter = groupX + BAR_GROUP_W / 2;
+		const labelY0 = padding + chartHeight + scrollBarH + 14;
+		const labelY1 = padding + chartHeight + scrollBarH + 30;
+
 		ctx.fillStyle = mobColor;
 		ctx.font = '16px pixel, monospace';
 		ctx.textAlign = 'center';
-		const altK = mobData.length > 20 && (i & 1) ? 8 : 0;
-		ctx.fillText(mob.displayName, groupX + groupWidth / 2, canvas.height - 20 - altK);
+		ctx.fillText(mob.displayName, xCenter, labelY0);
+	}
+
+	if (mobData.length > visibleCount) {
+		const trackY = padding + chartHeight + 4;
+		const trackW = chartWidth;
+		const thumbW = Math.max(30, (visibleCount / mobData.length) * trackW);
+		const thumbX = padding + (killChartOffset / mobData.length) * trackW;
+
+		ctx.fillStyle = 'rgba(255,255,255,0.1)';
+		ctx.beginPath();
+		ctx.roundRect(padding, trackY, trackW, scrollBarH, 6);
+		ctx.fill();
+
+		ctx.fillStyle = sectionColors.kills.primary + 'AA';
+		ctx.beginPath();
+		ctx.roundRect(thumbX, trackY, thumbW, scrollBarH, 6);
+		ctx.fill();
+
+		ctx.fillStyle = 'rgba(255,255,255,0.4)';
+		ctx.font = '14px pixel, monospace';
+		ctx.textAlign = 'right';
+		ctx.fillText(`${killChartOffset + 1}–${killChartOffset + visible.length} of ${mobData.length}`, canvas.width - padding, padding - 8);
 	}
 };
 

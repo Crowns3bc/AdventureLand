@@ -282,7 +282,7 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, d
 
 	let cumCost = itemValue;
 	for (const s of path) {
-		s.step_cost = cumCost + COSTS.scroll[s.scroll] + COSTS.offering[s.offering];
+		s.step_cost = cumCost + COSTS.scroll[s.scroll] + COSTS.offering[s.offering] + COSTS.offering[1] * s.primstacks;
 		s.expected_cost = s.chance >= 0.999999 ? s.step_cost : s.step_cost / s.chance;
 		s.expected_attempts = s.chance >= 0.999999 ? 1 : 1 / s.chance;
 		cumCost = s.expected_cost;

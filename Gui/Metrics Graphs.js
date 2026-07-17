@@ -1,4 +1,3 @@
-// ========== TRACKING STATE ==========
 let sumGold = 0, largestGoldDrop = 0;
 const goldStartTime = performance.now();
 let goldInterval = 'hour';
@@ -25,6 +24,10 @@ let itemCounts = {};
 const itemHistory = {};
 let lastItemUpdate = 0;
 let itemChartOffset = 0;
+
+let lootMonthKey = 'lootItems' + new Date().toLocaleString('en', { month: 'long' });
+let savedLoot = JSON.parse(localStorage.getItem(lootMonthKey) || "{}");
+let lootDirty = false;
 
 const coopHistory = {};
 let lastCoopUpdate = 0;
@@ -92,6 +95,9 @@ const damageTypeColors = {
 	DR: '#546E7A',
 	Reflect: '#26A69A'
 };
+
+const hexToRgba = (hex, a) =>
+	`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
 
 // ========== INITIALIZATION ==========
 setTimeout(() => {
@@ -344,8 +350,6 @@ const applyStyles = ($) => {
 		if (color) {
 			$(this).css('border-color', color);
 			if ($(this).hasClass('active')) {
-				const hexToRgba = (hex, a) =>
-					`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
 				$(this).css('background', hexToRgba(color, 0.4));
 			}
 		}
@@ -377,8 +381,6 @@ const attachEventHandlers = ($) => {
 		const color = sectionColors[sectionMap[type]]?.primary || '#FFF';
 
 		$(`[data-type="${type}"]`).removeClass('active').css('background', 'rgba(255, 255, 255, 0.1)');
-		const hexToRgba = (hex, a) =>
-			`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
 		$(this).addClass('active').css('background', hexToRgba(color, 0.2));
 
 		if (type === 'kills') {
@@ -413,8 +415,6 @@ const attachEventHandlers = ($) => {
 			selectedDamageTypes = selectedDamageTypes.filter(t => t !== damageType);
 		} else {
 			$(this).addClass('active');
-			const hexToRgba = (hex, a) =>
-				`rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
 			$(this).css('background', hexToRgba(color, 0.3));
 			if (!selectedDamageTypes.includes(damageType)) {
 				selectedDamageTypes.push(damageType);
@@ -478,10 +478,11 @@ let $xpRate, $totalXP, $timeToLevel, $xpLabel;
 let $partyDPS, $yourDPS, $sessionTime;
 let $killRate, $totalKillCount, $mobBreakdown;
 let $topItem, $uniqueItems;
-let $yourCoop, $partyCoop, $yourCoopPct;
+let $partyCoop, $yourCoopPct;
 
 const updateMetricsDashboard = () => {
 	const $ = parent.$;
+	if (!$('#metricsDashboard').is(':visible')) return;
 	const now = performance.now();
 
 	if (!$goldRate) {
@@ -506,7 +507,6 @@ const updateMetricsDashboard = () => {
 		$topItem = $('#topItem');
 		$uniqueItems = $('#uniqueItems');
 
-		$yourCoop = $('#yourCoop');
 		$partyCoop = $('#partyCoop');
 		$yourCoopPct = $('#yourCoopPct');
 	}
@@ -598,10 +598,10 @@ const updateMetricsDashboard = () => {
 	updateMobBreakdown($);
 	updateCoopMetrics($, now);
 
-	const itemEntries = Object.entries(itemCounts);
-	const totalItemsLooted = itemEntries.reduce((sum, e) => sum + e[1], 0);
+	let totalItemsLooted = 0, uniqueItemCount = 0;
+	for (const name in itemCounts) { totalItemsLooted += itemCounts[name]; uniqueItemCount++; }
 	$topItem.text(totalItemsLooted.toLocaleString('en'));
-	$uniqueItems.text(itemEntries.length);
+	$uniqueItems.text(uniqueItemCount);
 
 	if (now - lastItemUpdate >= HISTORY_INTERVAL) {
 		const elapsed = (now - itemStartTime) / 86400000;
@@ -623,50 +623,45 @@ const updateMetricsDashboard = () => {
 
 // ========== CO-OP TRACKING ==========
 const updateCoopMetrics = ($, now) => {
-	const yourDmg = character?.s?.coop?.p || 0;
-	let partyTotal = yourDmg;
-	let overallTotal = yourDmg;
-
+	const mid = character?.s?.coop?.id;
+	let partyScaled = 0, overallScaled = 0.1;
 	const partyIds = new Set(parent.party_list);
 
-	for (let id in parent.entities) {
-		const e = parent.entities[id];
-		if (!e.npc && e.s?.coop?.p) {
-			overallTotal += e.s.coop.p;
-			if (partyIds.has(id)) {
-				partyTotal += e.s.coop.p;
-			}
-		}
+	if (mid != null && character.s.coop.p) {
+		const scaled = Math.pow(character.s.coop.p, 0.65);
+		overallScaled += scaled;
+		if (partyIds.has(character.id)) partyScaled += scaled;
 	}
 
-	const partySharePct = overallTotal > 0 ? (partyTotal / overallTotal) * 100 : 0;
+	for (let id in parent.entities) {
+		const e = parent.entities[id], c = e.s?.coop;
+		if (e.npc || !c || c.id !== mid || !c.p) continue;
+		const scaled = Math.pow(c.p, 0.65);
+		overallScaled += scaled;
+		if (partyIds.has(id)) partyScaled += scaled;
+	}
 
-	$yourCoop.text((yourDmg | 0).toLocaleString('en'));
-	$partyCoop.text((partyTotal | 0).toLocaleString('en'));
-	$yourCoopPct.text(partySharePct.toFixed(2) + '%');
+	$partyCoop.text((partyScaled | 0).toLocaleString('en'));
+	$yourCoopPct.text((partyScaled / overallScaled * 100).toFixed(2) + '%');
 
 	if (now - lastCoopUpdate >= HISTORY_INTERVAL) {
-		if (!coopHistory[character.id]) coopHistory[character.id] = [];
-		coopHistory[character.id].push({ time: now, value: yourDmg });
-		if (coopHistory[character.id].length > MAX_HISTORY) coopHistory[character.id].shift();
-
-		for (let id in parent.entities) {
-			const e = parent.entities[id];
-			if (!e.npc && e.s?.coop?.p) {
-				if (!coopHistory[id]) coopHistory[id] = [];
-				coopHistory[id].push({ time: now, value: e.s.coop.p });
-				if (coopHistory[id].length > MAX_HISTORY) coopHistory[id].shift();
-			}
+		if (mid != null && character.s.coop.p) {
+			(coopHistory[character.id] ??= []).push({ time: now, value: character.s.coop.p });
+			if (coopHistory[character.id].length > MAX_HISTORY) coopHistory[character.id].shift();
 		}
-
+		for (let id in parent.entities) {
+			const e = parent.entities[id], c = e.s?.coop;
+			if (e.npc || !c || c.id !== mid || !c.p) continue;
+			(coopHistory[id] ??= []).push({ time: now, value: c.p });
+			if (coopHistory[id].length > MAX_HISTORY) coopHistory[id].shift();
+		}
 		lastCoopUpdate = now;
 	}
 };
 
 const drawItemBarChart = () => {
-	const $ = parent.$;
 	const canvas = parent.document.getElementById('itemChart');
-	if (!canvas || !$('#metricsDashboard').is(':visible')) return;
+	if (!canvas) return;
 
 	const ctx = canvas.getContext('2d');
 	const rect = canvas.getBoundingClientRect();
@@ -693,6 +688,7 @@ const drawItemBarChart = () => {
 		count: itemCounts[name],
 		rate: elapsed > 0 ? itemCounts[name] / elapsed : 0
 	}));
+
 	itemData.sort((a, b) => b.rate - a.rate);
 
 	const padding = 60;
@@ -708,16 +704,24 @@ const drawItemBarChart = () => {
 	itemChartOffset = Math.min(itemChartOffset, maxOffset);
 
 	const visible = itemData.slice(itemChartOffset, itemChartOffset + visibleCount);
-	const centerOffset = visible.length < visibleCount ? (chartWidth - visible.length * BAR_GROUP_W) / 2 : 0;
+	const centerOffset =
+		visible.length < visibleCount
+			? (chartWidth - visible.length * BAR_GROUP_W) / 2
+			: 0;
 
 	let maxRawItem = 1;
-	for (const d of visible) if (d.rate > maxRawItem) maxRawItem = d.rate;
+	for (const d of visible) {
+		if (d.rate > maxRawItem) maxRawItem = d.rate;
+	}
+
 	const maxValue = niceMax(maxRawItem * 1.1);
 
 	ctx.strokeStyle = sectionColors.items.axis;
 	ctx.lineWidth = 1;
+
 	for (let i = 0; i <= 5; i++) {
 		const y = padding + chartHeight * (1 - i / 5);
+
 		ctx.beginPath();
 		ctx.moveTo(padding, y);
 		ctx.lineTo(canvas.width - padding, y);
@@ -732,14 +736,22 @@ const drawItemBarChart = () => {
 	for (let i = 0; i < visible.length; i++) {
 		const d = visible[i];
 		const color = getItemColor(d.name);
+
 		const groupX = padding + centerOffset + i * BAR_GROUP_W;
 		const barHeight = (d.rate / maxValue) * chartHeight;
 		const barX = groupX + (BAR_GROUP_W - barWidth) / 2;
 		const barY = padding + chartHeight - barHeight;
 
-		const gradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
+		const gradient = ctx.createLinearGradient(
+			barX,
+			barY,
+			barX,
+			barY + barHeight
+		);
+
 		gradient.addColorStop(0, color);
 		gradient.addColorStop(1, color + '60');
+
 		ctx.fillStyle = gradient;
 		ctx.fillRect(barX, barY, barWidth, barHeight);
 
@@ -747,18 +759,19 @@ const drawItemBarChart = () => {
 		ctx.lineWidth = 1;
 		ctx.strokeRect(barX, barY, barWidth, barHeight);
 
-		if (barHeight > 30) {
-			const rateText = Math.round(d.rate).toLocaleString();
-			const x = barX + barWidth / 2;
-			const y = barY + 16;
-			ctx.font = '18px pixel, monospace';
-			ctx.textAlign = 'center';
-			ctx.lineWidth = 3;
-			ctx.strokeStyle = 'black';
-			ctx.strokeText(rateText, x, y);
-			ctx.fillStyle = 'white';
-			ctx.fillText(rateText, x, y);
-		}
+		// ALWAYS SHOW predicted/day above the bar
+		const rateText = Math.round(d.rate).toLocaleString();
+		const x = barX + barWidth / 2;
+		const y = Math.max(18, barY - 8);
+
+		ctx.font = '18px pixel, monospace';
+		ctx.textAlign = 'center';
+		ctx.lineWidth = 3;
+		ctx.strokeStyle = 'black';
+		ctx.strokeText(rateText, x, y);
+
+		ctx.fillStyle = 'white';
+		ctx.fillText(rateText, x, y);
 
 		const xCenter = groupX + BAR_GROUP_W / 2;
 		const labelY0 = padding + chartHeight + scrollBarH + 14;
@@ -766,7 +779,6 @@ const drawItemBarChart = () => {
 
 		ctx.fillStyle = color;
 		ctx.font = '16px pixel, monospace';
-		ctx.textAlign = 'center';
 		ctx.fillText(d.name, xCenter, labelY0);
 
 		ctx.fillStyle = 'rgba(255,255,255,0.6)';
@@ -774,12 +786,16 @@ const drawItemBarChart = () => {
 		ctx.fillText(d.count.toLocaleString(), xCenter, labelY1);
 	}
 
-	// scrollbar
 	if (itemData.length > visibleCount) {
 		const trackY = padding + chartHeight + 4;
 		const trackW = chartWidth;
-		const thumbW = Math.max(30, (visibleCount / itemData.length) * trackW);
-		const thumbX = padding + (itemChartOffset / itemData.length) * trackW;
+		const thumbW = Math.max(
+			30,
+			(visibleCount / itemData.length) * trackW
+		);
+
+		const thumbX =
+			padding + (itemChartOffset / itemData.length) * trackW;
 
 		ctx.fillStyle = 'rgba(255,255,255,0.1)';
 		ctx.beginPath();
@@ -791,24 +807,11 @@ const drawItemBarChart = () => {
 		ctx.roundRect(thumbX, trackY, thumbW, scrollBarH, 6);
 		ctx.fill();
 	}
-
-	ctx.fillStyle = sectionColors.items.primary;
-	ctx.font = '18px pixel, monospace';
-	ctx.textAlign = 'left';
-	ctx.fillText('predicted /day', padding, padding - 8);
-
-	if (itemData.length > visibleCount) {
-		ctx.fillStyle = 'rgba(255,255,255,0.4)';
-		ctx.font = '18px pixel, monospace';
-		ctx.textAlign = 'right';
-		ctx.fillText(`${itemChartOffset + 1}–${itemChartOffset + visible.length} of ${itemData.length}`, canvas.width - padding, padding - 8);
-	}
 };
 
 const drawCoopBarChart = () => {
-	const $ = parent.$;
 	const canvas = parent.document.getElementById('coopChart');
-	if (!canvas || !$('#metricsDashboard').is(':visible')) return;
+	if (!canvas) return;
 
 	const ctx = canvas.getContext('2d');
 	const rect = canvas.getBoundingClientRect();
@@ -951,9 +954,8 @@ const drawCoopBarChart = () => {
 
 // ========== CHART DRAWING ==========
 const drawDPSBarChart = () => {
-	const $ = parent.$;
 	const canvas = parent.document.getElementById('dpsChart');
-	if (!canvas || !$('#metricsDashboard').is(':visible')) return;
+	if (!canvas) return;
 
 	const ctx = canvas.getContext('2d');
 	const rect = canvas.getBoundingClientRect();
@@ -973,11 +975,13 @@ const drawDPSBarChart = () => {
 		if (!player) continue;
 
 		const values = {};
+		let total = 0;
 		for (const type of selectedDamageTypes) {
 			values[type] = calculateDamageTypeValue(id, now, type);
+			total += values[type];
 		}
 
-		players.push({ id, name: player.name, ctype: player.ctype, values });
+		players.push({ id, name: player.name, ctype: player.ctype, values, total });
 	}
 
 	if (players.length === 0) {
@@ -996,11 +1000,7 @@ const drawDPSBarChart = () => {
 		return;
 	}
 
-	players.sort((a, b) => {
-		const sumA = Object.values(a.values).reduce((s, v) => s + v, 0);
-		const sumB = Object.values(b.values).reduce((s, v) => s + v, 0);
-		return sumB - sumA;
-	});
+	players.sort((a, b) => b.total - a.total);
 
 	const padding = 60;
 	const labelHeight = 40;
@@ -1096,7 +1096,7 @@ const drawDPSBarChart = () => {
 			ctx.fillStyle = 'white';
 			ctx.font = '16px pixel, monospace';
 			ctx.textAlign = 'left';
-			const label = type === 'DPS' && players.length === 1 ? damageTypeLabels[type] : damageTypeLabels[type];
+			const label = damageTypeLabels[type];
 			ctx.fillText(label, legendX + 20, legendY + 12);
 
 			legendX += ctx.measureText(label).width + 40;
@@ -1131,9 +1131,8 @@ const updateMobBreakdown = ($) => {
 };
 
 const drawKillBarChart = () => {
-	const $ = parent.$;
 	const canvas = parent.document.getElementById('killChart');
-	if (!canvas || !$('#metricsDashboard').is(':visible')) return;
+	if (!canvas) return;
 
 	const ctx = canvas.getContext('2d');
 	const rect = canvas.getBoundingClientRect();
@@ -1258,7 +1257,7 @@ const drawKillBarChart = () => {
 
 const drawChart = (canvasId, lines, sectionColor) => {
 	const canvas = parent.document.getElementById(canvasId);
-	if (!canvas || !parent.$('#metricsDashboard').is(':visible')) return;
+	if (!canvas) return;
 
 	const ctx = canvas.getContext('2d');
 	const rect = canvas.getBoundingClientRect();
@@ -1296,8 +1295,8 @@ const drawChart = (canvasId, lines, sectionColor) => {
 
 	let rawMax = 1;
 	for (let i = 0; i < lines.length; i++) {
-		const lineMax = lines[i].smoothedMax || Math.max(...lines[i].history.map(d => d.value), 1);
-		if (lineMax > rawMax) rawMax = lineMax;
+		const h = lines[i].history;
+		for (let j = 0; j < h.length; j++) if (h[j].value > rawMax) rawMax = h[j].value;
 	}
 	const range = niceMax(rawMax * 1.1) || 1;
 
@@ -1474,32 +1473,20 @@ const resetKillHistory = () => {
 	lastKillUpdate = 0;
 };
 
-const barGradientCache = {};
-
 function getDamageBarFill(ctx, type, barX, barY, barWidth, barHeight, fallbackColor) {
-	if (type !== 'Burn' && type !== 'Blast') {
-		return fallbackColor;
-	}
-
-	const key = `${type}_${barWidth}_${barHeight}`;
-	if (barGradientCache[key]) return barGradientCache[key];
+	if (type !== 'Burn' && type !== 'Blast') return fallbackColor;
 
 	const g = ctx.createLinearGradient(barX, barY + barHeight, barX, barY);
 
-	switch (type) {
-		case 'Burn':
-			g.addColorStop(0.0, '#8B1A1A');
-			g.addColorStop(0.5, '#F4511E');
-			g.addColorStop(1.0, '#FFD54F');
-			break;
-
-		case 'Blast':
-			g.addColorStop(0.0, '#6D2C00');
-			g.addColorStop(1.0, '#FF9800');
-			break;
+	if (type === 'Burn') {
+		g.addColorStop(0.0, '#8B1A1A');
+		g.addColorStop(0.5, '#F4511E');
+		g.addColorStop(1.0, '#FFD54F');
+	} else {
+		g.addColorStop(0.0, '#6D2C00');
+		g.addColorStop(1.0, '#FF9800');
 	}
 
-	barGradientCache[key] = g;
 	return g;
 }
 
@@ -1595,12 +1582,6 @@ parent.socket.on("kill_credit", async (data) => {
 	totalKills++;
 	mobKills[mtype] = (mobKills[mtype] || 0) + 1;
 	getMobColor(mtype);
-
-	if (CONFIG.equipment.temporal.enabled && mtype === CONFIG.equipment.temporal.targetMob) {
-		if (!is_on_cooldown("temporalsurge")) {
-			await handleTemporalSurge();
-		}
-	}
 });
 
 function getItemColor(name) {
@@ -1613,19 +1594,21 @@ function getItemColor(name) {
 
 character.on("loot", (data) => {
 	if (typeof data.gold === 'number' && !Number.isNaN(data.gold)) {
-		const count = Object.keys(parent.party).filter(name =>
-			name === character.name || parent.entities[name]?.owner === character.owner
-		).length;
+		let count = 0;
+		for (const name in parent.party) {
+			if (name === character.name || parent.entities[name]?.owner === character.owner) count++;
+		}
 		const myGold = Math.round(data.gold * count);
 		sumGold += myGold;
 		if (myGold > largestGoldDrop) largestGoldDrop = myGold;
 	}
+
 	if (Array.isArray(data.items)) {
 		for (const item of data.items) {
 			const quantity = item.q ?? 1;
-
 			itemCounts[item.name] = (itemCounts[item.name] || 0) + quantity;
 			getItemColor(item.name);
 		}
+		lootDirty = true;
 	}
 });

@@ -171,6 +171,14 @@ function modify_tracker() {
 				return 10 * mag;
 			};
 
+			const tkrNiceMin = raw => {
+				if (raw <= 0) return 0;
+				const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+				const n = raw / mag, steps = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 8, 10];
+				let i = 0; while (i < steps.length && steps[i] < n) i++;
+				return (i ? steps[i - 1] : 0) * mag;
+			};
+
 			const tkrFmt = v => {
 				const a = Math.abs(v);
 				const fmt = (n, s) => { const str = n.toFixed(1); return (str.endsWith('.0') ? n.toFixed(0) : str) + s; };
@@ -231,7 +239,8 @@ function modify_tracker() {
 				const span = Math.max(1, lastDay - firstDay);
 				const xd = d => PL + cw * (d - firstDay) / span;
 				const yMax = tkrNiceMax(Math.max(data[data.length - 1][1], data[data.length - 1][2]) * 1.08);
-				const yv = v => PT + ch - ch * v / yMax;
+				const yMin = tkrRange === 'all' ? 0 : tkrNiceMin(Math.min(data[0][1], data[0][2]) * 0.95);
+				const yv = v => PT + ch - ch * (v - yMin) / (yMax - yMin);
 
 				// Grid + Y labels
 				ctx.font = '18px pixel,monospace';
@@ -241,7 +250,7 @@ function modify_tracker() {
 					ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(PL + cw, y); ctx.stroke();
 					if (i % 2 === 0) {
 						ctx.fillStyle = 'rgba(159,159,176,0.8)'; ctx.textAlign = 'right';
-						ctx.fillText(tkrFmt(yMax * (8 - i) / 8), PL - 6, y + 5);
+						ctx.fillText(tkrFmt(yMin + (yMax - yMin) * (8 - i) / 8), PL - 6, y + 5);
 					}
 				}
 

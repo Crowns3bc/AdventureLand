@@ -78,8 +78,9 @@ function sortAllBank(invSlots, sortedBank, cursor) {
 async function runLimited(entries, worker, cap = 180) {
 	const inflight = [];
 	for (const entry of entries) {
-		while (character.cc > cap) await sleep(50);
+		while (character.cc > cap) await sleep(100);
 		inflight.push(worker(entry));
+		await sleep(10);
 	}
 	return Promise.allSettled(inflight);
 }
@@ -98,7 +99,10 @@ async function sortGlobalBank() {
 		.filter(k => k !== "gold" && bank_packs[k])
 		.sort((a, b) => +a.replace("items", "") - +b.replace("items", ""));
 
-	const packFloor = pack => bank_packs[pack]?.[0];
+	const packFloor = pack => {
+		const n = +pack.replace("items", "");
+		return n <= 7 ? "bank" : n <= 23 ? "bank_b" : "bank_u";
+	};
 	const nm = it => it.level != null ? `${it.name} lv${it.level}` : it.name;
 
 	const flat = [];
@@ -212,7 +216,7 @@ async function sortGlobalBank() {
 			for (const e of batch) { const f = packFloor(e.curPack); (byFloor.get(f) ?? byFloor.set(f, []).get(f)).push(e); }
 			for (const [floor, entries] of byFloor) {
 				await go(floor);
-				const results = await runLimited(batch, entry => {
+				const results = await runLimited(entries, entry => {
 					const fi = freeSlots.pop();
 					console.log(`  retrieving ${nm(entry.item)} from ${entry.curPack}[${entry.curSlot}]`);
 					return bank_retrieve(entry.curPack, entry.curSlot, fi).then(() => moveToInv(entry, fi));

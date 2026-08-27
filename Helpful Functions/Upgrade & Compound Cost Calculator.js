@@ -294,7 +294,7 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, d
 	for (let i = path.length - 1; i >= 0; i--) {
 		const s = path[i];
 		suffixMult *= s.expected_attempts;
-		const primCnt = s.primstacks * (suffixMult / s.expected_attempts);
+		const primCnt = s.primstacks * suffixMult;
 		scrollTotals[SCROLL_NAMES.upgrade[s.scroll]] += suffixMult;
 		offeringTotals[OFFERING_NAMES[s.offering]] += suffixMult;
 		offeringTotals.offeringp += primCnt;

@@ -215,7 +215,7 @@ const equipmentSets = {
 		{ itemName: "strearring", slot: "earring2", level: 6, l: "l" },
 		{ itemName: "orbofstr", slot: "orb", level: 5, l: "l" },
 		{ itemName: "suckerpunch", slot: "ring1", level: 3, l: "u" },
-		{ itemName: "suckerpunch", slot: "ring2", level: 2, l: "l" },
+		{ itemName: "suckerpunch", slot: "ring2", level: 3, l: "l" },
 	],
 	luck: [
 		{ itemName: "mearring", slot: "earring1", level: 0, l: "l" },
@@ -236,8 +236,8 @@ const equipmentSets = {
 		{ itemName: "strearring", slot: "earring2", level: 6, l: "l" },
 		{ itemName: "orbofstr", slot: "orb", level: 5, l: "l" },
 		{ itemName: "strbelt", slot: "belt", level: 5, l: "l" },
-		{ itemName: "suckerpunch", slot: "ring1", level: 2, l: "l" },
-		{ itemName: "suckerpunch", slot: "ring2", level: 2, l: "u" },
+		{ itemName: "suckerpunch", slot: "ring1", level: 3, l: "l" },
+		{ itemName: "suckerpunch", slot: "ring2", level: 3, l: "u" },
 	],
 };
 

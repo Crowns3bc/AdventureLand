@@ -2,25 +2,29 @@
 // ============================================================================
 // CONFIGURATION - Toggle features here instead of editing code
 // ============================================================================
-const home = 'bigbird';
-const mobMap = 'main';
-const allBosses = ['bscorpion', 'bscorpion', 'crabxx', 'dragold', 'franky', 'greenjr', 'grinch', 'icegolem', 'jr', 'mrgreen', 'mrpumpkin', 'phoenix', 'rgoo', 'wabbit'];
+const home = 'ent';
+const mobMap = 'desertland';
+const allBosses = ['bscorpion', 'crabxx', 'dragold', 'ent', 'franky', 'greenjr', 'grinch', 'icegolem', 'jr', 'mrgreen', 'mrpumpkin', 'phoenix', 'rgoo', 'wabbit'];
 
 const CONFIG = {
 	combat: {
-		curse: false,
+		curse: true,
 		zapper: true,
-		zapSwap: true,
-		zapperMobs: [...allBosses, home, 'sparkbot', 'spider', 'scorpion'],
+		zapSwap: false,
+		zapperMobs: [...allBosses, home, "sparkbot"],
+		zapSpam: {
+			enabled: true,
+			mob: 'bscorpion',
+			minMp: 2000
+		},
 		targetPriority: ['CrownPriest'],
 		allBosses,
 	},
 
 	movement: {
 		enabled: true,
-		circleWalk: false,
-		circleSpeed: 1.8,
-		circleRadius: 25,
+		circleWalk: true,
+		circleRadius: 35,
 		kiting: {
 			enabled: false,
 			avoidTypes: ['bscorpion'],
@@ -50,9 +54,9 @@ const CONFIG = {
 	},
 
 	looting: {
-		lootSet: "maxLuck",
+		lootSet: "dreturn",
 		enabled: true,
-		chestThreshold: 20,
+		chestThreshold: 1,
 		targetCount: 55,
 		equipGoldGear: true,
 		lootCooldown: 3000
@@ -65,8 +69,10 @@ const CONFIG = {
 			mrpumpkin: 300000,
 			mrgreen: 300000,
 			bscorpion: 75000,
+			ent: 75000,
 			crabxx: 40000,
 			dragold: 200000,
+			wabbit: 5000,
 		},
 		temporal: {
 			enabled: true,
@@ -114,11 +120,9 @@ const EVENT_LOCATIONS = [
 ];
 
 const getDynamicEvents = () => {
-	const events = [...EVENT_LOCATIONS];
 	const w = parent.S?.wabbit;
-	if (w?.live) events.push({ name: 'wabbit', map: w.map, x: w.x, y: w.y });
-	return events;
-};
+	return w?.live ? [...EVENT_LOCATIONS, { name: 'wabbit', map: w.map, x: w.x, y: w.y }] : EVENT_LOCATIONS;
+}
 
 const CACHE_TTL = 50; // Cache validity in ms
 
@@ -157,13 +161,13 @@ const cache = {
 const locations = {
 	bat: [{ x: 1200, y: -782 }],
 	bigbird: [{ x: 1258, y: -69 }],
-	bluefairy: [{ x: -357, y: -675 }],
+	bluefairy: [{ x: -344, y: -680 }],
 	bscorpion: [{ x: -555, y: -1158 }],
 	boar: [{ x: 19, y: -1109 }],
 	cgoo: [{ x: -221, y: -274 }],
 	crab: [{ x: -11840, y: -37 }],
 	dryad: [{ x: 403, y: -347 }],
-	ent: [{ x: -420, y: -1960 }],
+	ent: [{ x: -413, y: -1961 }],
 	fireroamer: [{ x: 222, y: -827 }],
 	ghost: [{ x: -405, y: -1642 }],
 	gscorpion: [{ x: 390, y: -1422 }],
@@ -172,7 +176,7 @@ const locations = {
 	mole: [{ x: 14, y: -1072 }],
 	mummy: [{ x: 256, y: -1417 }],
 	odino: [{ x: -52, y: 756 }],
-	oneeye: [{ x: -255, y: 176 }],
+	oneeye: [{ x: -544, y: 94 }],
 	pinkgoblin: [{ x: 485, y: 157 }],
 	poisio: [{ x: -121, y: 1360 }],
 	prat: [{ x: 11, y: 84 }],
@@ -206,27 +210,27 @@ const equipmentSets = {
 	],
 	luck: [
 		{ itemName: "xhelmet", slot: "helmet", level: 9, l: "l" },
-		{ itemName: "vattire", slot: "chest", level: 8, l: "l" },
-		//{ itemName: "tshirt88", slot: "chest", level: 4, l: "l" },
+		//{ itemName: "vattire", slot: "chest", level: 8, l: "l" },
+		{ itemName: "tshirt88", slot: "chest", level: 4, l: "l" },
 		{ itemName: "starkillers", slot: "pants", level: 9, l: "l" },
 		{ itemName: "wingedboots", slot: "shoes", level: 9, l: "l" },
 		{ itemName: "mpxgloves", slot: "gloves", level: 7, l: "l" },
-		{ itemName: "sbelt", slot: "belt", level: 2, l: "l" },
+		{ itemName: "sbelt", slot: "belt", level: 3, l: "l" },
 		{ itemName: "lmace", slot: "mainhand", level: 9, l: "l" },
 		{ itemName: "mshield", slot: "offhand", level: 10, l: "l" },
 		{ itemName: "ringofluck", slot: "ring1", level: 2, l: "u" },
 		{ itemName: "ringofluck", slot: "ring2", level: 2, l: "l" },
 		{ itemName: "rabbitsfoot", slot: "orb", level: 3, l: "l" },
-		//{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
-		{ itemName: "spookyamulet", slot: "amulet", level: 3, l: "l" },
+		{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
+		//{ itemName: "spookyamulet", slot: "amulet", level: 3, l: "l" },
 		{ itemName: "bcape", slot: "cape", level: 8, l: "l" },
 		{ itemName: "mearring", slot: "earring1", level: 2, l: "l" },
 		{ itemName: "mearring", slot: "earring2", level: 1, l: "u" }
 	],
 	maxLuck: [
-		{ itemName: "eears", slot: "helmet", level: 8, l: "l" },
+		{ itemName: "eears", slot: "helmet", level: 5, l: "l" },
 		{ itemName: "tshirt88", slot: "chest", level: 4, l: "l" },
-		{ itemName: "xmaspants", slot: "pants", level: 9, l: "l" },
+		{ itemName: "xmaspants", slot: "pants", level: 3, l: "l" },
 		{ itemName: "wingedboots", slot: "shoes", level: 9, l: "l" },
 		{ itemName: "mpxgloves", slot: "gloves", level: 7, l: "l" },
 		{ itemName: "santasbelt", slot: "belt", level: 3, l: "l" },
@@ -235,11 +239,28 @@ const equipmentSets = {
 		{ itemName: "ringofluck", slot: "ring1", level: 2, l: "u" },
 		{ itemName: "ringofluck", slot: "ring2", level: 2, l: "l" },
 		{ itemName: "rabbitsfoot", slot: "orb", level: 3, l: "l" },
-		//{ itemName: "spookyamulet", slot: "amulet", level: 3, l: "l" },
-		{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
+		{ itemName: "spookyamulet", slot: "amulet", level: 3, l: "l" },
+		//{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
 		{ itemName: "ecape", slot: "cape", level: 8, l: "l" },
 		{ itemName: "mearring", slot: "earring1", level: 2, l: "l" },
 		{ itemName: "mearring", slot: "earring2", level: 1, l: "u" }
+	],
+	maxR: [
+		{ itemName: "xhelmet", slot: "helmet", level: 9, l: "l" },
+		{ itemName: "vattire", slot: "chest", level: 8, l: "l" },
+		{ itemName: "starkillers", slot: "pants", level: 9, l: "l" },
+		{ itemName: "wingedboots", slot: "shoes", level: 10, l: "l" },
+		{ itemName: "mpxgloves", slot: "gloves", level: 7, l: "l" },
+		{ itemName: "intbelt", slot: "belt", level: 6, l: "l" },
+		{ itemName: "lmace", slot: "mainhand", level: 9, l: "s" },
+		{ itemName: "wbookhs", slot: "offhand", level: 5, l: "l" },
+		{ itemName: "zapper", slot: "ring1", level: 2, l: "l" },
+		{ itemName: "zapper", slot: "ring2", level: 2, l: "u" },
+		{ itemName: "jacko", slot: "orb", level: 5, l: "l" },
+		{ itemName: "t2stramulet", slot: "amulet", level: 4, l: "l" },
+		{ itemName: "gcape", slot: "cape", level: 9, l: "l" },
+		{ itemName: "cearring", slot: "earring1", level: 4, l: "l" },
+		{ itemName: "cearring", slot: "earring2", level: 5, l: "u" }
 	],
 	gold: [
 		{ itemName: "wcap", slot: "helmet", level: 6, l: "l" },
@@ -250,11 +271,11 @@ const equipmentSets = {
 		{ itemName: "goldring", slot: "ring1", level: 1, l: "l" },
 		{ itemName: "goldring", slot: "ring2", level: 1, l: "u" },
 		{ itemName: "spookyamulet", slot: "amulet", level: 3, l: "l" },
-		{ itemName: "horsecapeg", slot: "cape", level: 9, l: "l" },
+		{ itemName: "horsecapeg", slot: "cape", level: 10, l: "l" },
 	],
 	dps: [
 		{ itemName: "spikedhelmet", slot: "helmet", level: 9, l: "l" },
-		{ itemName: "coat", slot: "chest", level: 10, l: "l" },
+		{ itemName: "vattire", slot: "chest", level: 8, l: "l" },
 		{ itemName: "starkillers", slot: "pants", level: 9, l: "l" },
 		{ itemName: "wingedboots", slot: "shoes", level: 10, l: "l" },
 		{ itemName: "mpxgloves", slot: "gloves", level: 7, l: "l" },
@@ -267,13 +288,33 @@ const equipmentSets = {
 		{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
 		{ itemName: "bcape", slot: "cape", level: 8, l: "l" },
 		{ itemName: "cearring", slot: "earring1", level: 4, l: "l" },
-		{ itemName: "cearring", slot: "earring2", level: 4, l: "u" }
+		{ itemName: "cearring", slot: "earring2", level: 5, l: "u" }
+	],
+	dreturn: [
+		{ itemName: "spikedhelmet", slot: "helmet", level: 9, l: "l" },
+		{ itemName: "cdragon", slot: "chest", l: "l" },
+		{ itemName: "starkillers", slot: "pants", level: 9, l: "l" },
+		{ itemName: "wingedboots", slot: "shoes", level: 10, l: "l" },
+		{ itemName: "mpxgloves", slot: "gloves", level: 7, l: "l" },
+		{ itemName: "sbelt", slot: "belt", level: 3, l: "l" },
+		{ itemName: "lmace", slot: "mainhand", level: 9, l: "s" },
+		{ itemName: "sshield", slot: "offhand", level: 10, l: "l" },
+		{ itemName: "zapper", slot: "ring1", level: 2, l: "u" },
+		{ itemName: "zapper", slot: "ring2", level: 2, l: "l" },
+		{ itemName: "rabbitsfoot", slot: "orb", level: 3, l: "l" },
+		{ itemName: "mpxamulet", slot: "amulet", level: 1, l: "l" },
+		{ itemName: "bcape", slot: "cape", level: 8, l: "l" },
+		{ itemName: "cearring", slot: "earring1", level: 4, l: "l" },
+		{ itemName: "cearring", slot: "earring2", level: 5, l: "u" }
 	],
 };
 
 // ============================================================================
 // CORE UTILITIES
 // ============================================================================
+const BOSS_SET = new Set(allBosses);
+const ZAPPER_MOB_SET = new Set(CONFIG.combat.zapperMobs);
+
 function updateCache() {
 	if (!cache.isValid()) {
 		cache.target = findBestTarget();
@@ -287,7 +328,7 @@ function updateCache() {
 }
 
 function findBestTarget() {
-	for (const bossType of CONFIG.combat.allBosses) {
+	for (const bossType of BOSS_SET) {
 		const boss = get_nearest_monster_v2({
 			type: bossType,
 			max_distance: character.range
@@ -306,7 +347,7 @@ function findBestTarget() {
 
 	for (const name of CONFIG.combat.targetPriority) {
 		const target = get_nearest_monster_v2({
-			target: name,
+			type: home,
 			max_distance: character.range
 		});
 		if (target) return target;
@@ -359,15 +400,15 @@ function findHealTarget() {
 function findZapTargets() {
 	if (!CONFIG.combat.zapper) return [];
 
-	return Object.values(parent.entities).filter(e =>
-		e &&
-		e.type === 'monster' &&
-		!e.target &&
-		CONFIG.combat.zapperMobs.includes(e.mtype) &&
-		is_in_range(e, 'zapperzap') &&
-		e.visible &&
-		!e.dead
-	);
+	const targets = [];
+	for (const id in parent.entities) {
+		const e = parent.entities[id];
+		if (e && e.type === 'monster' && !e.target && !e.dead && e.visible &&
+			ZAPPER_MOB_SET.has(e.mtype) && is_in_range(e, 'zapperzap')) {
+			targets.push(e);
+		}
+	}
+	return targets;
 }
 
 function getPartyMembers() {
@@ -375,8 +416,8 @@ function getPartyMembers() {
 }
 
 function findNearestBoss() {
-	for (const bossType of CONFIG.combat.allBosses) {
-		const boss = get_nearest_monster_v2({ type: bossType });
+	for (const bossType of BOSS_SET) {
+		const boss = get_nearest_monster_v2({ type: bossType, check_min_hp: true });
 		if (boss) return { mob: boss, type: bossType };
 	}
 	return null;
@@ -424,38 +465,21 @@ async function mainLoop() {
 // ACTION LOOP - Combat and healing only
 // ============================================================================
 async function actionLoop() {
-	let delay = 10;
-
 	try {
-		if (is_disabled(character)) {
-			return setTimeout(actionLoop, 25);
-		}
-
+		if (is_disabled(character)) return setTimeout(actionLoop, 25);
 		updateCache();
-
-		const msUntilAttack = ms_to_next_skill('attack');
-
-		if (msUntilAttack < character.ping / 10) {
+		const ms = ms_to_next_skill('attack') - 1.5;
+		if (ms < 3) {
+			if (ms > 0) { const until = performance.now() + ms; while (performance.now() < until); }
 			const healed = await tryHeal();
-
 			if (!healed) {
 				const target = cache.target;
-				if (target && is_in_range(target) && !smart.moving) {
-					await use_skill("attack", target);
-				}
+				if (target && is_in_range(target) && !smart.moving) await use_skill('attack', target);
 			}
+			return setTimeout(actionLoop, 0);
 		}
-
-		if (msUntilAttack > 200) delay = 40;
-		else if (msUntilAttack > 60) delay = 20;
-		else delay = 5;
-
-	} catch (e) {
-		//console.error('priest actionLoop error:', e);
-		delay = 1;
-	}
-
-	setTimeout(actionLoop, delay);
+		return setTimeout(actionLoop, ms > 8 ? ms - 6 : 1);
+	} catch { return setTimeout(actionLoop, 1); }
 }
 
 // ============================================================================
@@ -492,6 +516,9 @@ async function skillLoop() {
 		if (CONFIG.combat.zapper && state.current === 'idle') {
 			await handleZapper();
 		}
+		if (CONFIG.combat.zapSpam?.enabled && state.current === 'idle') {
+			await handleZapSpam();
+		}
 
 	} catch (e) {
 		console.error('skillLoop error:', e);
@@ -522,7 +549,7 @@ async function handleCurse() {
 
 	let target = null;
 
-	for (const b of CONFIG.combat.allBosses) {
+	for (const b of BOSS_SET) {
 		const mb = get_nearest_monster_v2({ type: b });
 		if (mb) {
 			target = mb;
@@ -533,7 +560,7 @@ async function handleCurse() {
 	if (!target) {
 		target = get_nearest_monster_v2({
 			type: CONFIG.combat.zapperMobs,
-			check_max_hp: true,
+			check_min_hp: true,
 			max_distance: 175,
 			point_for_distance_check: [X, Y]
 		});
@@ -547,10 +574,10 @@ async function handleCurse() {
 async function handleAbsorb() {
 	if (is_on_cooldown('absorb')) return;
 
-	const mapsToExclude = ['level2n', 'level2w'];
+	const mapsToExclude = ['level2n'];
 	if (mapsToExclude.includes(character.map)) return;
 
-	const boss = get_nearest_monster_v2({ type: CONFIG.combat.allBosses });
+	const boss = get_nearest_monster_v2({ type: BOSS_SET });
 	if (boss?.target && boss.target !== character.name) {
 		const targetPlayer = get_player(boss.target);
 		if (targetPlayer) {
@@ -600,7 +627,9 @@ async function handleZapper() {
 
 	if (smart.moving || character.cc > COOLDOWNS.cc) return;
 
-	if (CONFIG.combat.zapSwap && findZapTargets().length > 0 && !hasZapper && canSwap && hasEnoughMp && character.map === mobMap) {
+	const zapTargets = findZapTargets();
+
+	if (CONFIG.combat.zapSwap && zapTargets.length > 0 && !hasZapper && canSwap && hasEnoughMp && character.map === mobMap) {
 		try {
 			await equipSet('zapOn');
 			state.lastEquipTime = now;
@@ -609,8 +638,8 @@ async function handleZapper() {
 		}
 	}
 
-	if (findZapTargets().length > 0 && hasZapper && hasEnoughMp && !is_on_cooldown('zapperzap')) {
-		for (const entity of findZapTargets()) {
+	if (zapTargets.length > 0 && hasZapper && hasEnoughMp && !is_on_cooldown('zapperzap')) {
+		for (const entity of zapTargets) {
 			if (is_on_cooldown('zapperzap')) break;
 
 			try {
@@ -620,13 +649,28 @@ async function handleZapper() {
 			}
 		}
 	}
-	if (CONFIG.combat.zapSwap && findZapTargets().length === 0 && hasZapper && canSwap && character.map === mobMap) {
+	if (CONFIG.combat.zapSwap && zapTargets.length === 0 && hasZapper && canSwap && character.map === mobMap) {
 		try {
 			await equipSet('zapOff');
 			state.lastEquipTime = now;
 		} catch (e) {
 			console.error('Failed to unequip zapper:', e);
 		}
+	}
+}
+
+async function handleZapSpam() {
+	const cfg = CONFIG.combat.zapSpam;
+	if (!cfg?.enabled || character.cc > COOLDOWNS.cc) return;
+	if (character.slots.ring2?.name !== 'zapper' || character.mp < cfg.minMp || is_on_cooldown('zapperzap')) return;
+
+	const target = get_nearest_monster_v2({ type: cfg.mob });
+	if (!target || target.dead || !target.visible || !is_in_range(target, 'zapperzap')) return;
+
+	try {
+		await use_skill('zapperzap', target);
+	} catch (e) {
+		console.error('handleZapSpam error:', e);
 	}
 }
 
@@ -703,16 +747,14 @@ function handleEvents() {
 		return;
 	}
 
-	const aliveSorted = getDynamicEvents()
-		.map(e => ({ ...e, data: parent.S[e.name] }))
-		.filter(e => e.data?.live)
-		.sort((a, b) =>
-			(a.data.hp / a.data.max_hp) - (b.data.hp / b.data.max_hp)
-		);
-
-	if (!aliveSorted.length) return;
-
-	const target = aliveSorted[0];
+	let target = null, bestRatio = Infinity;
+	for (const e of getDynamicEvents()) {
+		const d = parent.S[e.name];
+		if (!d?.live) continue;
+		const r = d.hp / d.max_hp;
+		if (r < bestRatio) { bestRatio = r; target = e; }
+	}
+	if (!target) return;
 
 	if (target.join === true && character.map !== target.map) {
 		parent.socket.emit('join', { name: target.name });
@@ -724,8 +766,6 @@ function handleEvents() {
 	}
 }
 
-const MOVING_BOSSES = new Set(allBosses);
-
 async function handleSpecificEvent(eventType, mapName, x, y) {
 	if (!parent?.S?.[eventType]?.live) return;
 
@@ -735,7 +775,7 @@ async function handleSpecificEvent(eventType, mapName, x, y) {
 		return;
 	}
 
-	if (MOVING_BOSSES.has(eventType)) {
+	if (BOSS_SET.has(eventType)) {
 		if (!is_in_range(monster) && !smart.moving) {
 			const dx = monster.x - character.x;
 			const dy = monster.y - character.y;
@@ -766,25 +806,11 @@ function handleReturnHome() {
 
 async function walkInCircle() {
 	if (smart.moving) return;
-
-	const center = locations[home][0];
-	const radius = CONFIG.movement.circleRadius;
-
-	const currentTime = performance.now();
-	const deltaTime = currentTime - state.lastAngleUpdate;
-	state.lastAngleUpdate = currentTime;
-
-	const deltaAngle = CONFIG.movement.circleSpeed * (deltaTime / 1000);
-	state.angle = (state.angle + deltaAngle) % (2 * Math.PI);
-
-	const offsetX = Math.cos(state.angle) * radius;
-	const offsetY = Math.sin(state.angle) * radius;
-	const targetX = center.x + offsetX;
-	const targetY = center.y + offsetY;
-
-	if (!character.moving) {
-		await xmove(targetX, targetY);
-	}
+	const center = locations[home][0], r = CONFIG.movement.circleRadius, now = performance.now();
+	const dt = Math.min((now - state.lastAngleUpdate) / 1000, 0.5);
+	state.lastAngleUpdate = now;
+	state.angle = (state.angle + (character.speed / r) * dt) % (2 * Math.PI);
+	if (!character.moving) await xmove(center.x + Math.cos(state.angle) * r, center.y + Math.sin(state.angle) * r);
 }
 
 // ============================================================================
@@ -856,13 +882,10 @@ parent.socket.on('kill_credit', async (data) => {
 // KITING SYSTEM 
 // ============================================================================
 let lastMove = 0;
-const TWO_PI = Math.PI * 2;
-const ANGLE_STEP = Math.PI / CONFIG.movement.kiting.sampleAngles;
 
 function kiter() {
 	const cfg = CONFIG.movement.kiting;
-	if (!cfg || !cfg.enabled) return;
-
+	if (!cfg?.enabled) return;
 	if (cfg.debug) {
 		const [x1, y1, x2, y2] = cfg.boundaryBox;
 		clear_drawings();
@@ -871,141 +894,74 @@ function kiter() {
 		draw_line(x1, y2, x2, y2, 2, 0xfc031c);
 		draw_line(x1, y1, x2, y1, 2, 0xfc031c);
 	}
-
-	avoidMobs();
+	avoidMobs(cfg);
 }
 
-function avoidMobs() {
-	const cx = character.real_x;
-	const cy = character.real_y;
-	const cfg = CONFIG.movement.kiting;
+function avoidMobs(cfg) {
+	const cx = character.real_x, cy = character.real_y;
+	const R2 = cfg.avoidRadius * cfg.avoidRadius;
+	const types = cfg.avoidTypes;
+	const box = cfg.boundaryBox;
 
-	const monsters = getMonstersInRadius(cx, cy);
-	if (monsters.length === 0) return;
-
-	const avoidRanges = getAnglesToAvoid(monsters, cx, cy);
-
-	let inDanger = false;
-	for (const m of monsters) {
-		const r = getRange(m);
-		if (distanceSq(cx, cy, m.real_x, m.real_y) < r * r) {
-			inDanger = true;
-			break;
-		}
+	let threats = null, inDanger = false;
+	for (const id in parent.entities) {
+		const e = parent.entities[id];
+		if (e.type !== 'monster' || !types.includes(e.mtype)) continue;
+		const mx = e.real_x, my = e.real_y;
+		const dx = cx - mx, dy = cy - my;
+		const d2 = dx * dx + dy * dy;
+		if (d2 >= R2) continue;
+		const r = parent.G.monsters[e.mtype].range + cfg.rangeBuffer;
+		const danger = d2 < r * r;
+		(threats ??= []).push({ mx, my, r, d2, danger });
+		if (danger) inDanger = true;
 	}
 	if (!inDanger) return;
 
-	let maxWeight = -Infinity;
-	let maxAngle = 0;
-	const box = cfg.boundaryBox;
-
-	for (let i = 0; i < TWO_PI; i += ANGLE_STEP) {
-		const cos = Math.cos(i);
-		const sin = Math.sin(i);
-		const px = cx + 75 * cos;
-		const py = cy + 75 * sin;
-
-		if (px < box[0] || px > box[2] || py < box[1] || py > box[3]) continue;
-		if (!can_move_to(px, py)) continue;
-
-		let weight = 0;
-
-		for (const m of monsters) {
-			const r = getRange(m);
-			const mx = m.real_x;
-			const my = m.real_y;
-
-			const dx = cx - mx;
-			const dy = cy - my;
-			const distSqChar = dx * dx + dy * dy;
-
-			if (distSqChar < r * r) {
-				const dpx = px - mx;
-				const dpy = py - my;
-				const distSqPos = dpx * dpx + dpy * dpy;
-
-				if (distSqPos > distSqChar) {
-					weight += Math.sqrt(distSqPos) - Math.sqrt(distSqChar);
-				}
-			}
-		}
-
-		if (!angleIntersectsMonsters(avoidRanges, i) && weight > maxWeight) {
-			maxWeight = weight;
-			maxAngle = i;
+	const avoidRanges = [];
+	for (const t of threats) {
+		const tang = findTangents(cx, cy, t.mx, t.my, t.r);
+		if (!tang) continue;
+		const a1 = Math.atan2(cy - tang[0].y, cx - tang[0].x) + Math.PI;
+		const a2 = Math.atan2(cy - tang[1].y, cx - tang[1].x) + Math.PI;
+		avoidRanges.push(a1 < a2 ? [a1, a2] : [a2, a1]);
+		if (cfg.debug) {
+			draw_line(cx, cy, tang[0].x, tang[0].y, 1, 0x17F20D);
+			draw_line(cx, cy, tang[1].x, tang[1].y, 1, 0x17F20D);
+			draw_circle(t.mx, t.my, t.r, 1, 0x17F20D);
 		}
 	}
 
-	const cos = Math.cos(maxAngle);
-	const sin = Math.sin(maxAngle);
-	const moveX = cx + 25 * cos;
-	const moveY = cy + 25 * sin;
+	const n = cfg.sampleAngles * 2, step = Math.PI / cfg.sampleAngles;
+	let bestW = -Infinity, bestX = 0, bestY = 0, found = false;
+	for (let i = 0, a = 0; i < n; i++, a += step) {
+		const px = cx + 75 * Math.cos(a), py = cy + 75 * Math.sin(a);
+		if (px < box[0] || px > box[2] || py < box[1] || py > box[3]) continue;
+		if (angleIntersectsMonsters(avoidRanges, a)) continue;
+		if (!can_move_to(px, py)) continue;
+
+		let weight = 0;
+		for (const t of threats) {
+			if (!t.danger) continue;
+			const dpx = px - t.mx, dpy = py - t.my;
+			const dp2 = dpx * dpx + dpy * dpy;
+			if (dp2 > t.d2) weight += Math.sqrt(dp2) - Math.sqrt(t.d2);
+		}
+		if (weight > bestW) { bestW = weight; bestX = px; bestY = py; found = true; }
+	}
+	if (!found) return;
 
 	const now = performance.now();
 	if (now - lastMove > cfg.moveThrottle) {
 		lastMove = now;
+		const moveX = cx + (bestX - cx) / 3, moveY = cy + (bestY - cy) / 3;
 		move(moveX, moveY);
+		if (cfg.debug) draw_line(cx, cy, moveX, moveY, 2, 0xF20D0D);
 	}
-
-	if (cfg.debug) {
-		draw_line(cx, cy, moveX, moveY, 2, 0xF20D0D);
-	}
-}
-
-function getRange(m) {
-	return parent.G.monsters[m.mtype].range + CONFIG.movement.kiting.rangeBuffer;
-}
-
-function getMonstersInRadius(cx, cy) {
-	const cfg = CONFIG.movement.kiting;
-	const R2 = cfg.avoidRadius * cfg.avoidRadius;
-	const types = cfg.avoidTypes;
-	const monsters = [];
-
-	for (const id in parent.entities) {
-		const e = parent.entities[id];
-		if (e.type !== "monster") continue;
-		if (!types.includes(e.mtype)) continue;
-
-		const dx = cx - e.real_x;
-		const dy = cy - e.real_y;
-		if (dx * dx + dy * dy < R2) monsters.push(e);
-	}
-
-	return monsters;
-}
-
-function getAnglesToAvoid(monsters, cx, cy) {
-	const cfg = CONFIG.movement.kiting;
-	const avoidRanges = [];
-
-	for (const m of monsters) {
-		const r = getRange(m);
-		const tangents = findTangents(cx, cy, m.real_x, m.real_y, r);
-
-		if (tangents) {
-			const a1 = Math.atan2(cy - tangents[0].y, cx - tangents[0].x) + Math.PI;
-			const a2 = Math.atan2(cy - tangents[1].y, cx - tangents[1].x) + Math.PI;
-
-			if (a1 < a2) avoidRanges.push([a1, a2]);
-			else avoidRanges.push([a2, a1]);
-
-			if (cfg.debug) {
-				draw_line(cx, cy, tangents[0].x, tangents[0].y, 1, 0x17F20D);
-				draw_line(cx, cy, tangents[1].x, tangents[1].y, 1, 0x17F20D);
-			}
-		}
-
-		if (cfg.debug) draw_circle(m.real_x, m.real_y, r, 1, 0x17F20D);
-	}
-
-	return avoidRanges;
 }
 
 function angleIntersectsMonsters(ranges, angle) {
-	for (const r of ranges) {
-		if (isBetween(r[1], r[0], angle)) return true;
-	}
+	for (const r of ranges) if (isBetween(r[1], r[0], angle)) return true;
 	return false;
 }
 
@@ -1019,28 +975,15 @@ function isBetween(angle1, angle2, target) {
 }
 
 function findTangents(px, py, cx, cy, r) {
-	const dx = cx - px;
-	const dy = cy - py;
+	const dx = cx - px, dy = cy - py;
 	const dd = Math.hypot(dx, dy);
-
 	if (dd <= r) return null;
-
-	const a = Math.asin(r / dd);
-	const b = Math.atan2(dy, dx);
-
-	const t1 = b - a;
-	const t2 = b + a;
-
+	const a = Math.asin(r / dd), b = Math.atan2(dy, dx);
+	const t1 = b - a, t2 = b + a;
 	return [
 		{ x: cx + r * Math.sin(t1), y: cy - r * Math.cos(t1) },
 		{ x: cx - r * Math.sin(t2), y: cy + r * Math.cos(t2) }
 	];
-}
-
-function distanceSq(x1, y1, x2, y2) {
-	const dx = x1 - x2;
-	const dy = y1 - y2;
-	return dx * dx + dy * dy;
 }
 
 // ============================================================================
@@ -1118,7 +1061,7 @@ function saveChestMap(map) {
 // ============================================================================
 function handleEquipmentSwap() {
 	if (!CONFIG.equipment.autoSwapSets || character.cc > COOLDOWNS.cc) return;
-	if (findZapTargets().length > 0) return;
+	if (cache.zapTargets.length > 0) return;
 
 	const now = performance.now();
 	if (now - state.lastEquipTime < COOLDOWNS.equipSwap) return;
@@ -1161,8 +1104,8 @@ function clearInventory() {
 	let lootMule = get_player('CrownsAnal') || get_player('CrownMerch');
 	if (!lootMule) return;
 
-	if (character.gold > 5000000) {
-		send_gold(lootMule, character.gold - 5000000);
+	if (character.gold > 50000000) {
+		send_gold(lootMule, character.gold - 50000000);
 	}
 
 	const itemsToExclude = ['hpot1', 'mpot1', 'luckbooster', 'goldbooster', 'xpbooster', 'elixirluck', 'xptome', 'essenceoflife'];

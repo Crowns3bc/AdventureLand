@@ -1,37 +1,35 @@
 // autorerun
 // ============================================================================
 // CONFIGURATION - Toggle features here instead of editing code
-// ============================================================================
-const home = 'bigbird';
-const mobMap = 'main';
+const home = 'ent';
+const mobMap = 'desertland';
 const allBosses = ['bgoo', 'crabxx', 'dragold', 'franky', 'greenjr', 'grinch', 'icegolem', 'jr', 'mrgreen', 'mrpumpkin', 'phoenix', 'rgoo', 'wabbit'];
 
 const CONFIG = {
 	combat: {
 		enabled: true,
-		targetPriority: ['CrownPriest', 'CrownTown'],
+		targetPriority: ['CrownPriest'],
 		allBosses,
 		cleaveMinMobs: 1,
 		agitateMinMobs: 3,
 		tauntEnts: false,
-		scare: false
+		scare: true
 	},
 
 	movement: {
 		enabled: true,
-		circleWalk: false,
-		circleSpeed: 1.8,
+		circleWalk: true,
 		circleRadius: 35,
-		moveThreshold: 10,
+		moveThreshold: 35,
 		followKited: {
 			enabled: false,
-			targets: ['bscorpion', 'phoenix', 'mvampire'],
+			targets: ['bscorpion', 'phoenix', 'bluefairy'],
 			approachDistance: 0.5,  // Move halfway (0.5) or closer (1)
 			maxFollowRange: 400,  // Don't chase beyond this distance
 			updateInterval: 50,  // How often to recalculate position (ms)
 			stopWhenInRange: true  // Stop moving when in attack range
 		},
-		clusterWalk: true,
+		clusterWalk: false,
 		cluster: {
 			wanderRadius: 200,
 			clusterRadius: 95,
@@ -47,9 +45,10 @@ const CONFIG = {
 			grinch: 100000,
 			crabxx: 40000,
 			dragold: 200000,
+			wabbit: 5000,
 		},
-		singleTargetMaps: ['halloween', 'spookyforest', 'desertland', 'cave'],
-		aoeMaps: ['main', 'goobrawl', 'level2n', 'level2w', 'mforest', 'tunnel', 'uhills', 'winterland'],
+		singleTargetMaps: ['spookyforest', 'main'],
+		aoeMaps: ['goobrawl', 'level2n', 'level2w', 'mforest', 'tunnel', 'uhills', 'winterland', 'halloween', 'desertland'],
 		cleaveMaps: ['cave', 'desertland', 'goobrawl', 'halloween', 'level2n', 'level2w', 'main', 'mforest', 'spookytown', 'uhills', 'winterland', 'level2e'],
 		mpThresholds: { upper: 2250, lower: 1850 },
 		chestThreshold: 12,
@@ -109,17 +108,15 @@ const COOLDOWNS = {
 };
 
 const EVENT_LOCATIONS = [
-	{ name: 'dragold', map: 'cave', x: 1150, y: -850 },
 	//{ name: 'crabxx', map: 'main', x: -961, y: 1780, join: true },
+	{ name: 'dragold', map: 'cave', x: 1150, y: -850 },
 	{ name: 'mrgreen', map: 'spookytown', x: 610, y: 1000 },
 	{ name: 'mrpumpkin', map: 'halloween', x: -222, y: 720 }
 ];
 
 const getDynamicEvents = () => {
-	const events = [...EVENT_LOCATIONS];
 	const w = parent.S?.wabbit;
-	if (w?.live) events.push({ name: 'wabbit', map: w.map, x: w.x, y: w.y });
-	return events;
+	return w?.live ? [...EVENT_LOCATIONS, { name: 'wabbit', map: w.map, x: w.x, y: w.y }] : EVENT_LOCATIONS;
 };
 
 const CACHE_TTL = 50;
@@ -161,12 +158,13 @@ const cache = {
 const locations = {
 	bat: [{ x: 1200, y: -782 }],
 	bigbird: [{ x: 1258, y: -79 }],
+	bluefairy: [{ x: -362, y: -675 }],
 	bscorpion: [{ x: -408, y: -1241 }],
 	boar: [{ x: 19, y: -1109 }],
 	cgoo: [{ x: -221, y: -274 }],
 	crab: [{ x: -11840, y: -37 }],
 	dryad: [{ x: 403, y: -347 }],
-	ent: [{ x: -420, y: -1960 }],
+	ent: [{ x: -413, y: -1961 }],
 	fireroamer: [{ x: 222, y: -827 }],
 	ghost: [{ x: -405, y: -1642 }],
 	gscorpion: [{ x: 390, y: -1422 }],
@@ -174,8 +172,8 @@ const locations = {
 	mechagnome: [{ x: 0, y: 0 }],
 	mole: [{ x: 14, y: -1072 }],
 	mummy: [{ x: 256, y: -1417 }],
-	odino: [{ x: -42, y: 746 }],
-	oneeye: [{ x: -270, y: 160 }],
+	odino: [{ x: -52, y: 756 }],
+	oneeye: [{ x: -184, y: 342 }],
 	pinkgoblin: [{ x: 485, y: 157 }],
 	poisio: [{ x: -121, y: 1360 }],
 	prat: [{ x: 11, y: 84 }],
@@ -215,13 +213,10 @@ const equipmentSets = {
 	],
 	dps: [
 		{ itemName: "cearring", slot: "earring1", level: 5, l: "l" },
-		{ itemName: "cearring", slot: "earring2", level: 5, l: "u" },
-		//{ itemName: "coat", slot: "chest", level: 13, l: "l" },
+		{ itemName: "strearring", slot: "earring2", level: 6, l: "l" },
 		{ itemName: "orbofstr", slot: "orb", level: 5, l: "l" },
-		{ itemName: "suckerpunch", slot: "ring1", level: 2, l: "l" },
-		{ itemName: "suckerpunch", slot: "ring2", level: 2, l: "u" },
-		//{ itemName: "fireblade", slot: "mainhand", level: 13, l: "s" },
-		//{ itemName: "candycanesword", slot: "offhand", level: 13, l: "s" },
+		{ itemName: "suckerpunch", slot: "ring1", level: 3, l: "u" },
+		{ itemName: "suckerpunch", slot: "ring2", level: 2, l: "l" },
 	],
 	luck: [
 		{ itemName: "mearring", slot: "earring1", level: 0, l: "l" },
@@ -239,8 +234,9 @@ const equipmentSets = {
 
 	dpsAccessories: [
 		{ itemName: "cearring", slot: "earring1", level: 5, l: "l" },
-		{ itemName: "cearring", slot: "earring2", level: 5, l: "u" },
+		{ itemName: "strearring", slot: "earring2", level: 6, l: "l" },
 		{ itemName: "orbofstr", slot: "orb", level: 5, l: "l" },
+		{ itemName: "strbelt", slot: "belt", level: 5, l: "l" },
 		{ itemName: "suckerpunch", slot: "ring1", level: 2, l: "l" },
 		{ itemName: "suckerpunch", slot: "ring2", level: 2, l: "u" },
 	],
@@ -249,6 +245,9 @@ const equipmentSets = {
 // ============================================================================
 // CORE UTILITIES
 // ============================================================================
+const BOSS_SET = new Set(allBosses);
+const AGITATE_MOBS = new Set(['sparkbot', 'jr', 'greenjr', home]);
+
 function updateCache() {
 	if (cache.isValid()) return;
 
@@ -261,7 +260,7 @@ function updateCache() {
 	cache.clusterTarget = null;
 
 	const tankName = cache.tankEntity?.name;
-	const cleaveRange = G.skills.cleave.range;
+	const cleaveRange = G.skills.cleave.range + 10;
 	const doCluster = CONFIG.movement.clusterWalk;
 	const { x: homeX, y: homeY } = locations[home][0];
 	const wanderR2 = CONFIG.movement.cluster.wanderRadius ** 2;
@@ -275,20 +274,29 @@ function updateCache() {
 
 		if (tankName && e.target === tankName) cache.mobCount++;
 
-		if (!cache.hasLowBoss && CONFIG.combat.allBosses.includes(e.mtype) &&
+		if (!cache.hasLowBoss && BOSS_SET.has(e.mtype) &&
 			e.hp < (CONFIG.equipment.bossHpThresholds[e.mtype] || Infinity))
 			cache.hasLowBoss = true;
 
 		if (!e.visible) continue;
 
-		if (distance(character, e) <= cleaveRange)
+		const d = distance(character, e);
+		if (d <= cleaveRange)
 			cache.monstersInCleaveRange.push(e);
 
-		if (!cache.target) {
-			const dist = distance(character, e);
-			if (dist <= character.range) {
-				if (CONFIG.combat.allBosses.includes(e.mtype) || CONFIG.combat.targetPriority.includes(e.target))
+		if (d <= character.range) {
+			if (BOSS_SET.has(e.mtype)) {
+				if (!cache.target || !BOSS_SET.has(cache.target.mtype)) cache.target = e;
+			} else if (CONFIG.combat.targetPriority.includes(e.target) && !BOSS_SET.has(cache.target?.mtype)) {
+				const cursed = e.s?.cursed, marked = e.s?.marked;
+				if (!cache.target) {
 					cache.target = e;
+				} else {
+					const prevCursed = cache.target.s?.cursed, prevMarked = cache.target.s?.marked;
+					if (!prevCursed && cursed) cache.target = e;
+					else if (!prevCursed && !cursed && !prevMarked && marked) cache.target = e;
+					else if (!prevCursed && !cursed && !prevMarked && !marked && e.hp > cache.target.hp) cache.target = e;
+				}
 			}
 		}
 
@@ -352,32 +360,17 @@ async function mainLoop() {
 // ACTION LOOP - Attack only
 // ============================================================================
 async function actionLoop() {
-	let delay = 10;
-
 	try {
-		if (is_disabled(character)) {
-			return setTimeout(actionLoop, 25);
-		}
-
+		if (is_disabled(character)) return setTimeout(actionLoop, 25);
 		updateCache();
-
-		const target = cache.target;
-		const msUntilAttack = ms_to_next_skill('attack');
-
-		if (target && msUntilAttack < 5 && is_in_range(target)) {
-			await use_skill("attack", target);
-		} else {
-			if (msUntilAttack > 200) delay = 100;
-			else if (msUntilAttack > 60) delay = 20;
-			else delay = 5;
+		const target = cache.target, ms = ms_to_next_skill('attack') - 1.5;
+		if (target && ms < 3 && is_in_range(target)) {
+			if (ms > 0) { const until = performance.now() + ms; while (performance.now() < until); }
+			await use_skill('attack', target);
+			return setTimeout(actionLoop, 0);
 		}
-
-	} catch (e) {
-		//console.error('actionLoop error:', e);
-		delay = 5;
-	}
-
-	setTimeout(actionLoop, delay);
+		return setTimeout(actionLoop, ms > 8 ? ms - 6 : 1);
+	} catch { return setTimeout(actionLoop, 1); }
 }
 
 // ============================================================================
@@ -488,19 +481,12 @@ function canCleave() {
 	const tank = cache.tankEntity;
 	if (!tank) return false;
 
-	const lowBoss = Object.values(parent.entities).find(e =>
-		e?.type === 'monster' &&
-		CONFIG.combat.allBosses.includes(e.mtype) &&
-		!e.dead &&
-		e.hp < CONFIG.equipment.bossHpThresholds[e.mtype]
-	);
-	if (lowBoss) return false;
-
+	if (cache.monstersInCleaveRange.some(e => !e.target)) return false;
 	return cache.monstersInCleaveRange.length >= CONFIG.combat.cleaveMinMobs;
 }
 
 async function handleAgitate(tank) {
-	if (is_on_cooldown('agitate') || !tank?.rip === false) return;
+	if (is_on_cooldown('agitate') || !tank || tank.rip || is_disabled(tank)) return;
 
 	const range = G.skills.agitate.range;
 	let crabCount = 0, crabTargeted = 0;
@@ -514,7 +500,7 @@ async function handleAgitate(tank) {
 		if (e.mtype === 'crabx') {
 			crabCount++;
 			if (e.target) crabTargeted++;
-		} else if (['sparkbot', 'jr', 'greenjr', 'spider', 'scorpion', 'bigbird', home].includes(e.mtype)) {
+		} else if (AGITATE_MOBS.has(e.mtype)) {
 			if (e.target !== character.name && e.target !== tank?.name) {
 				otherCount++;
 			}
@@ -623,24 +609,23 @@ async function equipmentLoop() {
 			return setTimeout(equipmentLoop, delay);
 		}
 
+		if (ms_to_next_skill('attack') <= 150) return setTimeout(equipmentLoop, delay);
+		
 		const now = performance.now();
 		const swapCooldown = CONFIG.equipment.swapCooldown;
 
-		const mainhand = character.slots?.mainhand?.name;
-		if (mainhand === 'basher' || mainhand === 'bataxe') {
-			//return setTimeout(equipmentLoop, delay);
-		}
-
 		// --- FIND ACTIVE BOSS ---
-		const activeBoss = getDynamicEvents()
-			.map(e => ({ name: e.name, data: parent.S[e.name] }))
-			.find(e => e.data?.live);
+		let activeBossName = null, activeBossData = null;
+		for (const e of getDynamicEvents()) {
+			const d = parent.S[e.name];
+			if (d?.live) { activeBossName = e.name; activeBossData = d; break; }
+		}
 
 		// --- BOOSTER SWAP ---
 		if (CONFIG.equipment.boosterSwapEnabled && now - state.lastBoosterSwap > swapCooldown) {
 			let desiredBooster = 'xpbooster';
 
-			if (activeBoss && activeBoss.data.hp < CONFIG.equipment.bossHpThresholds[activeBoss.name]) {
+			if (activeBossData && activeBossData.hp < CONFIG.equipment.bossHpThresholds[activeBossName]) {
 				desiredBooster = 'luckbooster';
 			}
 
@@ -673,7 +658,7 @@ async function equipmentLoop() {
 		}
 
 		// --- COAT SWAP (only when not at boss or boss HP high) ---
-		if (CONFIG.equipment.coatSwapEnabled && (!activeBoss || activeBoss.data.hp > CONFIG.equipment.bossHpThresholds[activeBoss.name]) && now - state.lastCoatSwap > swapCooldown) {
+		if (CONFIG.equipment.coatSwapEnabled && (!activeBossData || activeBossData.hp > CONFIG.equipment.bossHpThresholds[activeBossName]) && now - state.lastCoatSwap > swapCooldown) {
 			let targetCoatSet = null;
 
 			if (character.mp > CONFIG.equipment.mpThresholds.upper) {
@@ -692,9 +677,9 @@ async function equipmentLoop() {
 		if (now - state.lastBossSetSwap > swapCooldown) {
 			let targetSet = null;
 
-			if (CONFIG.equipment.bossSetSwapEnabled && activeBoss) {
-				const bossHp = activeBoss.data.hp;
-				if (bossHp > CONFIG.equipment.bossHpThresholds[activeBoss.name]) {
+			if (CONFIG.equipment.bossSetSwapEnabled && activeBossData) {
+				const bossHp = activeBossData.hp;
+				if (bossHp > CONFIG.equipment.bossHpThresholds[activeBossName]) {
 					if (character.map !== mobMap) {
 						targetSet = 'dps';
 					}
@@ -791,16 +776,14 @@ function handleEvents() {
 		return;
 	}
 
-	const aliveSorted = getDynamicEvents()
-		.map(e => ({ ...e, data: parent.S[e.name] }))
-		.filter(e => e.data?.live)
-		.sort((a, b) =>
-			(a.data.hp / a.data.max_hp) - (b.data.hp / b.data.max_hp)
-		);
-
-	if (!aliveSorted.length) return;
-
-	const target = aliveSorted[0];
+	let target = null, bestRatio = Infinity;
+	for (const e of getDynamicEvents()) {
+		const d = parent.S[e.name];
+		if (!d?.live) continue;
+		const r = d.hp / d.max_hp;
+		if (r < bestRatio) { bestRatio = r; target = e; }
+	}
+	if (!target) return;
 
 	if (target.join === true && character.map !== target.map) {
 		parent.socket.emit('join', { name: target.name });
@@ -812,8 +795,6 @@ function handleEvents() {
 	}
 }
 
-const MOVING_BOSSES = new Set(allBosses);
-
 async function handleSpecificEvent(eventType, mapName, x, y) {
 	if (!parent?.S?.[eventType]?.live) return;
 
@@ -823,7 +804,7 @@ async function handleSpecificEvent(eventType, mapName, x, y) {
 		return;
 	}
 
-	if (MOVING_BOSSES.has(eventType)) {
+	if (BOSS_SET.has(eventType)) {
 		if (!is_in_range(monster) && !smart.moving) {
 			const dx = monster.x - character.x;
 			const dy = monster.y - character.y;
@@ -852,24 +833,14 @@ function handleReturnHome() {
 	}
 }
 
-const walkInCircle = async () => {
-	if (smart.moving || character.moving) return;
-
-	const { x: centerX, y: centerY } = locations[home][0];
-	const now = performance.now();
-	const delta = (now - state.lastAngleUpdate) / 1000;
-
-	state.angle = (state.angle - CONFIG.movement.circleSpeed * delta) % (2 * Math.PI);
+async function walkInCircle() {
+	if (smart.moving) return;
+	const center = locations[home][0], r = CONFIG.movement.circleRadius, now = performance.now();
+	const dt = Math.min((now - state.lastAngleUpdate) / 1000, 0.5);
 	state.lastAngleUpdate = now;
-
-	const targetX = centerX + Math.cos(state.angle) * CONFIG.movement.circleRadius;
-	const targetY = centerY + Math.sin(state.angle) * CONFIG.movement.circleRadius;
-
-	const distToTarget = Math.hypot(character.x - targetX, character.y - targetY);
-	if (distToTarget > CONFIG.movement.moveThreshold) {
-		await xmove(targetX, targetY);
-	}
-};
+	state.angle = (state.angle + (character.speed / r) * dt) % (2 * Math.PI);
+	if (!character.moving) await xmove(center.x + Math.cos(state.angle) * r, center.y + Math.sin(state.angle) * r);
+}
 
 const follower = {
 	async followKited() {
@@ -898,16 +869,30 @@ const follower = {
 	}
 };
 
+let lastClusterMove = 0;
+let lastClusterX = 0;
+let lastClusterY = 0;
+
 const walkToDenseCluster = async () => {
-	if (smart.moving || character.moving) return;
+	if (smart.moving) return;
 
 	const cluster = cache.clusterTarget;
 	if (!cluster) return handleReturnHome();
 
-	if (Math.hypot(character.x - cluster.x, character.y - cluster.y) > CONFIG.movement.moveThreshold)
-		if (can_move_to(cluster.x, cluster.y)) {
-			await move(cluster.x, cluster.y);
-		}
+	const dist = Math.hypot(character.x - cluster.x, character.y - cluster.y);
+	if (dist <= CONFIG.movement.moveThreshold) return;
+
+	const now = Date.now();
+	const targetChanged = Math.hypot(cluster.x - lastClusterX, cluster.y - lastClusterY) > 40;
+
+	if (!targetChanged && now - lastClusterMove < 150) return;
+	if (!can_move_to(cluster.x, cluster.y)) return;
+
+	lastClusterX = cluster.x;
+	lastClusterY = cluster.y;
+	lastClusterMove = now;
+
+	await move(cluster.x, cluster.y);
 };
 
 // ============================================================================
@@ -982,8 +967,8 @@ function clearInventory() {
 	const lootMule = get_player('CrownsAnal') || get_player('CrownMerch');
 	if (!lootMule) return;
 
-	if (character.gold > 5000000) {
-		send_gold(lootMule, character.gold - 5000000);
+	if (character.gold > 50000000) {
+		send_gold(lootMule, character.gold - 50000000);
 	}
 
 	const itemsToExclude = ['hpot1', 'mpot1', 'luckbooster', 'xpbooster', 'pumpkinspice', 'xptome'];
@@ -1045,21 +1030,22 @@ function elixirUsage() {
 	}
 }
 
-let targetStartTimes = {};
+const targetStartTimes = new Map();
 
 function scare() {
 	const slot = character.items.findIndex(i => i && i.name === 'jacko');
-	const currentTime = performance.now();
+	const now = performance.now();
 	let shouldScare = false;
 
 	for (const id in parent.entities) {
 		const current = parent.entities[id];
 
 		if (current.type === 'monster' && current.target === character.name && current.mtype !== 'grinch') {
-			targetStartTimes[id] ??= currentTime;
-			if (currentTime - targetStartTimes[id] > 1000) shouldScare = true;
-		} else {
-			delete targetStartTimes[id];
+			let t = targetStartTimes.get(id);
+			if (t === undefined) targetStartTimes.set(id, t = now);
+			if (now - t > 1000) shouldScare = true;
+		} else if (targetStartTimes.has(id)) {
+			targetStartTimes.delete(id);
 		}
 	}
 
@@ -1253,7 +1239,7 @@ const skinConfigs = {
 	warrior: {
 		skin: 'tf_green',
 		skinRing: { name: 'tristone', level: 1, locked: 'l' },
-		normalRing: { name: 'suckerpunch', level: 2, locked: 'l' }
+		normalRing: { name: 'suckerpunch', level: 3, locked: 'u' }
 	},
 };
 

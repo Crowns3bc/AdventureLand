@@ -41,9 +41,6 @@ const COSTS = {
 	cscroll: [G.items.cscroll0.g, G.items.cscroll1.g, G.items.cscroll2.g, G.items.cscroll3.g, 50000000000],
 	offering: [0, 5000000, G.items.offering.g, 650000000]
 };
-
-// igrade isn't exposed client-side. zero_grade (computed) matches it for every item in the game
-// except lostearring, confirmed by reading the game's own source — that one exception is patched here.
 const MANUAL_IGRADE = { lostearring: 2 };
 
 const UPGRADES = {
@@ -70,13 +67,8 @@ const OFFERING_NAMES = ["none", "offeringp", "offering", "offeringx"];
 
 const gradeCache = {}, igradeCache = {};
 const getZeroGrade = n => gradeCache[n] ?? (gradeCache[n] = item_grade({ name: n, level: 0 }));
-// Server keys D.upgrades/D.compounds by item_def.igrade — not readable client-side, so zero_grade
-// stands in for it everywhere except the one known exception patched in MANUAL_IGRADE.
 const getIgrade = n => igradeCache[n] ?? (igradeCache[n] = MANUAL_IGRADE[n] ?? getZeroGrade(n));
 const fmtGold = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-
-// FIXED: guard against undefined table entries (igrade 3/4 have no UPGRADES/COMPOUNDS rows defined)
-// instead of silently producing NaN that poisons the whole DP.
 const tableLookup = (table, igrade, level) => {
 	const v = table[igrade]?.[level];
 	if (v == null) { console.warn(`no probability entry for igrade=${igrade} level=${level} — fill in UPGRADES/COMPOUNDS or this path is treated as impossible`); return null; }
@@ -91,11 +83,6 @@ const getUpgradeChance = (item, scroll_def, offering_def) => {
 	const oprobability = tableLookup(UPGRADES, igrade, new_level);
 	if (oprobability == null) return { chance: 0, new_grace: 0 };
 	let probability = oprobability;
-
-	// FIXED: server's grace term is (item.grace + min(3,ugrace/4.5) + igrade) + min(6,S.ugrace/3) + ograce/3.2.
-	// ugrace/S.ugrace/ograce are hidden server-side pity trackers a player can't observe — dropped (≈0)
-	// rather than faked with a grade-tier guess. igrade is kept as-is (via getIgrade) instead of folded
-	// into that same guess, since it's the one piece of this term we can actually pin down.
 	let grace = Math.max(0, Math.min(new_level + 1, (item.grace || 0) + igrade));
 	grace = (probability * grace) / new_level + grace / 1000;
 
@@ -130,8 +117,6 @@ const getCompoundChance = (item, scroll_def, offering_def) => {
 	if (!scroll_def || grade > scroll_def.grade) return { chance: 0, new_grace: 0 };
 
 	const new_level = (item.level || 0) + 1;
-	// FIXED: matches server exactly now — igrade from the real def field, level>=3 override applies
-	// unconditionally (no MANUAL_IGRADE special-casing needed once igrade is read correctly).
 	let igrade = getIgrade(item.name);
 	if (item.level >= 3) igrade = item_grade({ name: item.name, level: item.level - 2 });
 
@@ -147,7 +132,7 @@ const getCompoundChance = (item, scroll_def, offering_def) => {
 	}
 
 	if (offering_def) {
-		const grace = 0.027 * (rawGrace * 3 + 0.5); // scaled — probability formula only
+		const grace = 0.027 * (rawGrace * 3 + 0.5);
 		let increase = 0.5;
 		const diff = offering_def.grade - grade;
 
@@ -156,15 +141,12 @@ const getCompoundChance = (item, scroll_def, offering_def) => {
 		else if (diff === 0) probability = probability * 1.36 + Math.min(30 * 0.027, grace);
 		else if (diff === -1) probability = probability * 1.15 + Math.min(25 * 0.019, grace) / Math.max(item.level - 2, 1), increase = 0.2;
 		else probability = probability * 1.08 + Math.min(15 * 0.015, grace) / Math.max(item.level - 1, 1), increase = 0.1;
-
-		// FIXED: server carries forward the RAW summed item grace (item0.grace+item1.grace+item2.grace),
-		// not the 0.027-scaled probability variable. Reusing the scaled value here was off by ~12x.
 		new_grace = rawGrace * 3;
 		grace_bonus += increase;
 	} else {
 		const grace = 0.007 * (rawGrace * 3);
 		probability += Math.min(25 * 0.007, grace) / Math.max(item.level - 1, 1);
-		new_grace = rawGrace; // server: max(g,g,g) with 3 identical inputs == g
+		new_grace = rawGrace;
 	}
 
 	new_grace = new_grace / 6.4 + grace_bonus;
@@ -300,11 +282,7 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, d
 	return output;
 }
 
-// FIXED: was a greedy per-level scan (locally-best step, no lookahead). Rewritten as a Dijkstra over
-// (level, grace) exactly like calculateUpgrade — a step that's cheaper right now but leaves worse
-// grace can lose to a step that costs more now but sets up cheaper levels later, and only a real
-// shortest-path search over the full state space gets that right.
-const GRACE_SLOTS = 200; // 0..19.9 in 0.1 steps — generous headroom over observed compound grace ranges
+const GRACE_SLOTS = 200;
 
 const calculateCompoundDP = (itemName, itemValue, targetLevel) => {
 	const dp = Array(targetLevel + 1).fill(0).map(() => Array(GRACE_SLOTS).fill(null));

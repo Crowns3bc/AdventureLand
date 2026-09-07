@@ -39,9 +39,11 @@
 const COSTS = {
 	scroll: [G.items.scroll0.g, G.items.scroll1.g, G.items.scroll2.g, G.items.scroll3.g, 50000000000],
 	cscroll: [G.items.cscroll0.g, G.items.cscroll1.g, G.items.cscroll2.g, G.items.cscroll3.g, 50000000000],
-	offering: [0, 2500000, G.items.offering.g, 650000000]
+	offering: [0, 5000000, G.items.offering.g, 650000000]
 };
 
+// igrade isn't exposed client-side. zero_grade (computed) matches it for every item in the game
+// except lostearring, confirmed by reading the game's own source — that one exception is patched here.
 const MANUAL_IGRADE = { lostearring: 2 };
 
 const UPGRADES = {
@@ -66,23 +68,38 @@ const SCROLL_NAMES = {
 };
 const OFFERING_NAMES = ["none", "offeringp", "offering", "offeringx"];
 
-const gradeCache = {};
+const gradeCache = {}, igradeCache = {};
 const getZeroGrade = n => gradeCache[n] ?? (gradeCache[n] = item_grade({ name: n, level: 0 }));
+// Server keys D.upgrades/D.compounds by item_def.igrade — not readable client-side, so zero_grade
+// stands in for it everywhere except the one known exception patched in MANUAL_IGRADE.
+const getIgrade = n => igradeCache[n] ?? (igradeCache[n] = MANUAL_IGRADE[n] ?? getZeroGrade(n));
 const fmtGold = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 
+// FIXED: guard against undefined table entries (igrade 3/4 have no UPGRADES/COMPOUNDS rows defined)
+// instead of silently producing NaN that poisons the whole DP.
+const tableLookup = (table, igrade, level) => {
+	const v = table[igrade]?.[level];
+	if (v == null) { console.warn(`no probability entry for igrade=${igrade} level=${level} — fill in UPGRADES/COMPOUNDS or this path is treated as impossible`); return null; }
+	return v;
+};
+
 const getUpgradeChance = (item, scroll_def, offering_def) => {
-	let grace = item.grace || 0, new_grace = grace;
-	const zero_grade = getZeroGrade(item.name), grade = item_grade(item);
+	const igrade = getIgrade(item.name), grade = item_grade(item);
 	if (grade > scroll_def.grade) return { chance: 0, new_grace: 0 };
 
 	const new_level = (item.level || 0) + 1;
-	let probability = UPGRADES[zero_grade][new_level], oprobability = probability;
-	const igrace = !zero_grade ? 1 : zero_grade === 1 ? -1 : -2;
+	const oprobability = tableLookup(UPGRADES, igrade, new_level);
+	if (oprobability == null) return { chance: 0, new_grace: 0 };
+	let probability = oprobability;
 
-	grace = Math.max(0, Math.min(new_level + 1, grace + igrace));
+	// FIXED: server's grace term is (item.grace + min(3,ugrace/4.5) + igrade) + min(6,S.ugrace/3) + ograce/3.2.
+	// ugrace/S.ugrace/ograce are hidden server-side pity trackers a player can't observe — dropped (≈0)
+	// rather than faked with a grade-tier guess. igrade is kept as-is (via getIgrade) instead of folded
+	// into that same guess, since it's the one piece of this term we can actually pin down.
+	let grace = Math.max(0, Math.min(new_level + 1, (item.grace || 0) + igrade));
 	grace = (probability * grace) / new_level + grace / 1000;
 
-	let high = false;
+	let high = false, new_grace = item.grace || 0;
 	if (scroll_def.grade > grade && new_level <= 10) {
 		probability = probability * 1.2 + 0.01;
 		high = true;
@@ -108,18 +125,20 @@ const getUpgradeChance = (item, scroll_def, offering_def) => {
 };
 
 const getCompoundChance = (item, scroll_def, offering_def) => {
-	let grace = item.grace || 0, new_grace = grace;
-	const zero_grade = getZeroGrade(item.name), grade = item_grade(item);
+	const rawGrace = item.grace || 0;
+	const grade = item_grade(item);
 	if (!scroll_def || grade > scroll_def.grade) return { chance: 0, new_grace: 0 };
 
 	const new_level = (item.level || 0) + 1;
-	let igrade = MANUAL_IGRADE[item.name] ?? zero_grade;
-	if (item.level >= 3 && !(item.name in MANUAL_IGRADE)) {
-		igrade = item_grade({ name: item.name, level: item.level - 2 })
-	}
+	// FIXED: matches server exactly now — igrade from the real def field, level>=3 override applies
+	// unconditionally (no MANUAL_IGRADE special-casing needed once igrade is read correctly).
+	let igrade = getIgrade(item.name);
+	if (item.level >= 3) igrade = item_grade({ name: item.name, level: item.level - 2 });
 
-	let probability = COMPOUNDS[igrade][new_level], oprobability = probability;
-	let high = 0, grace_bonus = 0;
+	const oprobability = tableLookup(COMPOUNDS, igrade, new_level);
+	if (oprobability == null) return { chance: 0, new_grace: 0 };
+	let probability = oprobability;
+	let high = 0, grace_bonus = 0, new_grace;
 
 	if (scroll_def.grade > grade) {
 		probability = probability * 1.1 + 0.001;
@@ -128,8 +147,8 @@ const getCompoundChance = (item, scroll_def, offering_def) => {
 	}
 
 	if (offering_def) {
+		const grace = 0.027 * (rawGrace * 3 + 0.5); // scaled — probability formula only
 		let increase = 0.5;
-		grace = 0.027 * (grace * 3 + 0.5);
 		const diff = offering_def.grade - grade;
 
 		if (diff > 1) probability = probability * 1.64 + grace * 2, high = 1, increase = 3;
@@ -138,12 +157,14 @@ const getCompoundChance = (item, scroll_def, offering_def) => {
 		else if (diff === -1) probability = probability * 1.15 + Math.min(25 * 0.019, grace) / Math.max(item.level - 2, 1), increase = 0.2;
 		else probability = probability * 1.08 + Math.min(15 * 0.015, grace) / Math.max(item.level - 1, 1), increase = 0.1;
 
-		new_grace = grace * 3;
+		// FIXED: server carries forward the RAW summed item grace (item0.grace+item1.grace+item2.grace),
+		// not the 0.027-scaled probability variable. Reusing the scaled value here was off by ~12x.
+		new_grace = rawGrace * 3;
 		grace_bonus += increase;
 	} else {
-		grace = 0.007 * (grace * 3);
+		const grace = 0.007 * (rawGrace * 3);
 		probability += Math.min(25 * 0.007, grace) / Math.max(item.level - 1, 1);
-		new_grace = item.grace || 0;
+		new_grace = rawGrace; // server: max(g,g,g) with 3 identical inputs == g
 	}
 
 	new_grace = new_grace / 6.4 + grace_bonus;
@@ -152,11 +173,11 @@ const getCompoundChance = (item, scroll_def, offering_def) => {
 };
 
 const calculateUpgrade = (itemName, itemValue, opts = {}) => {
-	const { targetLevel = 12, luckySlot = false, startLevel = 0, startGrace = 0 } = opts;
+	const { targetLevel = 12, startLevel = 0, startGrace = 0 } = opts;
 	const dp = Array(13).fill(0).map(() => Array(140).fill(null));
 	const pq = new MinHeap();
 
-	dp[startLevel][startGrace * 10] = [itemValue, "init", -1, -1, 0];
+	dp[startLevel][startGrace * 10] = [itemValue, "init", -1, -1];
 	pq.push([itemValue, startLevel, startGrace * 10]);
 
 	while (pq.size()) {
@@ -169,11 +190,10 @@ const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 
 		if (realGrace < 13) {
 			const newGrace = Math.min(realGrace + 0.5, 13);
-			const primCost = COSTS.offering[1];
-			const newTotalCost = totalCost + primCost;
+			const newTotalCost = totalCost + COSTS.offering[1];
 			const idx = Math.round(newGrace * 10);
 			if (!dp[lvl][idx] || newTotalCost < dp[lvl][idx][0]) {
-				dp[lvl][idx] = [newTotalCost, "prim", lvl, grace, 0];
+				dp[lvl][idx] = [newTotalCost, "prim", lvl, grace];
 				pq.push([newTotalCost, lvl, idx]);
 			}
 		}
@@ -201,45 +221,6 @@ const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 	return dp;
 };
 
-const calculateCompoundPath = (itemValue, itemName, startLevel, targetLevel, optimizeItem) => {
-	const path = [];
-	let item = { name: itemName, level: startLevel, grace: 0 };
-	let cumCost = 0, curCost = itemValue, itemsNeeded = 1;
-
-	for (let lvl = startLevel; lvl < targetLevel; lvl++) {
-		let best = null;
-		const grade = item_grade(item);
-
-		for (let i = grade; i <= Math.min(grade + 1, 4); i++) {
-			for (let j = 0; j < 4; j++) {
-				const stepCost = curCost * 3 + COSTS.cscroll[i] + COSTS.offering[j];
-				const { chance, new_grace } = getCompoundChance(item, COMPOUND_SCROLLS[i], OFFERINGS[j]);
-				if (!chance) continue;
-
-				const expCost = stepCost / chance;
-				const better = !best || (optimizeItem ? (chance > best.chance + 0.0001 || (Math.abs(chance - best.chance) < 0.0001 && expCost < best.expCost)) : expCost < best.expCost);
-
-				if (better) best = { expCost, stepCost, chance, grace: new_grace, scroll: i, offering: j };
-			}
-		}
-
-		if (!best) break;
-		itemsNeeded *= 3 / best.chance;
-		cumCost += best.expCost;
-
-		path.push({
-			from_level: lvl, to_level: lvl + 1, scroll: best.scroll, offering: best.offering,
-			chance: best.chance, expected_attempts: 1 / best.chance, step_cost: best.stepCost,
-			expected_cost: cumCost, grace_after: best.grace
-		});
-
-		item = { name: itemName, level: lvl + 1, grace: best.grace };
-		curCost = best.expCost;
-	}
-
-	return { path, total_expected_cost: cumCost, total_items_needed: itemsNeeded, final_level: item.level, final_grace: item.grace };
-};
-
 function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, display = true) {
 	if (!G.items[itemName]) return null;
 
@@ -252,7 +233,6 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, d
 			minIdx = g;
 		}
 	}
-
 	if (minIdx === -1) return null;
 
 	const path = [];
@@ -320,30 +300,88 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, d
 	return output;
 }
 
-function compoundCost(itemName, itemValue, targetLevel = 7, optimizeItem = false, display = true) {
+// FIXED: was a greedy per-level scan (locally-best step, no lookahead). Rewritten as a Dijkstra over
+// (level, grace) exactly like calculateUpgrade — a step that's cheaper right now but leaves worse
+// grace can lose to a step that costs more now but sets up cheaper levels later, and only a real
+// shortest-path search over the full state space gets that right.
+const GRACE_SLOTS = 200; // 0..19.9 in 0.1 steps — generous headroom over observed compound grace ranges
+
+const calculateCompoundDP = (itemName, itemValue, targetLevel) => {
+	const dp = Array(targetLevel + 1).fill(0).map(() => Array(GRACE_SLOTS).fill(null));
+	const pq = new MinHeap();
+	dp[0][0] = [itemValue, "init", -1, -1, 1];
+	pq.push([itemValue, 0, 0]);
+
+	while (pq.size()) {
+		const [cost, lvl, graceIdx] = pq.pop();
+		if (dp[lvl][graceIdx] && dp[lvl][graceIdx][0] < cost) continue;
+		if (lvl >= targetLevel) continue;
+
+		const item = { name: itemName, level: lvl, grace: graceIdx / 10 };
+		const grade = item_grade(item);
+
+		for (let s = grade; s <= Math.min(grade + 1, 4); s++) {
+			for (let o = 0; o < 4; o++) {
+				const { chance, new_grace } = getCompoundChance(item, COMPOUND_SCROLLS[s], OFFERINGS[o]);
+				if (!chance) continue;
+
+				const stepCost = cost * 3 + COSTS.cscroll[s] + COSTS.offering[o];
+				const expCost = stepCost / chance;
+				const newLvl = lvl + 1;
+				const idx = Math.min(Math.round(new_grace * 10), GRACE_SLOTS - 1);
+
+				if (!dp[newLvl][idx] || expCost < dp[newLvl][idx][0]) {
+					dp[newLvl][idx] = [expCost, `${s},${o}`, lvl, graceIdx, chance, stepCost];
+					pq.push([expCost, newLvl, idx]);
+				}
+			}
+		}
+	}
+	return dp;
+};
+
+function compoundCost(itemName, itemValue, targetLevel = 7, display = true) {
 	if (!G.items[itemName]) return null;
 
-	const result = calculateCompoundPath(itemValue, itemName, 0, targetLevel, optimizeItem);
+	const dp = calculateCompoundDP(itemName, itemValue, targetLevel);
+
+	let minCost = Infinity, minIdx = -1;
+	for (let g = 0; g < GRACE_SLOTS; g++) {
+		if (dp[targetLevel][g] && dp[targetLevel][g][0] < minCost) {
+			minCost = dp[targetLevel][g][0];
+			minIdx = g;
+		}
+	}
+	if (minIdx === -1) return null;
+
+	const path = [];
+	let cl = targetLevel, cg = minIdx;
+	while (cl > 0) {
+		const [expCost, action, pl, pg, chance, stepCost] = dp[cl][cg];
+		const [s, o] = action.split(',').map(Number);
+		path.unshift({ from_level: pl, to_level: cl, scroll: s, offering: o, chance, expected_attempts: 1 / chance, step_cost: stepCost, expected_cost: expCost, grace_after: cg / 10 });
+		cl = pl; cg = pg;
+	}
 
 	const scrollTotals = { cscroll0: 0, cscroll1: 0, cscroll2: 0, cscroll3: 0, cscroll4: 0 };
 	const offeringTotals = { none: 0, offeringp: 0, offering: 0, offeringx: 0 };
 	let itemMult = 1, scrollCost = 0, offeringCost = 0;
-	for (let i = result.path.length - 1; i >= 0; i--) {
-		const s = result.path[i];
-		const cnt = s.expected_attempts * itemMult;
-		scrollTotals[SCROLL_NAMES.compound[s.scroll]] += cnt;
-		offeringTotals[OFFERING_NAMES[s.offering]] += cnt;
-		scrollCost += cnt * COSTS.cscroll[s.scroll];
-		offeringCost += cnt * COSTS.offering[s.offering];
-		itemMult *= s.expected_attempts * 3;
+	for (let i = path.length - 1; i >= 0; i--) {
+		const s = path[i];
+		const attempts = itemMult / s.chance;
+		scrollTotals[SCROLL_NAMES.compound[s.scroll]] += attempts;
+		offeringTotals[OFFERING_NAMES[s.offering]] += attempts;
+		scrollCost += attempts * COSTS.cscroll[s.scroll];
+		offeringCost += attempts * COSTS.offering[s.offering];
+		itemMult = attempts * 3;
 	}
 
 	const output = {
 		item: itemName, base_item_value: fmtGold(itemValue), from_level: 0, to_level: targetLevel,
-		total_expected_cost: fmtGold(result.total_expected_cost), total_items_needed: Math.ceil(result.total_items_needed),
+		total_expected_cost: fmtGold(minCost), total_items_needed: Math.ceil(itemMult),
 		expected_scrolls: { ...Object.fromEntries(Object.entries(scrollTotals).filter(([, v]) => v > 0).map(([k, v]) => [k, Math.round(v)])), cost: fmtGold(scrollCost) },
 		expected_offerings: { ...Object.fromEntries(Object.entries(offeringTotals).filter(([k, v]) => k !== "none" && v > 0).map(([k, v]) => [k, Math.round(v)])), cost: fmtGold(offeringCost) },
-		compound_steps: result.path.map(s => ({
+		compound_steps: path.map(s => ({
 			compound: `+${s.from_level} → +${s.to_level}`, scroll: SCROLL_NAMES.compound[s.scroll],
 			offering: OFFERING_NAMES[s.offering], success_chance: `${(s.chance * 100).toFixed(2)}%`,
 			expected_attempts: s.expected_attempts.toFixed(2), cost_per_attempt: fmtGold(s.step_cost),

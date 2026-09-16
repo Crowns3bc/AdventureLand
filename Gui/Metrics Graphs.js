@@ -1,3 +1,9 @@
+
+
+let trackMode = 'Solo'; // 'Solo' | 'Party' | 'All'
+let includeOverheal = false; // true to show excess healing
+let includeOverMana = false; // true to show excess healing
+
 let sumGold = 0, largestGoldDrop = 0;
 const goldStartTime = performance.now();
 let goldInterval = 'hour';
@@ -25,18 +31,12 @@ const itemHistory = {};
 let lastItemUpdate = 0;
 let itemChartOffset = 0;
 
-let lootMonthKey = 'lootItems' + new Date().toLocaleString('en', { month: 'long' });
-let savedLoot = JSON.parse(localStorage.getItem(lootMonthKey) || "{}");
-let lootDirty = false;
-
 const coopHistory = {};
 let lastCoopUpdate = 0;
 let coopChartOffset = 0;
 
 let selectedDamageTypes = ['DPS'];
-
-let includeOverheal = false;
-let includeOverMana = false;
+const isTracked = id => trackMode === 'Solo' ? id === character.id : trackMode === 'All' || parent.party_list.includes(id);
 
 const MAX_HISTORY = 60;
 const HISTORY_INTERVAL = 5000;
@@ -1519,9 +1519,8 @@ const toggleMetricsDashboard = () => {
 };
 
 parent.socket.on('hit', data => {
-	const isParty = id => parent.party_list.includes(id);
 	try {
-		if (!isParty(data.hid) && !isParty(data.id)) return;
+		if (!isTracked(data.hid) && !isTracked(data.id)) return;
 
 		if (data.dreturn && get_player(data.id) && !get_player(data.hid)) {
 			getPlayerEntry(data.id).sumDamageReturn += data.dreturn;
@@ -1529,7 +1528,7 @@ parent.socket.on('hit', data => {
 		if (data.reflect && get_player(data.id) && !get_player(data.hid)) {
 			getPlayerEntry(data.id).sumReflection += data.reflect;
 		}
-		if (get_player(data.hid) && isParty(data.hid) && (data.heal || data.lifesteal)) {
+		if (get_player(data.hid) && isTracked(data.hid) && (data.heal || data.lifesteal)) {
 			const e = getPlayerEntry(data.hid);
 			const healer = get_player(data.hid);
 			const target = get_player(data.id);
@@ -1548,7 +1547,7 @@ parent.socket.on('hit', data => {
 				e.sumHeal += actualHeal;
 			}
 		}
-		if (get_player(data.hid) && isParty(data.hid) && data.manasteal) {
+		if (get_player(data.hid) && isTracked(data.hid) && data.manasteal) {
 			const e = getPlayerEntry(data.hid);
 			const p = get_entity(data.hid);
 			if (includeOverMana) {
@@ -1576,8 +1575,8 @@ parent.socket.on('hit', data => {
 });
 
 parent.socket.on("kill_credit", async (data) => {
-	const { mtype } = data;
-	if (!mtype) return;
+	const { mtype, id } = data;
+	if (!mtype || (id && !isTracked(id))) return;
 
 	totalKills++;
 	mobKills[mtype] = (mobKills[mtype] || 0) + 1;
@@ -1594,10 +1593,19 @@ function getItemColor(name) {
 
 character.on("loot", (data) => {
 	if (typeof data.gold === 'number' && !Number.isNaN(data.gold)) {
-		let count = 0;
-		for (const name in parent.party) {
-			if (name === character.name || parent.entities[name]?.owner === character.owner) count++;
+		let count = 1;
+
+		if (trackMode === 'Party') {
+			count = 0;
+			for (const name in parent.party) {
+				if (name === character.name || parent.entities[name]?.owner === character.owner) {
+					count++;
+				}
+			}
+		} else if (trackMode === 'All') {
+			count = Object.keys(parent.party || {}).length || 1;
 		}
+
 		const myGold = Math.round(data.gold * count);
 		sumGold += myGold;
 		if (myGold > largestGoldDrop) largestGoldDrop = myGold;
@@ -1609,6 +1617,5 @@ character.on("loot", (data) => {
 			itemCounts[item.name] = (itemCounts[item.name] || 0) + quantity;
 			getItemColor(item.name);
 		}
-		lootDirty = true;
 	}
 });

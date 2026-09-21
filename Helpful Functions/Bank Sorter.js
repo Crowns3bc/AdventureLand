@@ -35,7 +35,7 @@ const getPacksOnFloor = () =>
 	Object.keys(bank_packs).filter(k => k !== "gold" && bank_packs[k][0] === character.map);
 
 function sortAllBank(invSlots, sortedBank, cursor) {
-	if (!character.bank) return game_log("Not inside the bank");
+	if (!character.bank) return console.log("Not inside the bank");
 
 	const packs = getPacksOnFloor();
 	const cmp = order.comparator;
@@ -44,7 +44,7 @@ function sortAllBank(invSlots, sortedBank, cursor) {
 		invSlots = [];
 		for (let i = 0; i < 42; i++) if (!character.items[i]) invSlots.push(i);
 	}
-	if (!invSlots.length) return game_log("Make some space in inventory");
+	if (!invSlots.length) return console.log("Make some space in inventory");
 
 	if (!sortedBank) {
 		let arr = [];
@@ -92,8 +92,8 @@ const FLOOR_ENTRY = {
 };
 
 async function sortGlobalBank() {
-	if (!character.bank) return game_log("Not inside the bank");
-	if (!character.esize) return game_log("Need at least 1 empty inventory slot!");
+	if (!character.bank) return console.log("Not inside the bank");
+	if (!character.esize) return console.log("Need at least 1 empty inventory slot!");
 
 	const allPacks = Object.keys(character.bank)
 		.filter(k => k !== "gold" && bank_packs[k])
@@ -104,6 +104,87 @@ async function sortGlobalBank() {
 		return n <= 7 ? "bank" : n <= 23 ? "bank_b" : "bank_u";
 	};
 	const nm = it => it.level != null ? `${it.name} lv${it.level}` : it.name;
+
+	let curFloor = character.map;
+	const go = async to => {
+		if (!to || curFloor === to) return;
+		console.log(`  [travel] ${curFloor} -> ${to}`);
+		const [x, y] = FLOOR_ENTRY[to][curFloor];
+		await smart_move({ map: to, x, y });
+		curFloor = to;
+	};
+
+	console.log("Merging understacked items");
+	let mergeCount = 0;
+	const unmergeable = new Set();
+	while (true) {
+		const stackList = {};
+		for (const pack of allPacks) {
+			const arr = character.bank[pack];
+			for (let i = 0; i < 42; i++) {
+				const item = arr[i];
+				if (!item?.q) continue;
+				const max = G.items[item.name].s;
+				if (!max || item.q >= max) continue;
+				const key = item.p ? `${item.name}|${item.p}` : item.name;
+				if (unmergeable.has(key)) continue;
+				(stackList[key] ??= []).push([pack, i, item.q]);
+			}
+		}
+
+		let merged = false;
+		for (const key in stackList) {
+			const stacks = stackList[key];
+			if (stacks.length < 2) continue;
+
+			const limit = G.items[key.split("|")[0]].s;
+			stacks.sort((a, b) => a[2] - b[2]);
+			let lo = 0, hi = stacks.length - 1;
+			while (lo < hi && stacks[lo][2] + stacks[hi][2] > limit) hi--;
+			if (lo >= hi) { lo = 0; hi = stacks.length - 1; }
+			const [loPack, loSlot, loQ] = stacks[lo], [hiPack, hiSlot, hiQ] = stacks[hi];
+			const hiFloor = packFloor(hiPack), loFloor = packFloor(loPack);
+			const needed = limit - hiQ;
+			const needSplit = loQ > needed;
+
+			const free = [];
+			for (let i = 0; i < 42 && free.length < (needSplit ? 3 : 2); i++) if (!character.items[i]) free.push(i);
+			if (free.length < (needSplit ? 3 : 2)) { console.log("  inventory full, stopping merge phase"); merged = false; break; }
+			const [f0, f1, f2] = free;
+
+			await go(hiFloor);
+			await bank_retrieve(hiPack, hiSlot, f0);
+			await go(loFloor);
+			await bank_retrieve(loPack, loSlot, f1);
+
+			if (needSplit) {
+				await split(f1, needed);
+				await swap(f2, f0);
+			} else if (character.items[f0]?.name === character.items[f1]?.name) {
+				await swap(f0, f1);
+			}
+
+			if (character.items[f1]) await bank_store(f1, loPack, loSlot);
+			if (character.items[f0]) { await go(hiFloor); await bank_store(f0, hiPack, hiSlot); }
+
+			const nowHi = character.bank[hiPack][hiSlot]?.q ?? 0;
+			const nowLo = character.bank[loPack][loSlot]?.q ?? 0;
+			const worked = nowHi !== hiQ || nowLo !== loQ;
+
+			if (!worked) {
+				console.log(`  ${key} didn't actually merge (still ${hiQ}+${loQ} in the bank) — not truly stackable together, skipping for this run`);
+				unmergeable.add(key);
+				continue;
+			}
+
+			console.log(`  merged ${key}: ${loQ}+${hiQ} -> ${nowHi}+${nowLo} (limit ${limit})`);
+			mergeCount++;
+			merged = true;
+			break;
+		}
+		if (!merged) break;
+	}
+	console.log(`Merged ${mergeCount} stack pair(s)`);
 
 	const flat = [];
 	for (const pack of allPacks)
@@ -136,30 +217,21 @@ async function sortGlobalBank() {
 	const placed = e => e.curPack === e.targetPack && e.curSlot === e.targetSlot;
 	const inInv = e => e.curPack === "__inv__";
 
-	game_log(`Sorting ${flat.length} items across ${allPacks.length} packs`);
+	console.log(`Sorting ${flat.length} items across ${allPacks.length} packs`);
 
 	const misplaced = flat.filter(e => !placed(e));
-	game_log(`${misplaced.length} items are out of position`);
+	console.log(`${misplaced.length} items are out of position`);
 	const misplacedByName = {};
 	for (const e of misplaced) (misplacedByName[e.item.name] ??= []).push(e);
 	for (const [name, entries] of Object.entries(misplacedByName)) {
 		if (entries.length === 1) {
 			const e = entries[0];
-			game_log(`  ${nm(e.item)}: ${e.curPack}[${e.curSlot}] -> ${e.targetPack}[${e.targetSlot}]`);
+			console.log(`  ${nm(e.item)}: ${e.curPack}[${e.curSlot}] -> ${e.targetPack}[${e.targetSlot}]`);
 		} else {
 			const first = entries[0], last = entries[entries.length - 1];
-			game_log(`  ${name} x${entries.length}: ${first.curPack}[${first.curSlot}]..${last.curPack}[${last.curSlot}] -> ${first.targetPack}[${first.targetSlot}]..${last.targetPack}[${last.targetSlot}]`);
+			console.log(`  ${name} x${entries.length}: ${first.curPack}[${first.curSlot}]..${last.curPack}[${last.curSlot}] -> ${first.targetPack}[${first.targetSlot}]..${last.targetPack}[${last.targetSlot}]`);
 		}
 	}
-
-	let curFloor = character.map;
-	const go = async to => {
-		if (!to || curFloor === to) return;
-		game_log(`  [travel] ${curFloor} -> ${to}`);
-		const [x, y] = FLOOR_ENTRY[to][curFloor];
-		await smart_move({ map: to, x, y });
-		curFloor = to;
-	};
 
 	const moveToInv = (e, invSlot) => {
 		loc.delete(`${e.curPack}:${e.curSlot}`);
@@ -181,7 +253,7 @@ async function sortGlobalBank() {
 		const unplaced = flat.filter(e => !placed(e) && !inInv(e));
 		if (!held.length && !unplaced.length) break;
 
-		game_log(`Pass ${iters}: ${unplaced.length} unplaced, ${held.length} held`);
+		console.log(`Pass ${iters}: ${unplaced.length} unplaced, ${held.length} held`);
 		let progress = false;
 
 		if (held.length) {
@@ -226,16 +298,16 @@ async function sortGlobalBank() {
 			if (batch.length < stillUnplaced.length) console.log("  inventory full, will deposit next pass");
 		}
 
-		if (!progress) { game_log("No progress made, aborting"); break; }
+		if (!progress) { console.log("No progress made, aborting"); break; }
 	}
 
-	game_log("Running per-floor fine sort");
+	console.log("Running per-floor fine sort");
 	for (const floor of ["bank", "bank_b", "bank_u"]) {
 		await go(floor);
 		await sortAllBank();
-		game_log(`Sorted ${floor}`);
+		console.log(`Sorted ${floor}`);
 	}
-	game_log("Complete!");
+	console.log("Complete!");
 }
 
 sortGlobalBank();

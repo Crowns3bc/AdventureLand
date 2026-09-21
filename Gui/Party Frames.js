@@ -1,7 +1,7 @@
 if (parent.party_style_prepared) parent.$('#style-party-frames').remove();
 
 parent.$('head').append(`<style id="style-party-frames">
-.party-container {position: absolute; top: 55px; left: -25%; width: 1000px; height: 300px; font-family: 'pixel';}
+.party-container {top: 55px; right: 45px; width: max-content; max-width: 100vw; font-family: 'pixel';}
 </style>`);
 parent.party_style_prepared = true;
 
@@ -52,7 +52,7 @@ const barConfigs = {
 setInterval(() => {
 	const partyFrame = parent.$('#newparty').addClass('party-container');
 	if (!partyFrame.length) return;
-
+	
 	const members = Object.keys(parent.party);
 	partyFrame.children().each((x, el) => {
 		const name = members[x];

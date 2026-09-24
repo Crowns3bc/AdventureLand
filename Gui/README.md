@@ -57,10 +57,7 @@ Acts as your own custom Game Events. Automatically gets the item sprite and send
 
 Metrics Graphs:                           
 A combined version of my gold, XP, and DPS meters that is displayed as a popout window rather than always being on screen              
-<img width="1590" height="1035" alt="image" src="https://github.com/user-attachments/assets/a0aeca4f-a1f0-4d3d-95e0-f8e5ae98a3c8" />                 
-<img width="1583" height="1032" alt="image" src="https://github.com/user-attachments/assets/ad48a440-4923-4a1f-a0a8-432b8cacdb75" />              
-<img width="1461" height="963" alt="image" src="https://github.com/user-attachments/assets/5f372564-b367-465d-9210-2b167308b3cb" />                 
-<img width="1458" height="1105" alt="image" src="https://github.com/user-attachments/assets/a62ae03b-ce65-42c7-8093-688f177bc9aa" />                  
+<img width="1511" height="5350" alt="image" src="https://github.com/user-attachments/assets/99d57c76-f3af-435a-815e-a09f98bb6e3d" />                    
 
 Lucky Slot Tracker:                        
 Upgrade roll tracker for finding your "lucky slot". Includes tracking each upgrade roll and a visual chart of the average roll          

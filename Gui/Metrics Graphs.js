@@ -1,6 +1,4 @@
-
-
-let trackMode = 'Solo'; // 'Solo' | 'Party' | 'All'
+let trackMode = 'Party'; // 'Solo' | 'Party' | 'All'
 let includeOverheal = false; // true to show excess healing
 let includeOverMana = false; // true to show excess healing
 
@@ -50,13 +48,14 @@ const classColors = {
 	ranger: '#AAD372', rogue: '#FFF468', warrior: '#C69B6D', default: '#FFFFFF'
 };
 
+// Game palette (from html.js). Keep primaries as 6-digit hex: chart code appends alpha digits.
 const sectionColors = {
-	gold: { primary: '#FFD700', rgba: 'rgba(255, 215, 0, 0.3)', axis: 'rgba(255, 215, 0, 0.1)' },
-	xp: { primary: '#87CEEB', rgba: 'rgba(135, 206, 235, 0.3)', axis: 'rgba(135, 206, 235, 0.2)' },
-	dps: { primary: '#FF6B6B', rgba: 'rgba(255, 107, 107, 0.3)', axis: 'rgba(255, 107, 107, 0.2)' },
-	kills: { primary: '#9D4EDD', rgba: 'rgba(157, 78, 221, 0.3)', axis: 'rgba(157, 78, 221, 0.1)' },
-	items: { primary: '#00E5FF', rgba: 'rgba(0, 229, 255, 0.3)', axis: 'rgba(0, 229, 255, 0.1)' },
-	coop: { primary: '#FF9500', rgba: 'rgba(255, 149, 0, 0.3)', axis: 'rgba(255, 149, 0, 0.1)' }
+	gold: { primary: '#FFD700', rgba: 'rgba(255, 215, 0, 0.3)', axis: '#2A2A2A' },
+	xp: { primary: '#3B8ED2', rgba: 'rgba(59, 142, 210, 0.3)', axis: '#2A2A2A' },
+	dps: { primary: '#E94959', rgba: 'rgba(233, 73, 89, 0.3)', axis: '#2A2A2A' },
+	kills: { primary: '#B484E5', rgba: 'rgba(180, 132, 229, 0.3)', axis: '#2A2A2A' },
+	items: { primary: '#7AC0F5', rgba: 'rgba(122, 192, 245, 0.3)', axis: '#2A2A2A' },
+	coop: { primary: '#E9973A', rgba: 'rgba(233, 151, 58, 0.3)', axis: '#2A2A2A' }
 };
 
 const mobColors = [
@@ -168,10 +167,10 @@ const createMetricsDashboard = () => {
 		`<div class="metric-card"><div class="metric-label">${label}</div><div class="metric-value" id="${valueId}">0</div></div>`;
 
 	const intervalButtons = (type, buttons) =>
-		buttons.map(b => `<button class="interval-btn ${b.active ? 'active' : ''}" data-interval="${b.interval}" data-type="${type}">${b.label}</button>`).join('');
+		buttons.map(b => `<button class="gamebutton gamebutton-small interval-btn ${b.active ? 'active gamebutton-active' : ''}" data-interval="${b.interval}" data-type="${type}">${b.label}</button>`).join('');
 
 	const damageButtons = (buttons) =>
-		buttons.map(b => `<button class="damage-type-btn ${b.active ? 'active' : ''}" data-damage-type="${b.type}" data-color="${b.color}">${b.label}</button>`).join('');
+		buttons.map(b => `<button class="gamebutton gamebutton-small damage-type-btn ${b.active ? 'active' : ''}" data-damage-type="${b.type}" data-color="${b.color}">${b.label}</button>`).join('');
 
 	const backdrop = $('<div id="metricsBackdrop"></div>').css({
 		position: 'fixed',
@@ -188,7 +187,7 @@ const createMetricsDashboard = () => {
 		<div id="metricsDashboard">
 			<div id="metricsHeader">
 				<span id="metricsTitle">Performance Metrics</span>
-				<button id="closeBtn">×</button>
+				<button id="closeBtn" class="gamebutton">X</button>
 			</div>
 			<div id="metricsContent">
 				<div class="metrics-section" data-section="gold">
@@ -287,9 +286,8 @@ const createMetricsDashboard = () => {
 		</div>
 	`).css({
 		position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-		width: '1250px', maxHeight: '120vh', background: 'rgba(20, 20, 30, 0.98)',
-		border: '3px solid #6366F1', borderRadius: '10px', zIndex: 9999, display: 'none',
-		boxShadow: '0 0 30px rgba(99, 102, 241, 0.5)', overflow: 'hidden',
+		width: 'min(1250px, calc(100vw - 40px))', display: 'none', overflow: 'hidden',
+		background: '#000', border: '5px solid gray', zIndex: 9999, fontSize: '24px',
 		fontFamily: $('#bottomrightcorner').css('font-family') || 'pixel'
 	});
 
@@ -300,59 +298,36 @@ const createMetricsDashboard = () => {
 };
 
 const applyStyles = ($) => {
+	const btn = { fontFamily: 'inherit', fontSize: '22px', lineHeight: '24px', padding: '6px 10px', minWidth: '70px', color: '#E4E4E4', cursor: 'pointer', border: '3px solid gray', background: '#000' };
+	const box = { background: '#000', border: '2px solid gray' };
 	const styles = {
-		'#metricsHeader': {
-			background: 'linear-gradient(to right, #1a1a2e, #16213e)', padding: '12px 15px',
-			borderBottom: '2px solid #3436a0ff', display: 'flex', justifyContent: 'space-between',
-			alignItems: 'center', borderRadius: '7px 7px 0 0', userSelect: 'none'
-		},
-		'#metricsTitle': { color: '#3436a0ff', fontSize: '34px', fontWeight: 'bold', textShadow: '0 0 10px rgba(99, 102, 241, 0.5)' },
-		'#closeBtn': { background: 'rgba(255, 255, 255, 0.1)', border: '1px solid #6366F1', color: '#6366F1', fontSize: '25px', width: '30px', height: '30px', cursor: 'pointer', borderRadius: '3px', transition: 'all 0.2s', fontFamily: 'inherit' },
-		'#metricsContent': { padding: '15px', color: 'white', height: 'calc(90vh - 70px)', overflowY: 'auto', overflowX: 'hidden' },
-		'.metrics-section': { marginBottom: '20px', padding: '15px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px' },
-		'.metrics-section h3': { marginTop: '0', marginBottom: '15px', fontSize: '28px', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '1px' },
-		'.metrics-grid': { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '15px' },
-		'.metric-card': { background: 'rgba(0, 0, 0, 0.4)', padding: '15px', borderRadius: '8px', textAlign: 'center' },
-		'.metric-label': { fontSize: '20px', color: '#aaa', marginBottom: '8px', textTransform: 'uppercase' },
-		'.metric-value': { fontSize: '24px', fontWeight: 'bold' },
-		'.interval-selector': { display: 'flex', gap: '5px', marginBottom: '15px', justifyContent: 'center', flexWrap: 'wrap' },
-		'.interval-btn': { padding: '8px 15px', minWidth: '70px', minHeight: '40px', background: 'rgba(255, 255, 255, 0.1)', color: 'white', cursor: 'pointer', borderRadius: '5px', transition: 'all 0.2s', fontSize: '20px', fontFamily: 'inherit', border: 'none' },
-		'.damage-type-selector': { display: 'flex', gap: '5px', marginBottom: '10px', justifyContent: 'center', flexWrap: 'wrap' },
-		'.damage-type-btn': { padding: '8px 15px', minWidth: '70px', minHeight: '40px', background: 'rgba(255, 255, 255, 0.1)', color: 'white', cursor: 'pointer', borderRadius: '5px', transition: 'all 0.2s', fontSize: '20px', border: '2px solid rgba(255, 255, 255, 0.3)', fontFamily: 'inherit' },
-		'.damage-type-btn.active': { boxShadow: '0 0 10px rgba(255, 255, 255, 0.3)' },
-		'.metric-chart': { width: '100%', height: '550px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', display: 'block' },
-		'#mobBreakdown': { marginTop: '15px', padding: '15px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px' },
-		'.mob-breakdown-title': { color: '#9D4EDD', fontSize: '20px', marginBottom: '15px', textAlign: 'center' },
-		'.mob-breakdown-grid': { display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px' },
-		'.mob-stat': { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 20px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '6px', minWidth: '120px' },
-		'.mob-stat-name': { fontSize: '18px', marginBottom: '5px', textTransform: 'capitalize', fontWeight: 'bold' },
-		'.mob-stat-count': { fontSize: '16px', color: '#FFF' }
+		'#metricsHeader': { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', borderBottom: '5px solid gray', userSelect: 'none' },
+		'#metricsTitle': { color: '#F1C054', fontSize: '32px' },
+		'#closeBtn': { ...btn, minWidth: '40px' },
+		'#metricsContent': { padding: '12px 16px', color: '#E4E4E4', maxHeight: 'calc(100vh - 130px)', overflowY: 'auto', overflowX: 'hidden' },
+		'.metrics-section': { marginBottom: '18px', paddingTop: '14px', borderTop: '2px solid #555' },
+		'.metrics-section h3': { display: 'inline-block', margin: '0 0 12px', fontSize: '28px', fontWeight: 'normal', borderBottom: '2px dashed gray' },
+		'.metrics-grid': { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px', marginBottom: '12px' },
+		'.metric-card': { ...box, padding: '8px 12px', textAlign: 'left' },
+		'.metric-label': { fontSize: '20px', color: '#8A8D8F', marginBottom: '4px' },
+		'.metric-value': { fontSize: '28px' },
+		'.interval-selector': { display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' },
+		'.damage-type-selector': { display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' },
+		'.interval-btn': btn,
+		'.damage-type-btn': btn,
+		'.metric-chart': { ...box, width: '100%', height: '500px', display: 'block' },
+		'#mobBreakdown': { ...box, marginTop: '8px', padding: '10px' }
 	};
+	Object.entries(styles).forEach(([sel, css]) => $(sel).css(css));
 
-	Object.entries(styles).forEach(([sel, style]) => $(sel).css(style));
-
-	$('.metrics-section').each(function () {
-		const section = $(this).data('section');
-		const color = sectionColors[section]?.rgba || 'rgba(255,255,255,0.2)';
-		$(this).css('border', `2px solid ${color}`);
-		$(this).find('h3').css('color', sectionColors[section]?.primary || '#FFF');
-	});
-
-	Object.entries(sectionColors).forEach(([section, colors]) => {
-		$(`[data-section="${section}"] .metric-card`).css('border', `1px solid ${colors.rgba}`);
-		$(`[data-section="${section}"] .metric-value`).css('color', colors.primary);
-		$(`[data-section="${section}"] .interval-btn`).css('border', `1px solid ${colors.primary}`);
-		$(`[data-section="${section}"] .metric-chart`).css('border', `1px solid ${colors.rgba}`);
-	});
-
+	for (const [k, c] of Object.entries(sectionColors)) {
+		const $s = $(`[data-section="${k}"]`);
+		$s.find('h3, .metric-value').css('color', c.primary);
+		$s.find('.interval-btn.active').css('border-color', c.primary);
+	}
 	$('.damage-type-btn').each(function () {
-		const color = $(this).data('color');
-		if (color) {
-			$(this).css('border-color', color);
-			if ($(this).hasClass('active')) {
-				$(this).css('background', hexToRgba(color, 0.4));
-			}
-		}
+		const c = $(this).data('color');
+		$(this).css({ borderColor: c, background: $(this).hasClass('active') ? hexToRgba(c, 0.4) : '#000' });
 	});
 };
 
@@ -380,8 +355,8 @@ const attachEventHandlers = ($) => {
 		const sectionMap = { gold: 'gold', xp: 'xp', damage: 'dps', kills: 'kills', killtype: 'kills' };
 		const color = sectionColors[sectionMap[type]]?.primary || '#FFF';
 
-		$(`[data-type="${type}"]`).removeClass('active').css('background', 'rgba(255, 255, 255, 0.1)');
-		$(this).addClass('active').css('background', hexToRgba(color, 0.2));
+		$(`[data-type="${type}"]`).removeClass('active gamebutton-active').css('border-color', 'gray');
+		$(this).addClass('active gamebutton-active').css('border-color', color);
 
 		if (type === 'kills') {
 			if (killInterval !== interval) {
@@ -411,11 +386,11 @@ const attachEventHandlers = ($) => {
 		const color = $(this).data('color');
 
 		if ($(this).hasClass('active')) {
-			$(this).removeClass('active').css('background', 'rgba(255, 255, 255, 0.1)');
+			$(this).removeClass('active').css('background', '#000');
 			selectedDamageTypes = selectedDamageTypes.filter(t => t !== damageType);
 		} else {
 			$(this).addClass('active');
-			$(this).css('background', hexToRgba(color, 0.3));
+			$(this).css('background', hexToRgba(color, 0.4));
 			if (!selectedDamageTypes.includes(damageType)) {
 				selectedDamageTypes.push(damageType);
 			}
@@ -424,10 +399,6 @@ const attachEventHandlers = ($) => {
 		updateMetricsDashboard();
 	});
 
-	$('#closeBtn').hover(
-		function () { $(this).css('background', 'rgba(99, 102, 241, 0.3)'); },
-		function () { $(this).css('background', 'rgba(255, 255, 255, 0.1)'); }
-	);
 	const setupScrollableChart = (canvasId, getOffset, setOffset, getNames) => {
 		const canvas = parent.document.getElementById(canvasId);
 		if (!canvas) return;
@@ -675,7 +646,7 @@ const drawItemBarChart = () => {
 
 	const names = Object.keys(itemCounts);
 	if (!names.length) {
-		ctx.fillStyle = '#999';
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '24px pixel, monospace';
 		ctx.textAlign = 'center';
 		ctx.fillText('No items looted yet...', canvas.width / 2, canvas.height / 2);
@@ -727,7 +698,7 @@ const drawItemBarChart = () => {
 		ctx.lineTo(canvas.width - padding, y);
 		ctx.stroke();
 
-		ctx.fillStyle = sectionColors.items.primary;
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '16px pixel, monospace';
 		ctx.textAlign = 'right';
 		ctx.fillText(fmtVal(maxValue * i / 5), padding - 10, y + 5);
@@ -742,21 +713,11 @@ const drawItemBarChart = () => {
 		const barX = groupX + (BAR_GROUP_W - barWidth) / 2;
 		const barY = padding + chartHeight - barHeight;
 
-		const gradient = ctx.createLinearGradient(
-			barX,
-			barY,
-			barX,
-			barY + barHeight
-		);
-
-		gradient.addColorStop(0, color);
-		gradient.addColorStop(1, color + '60');
-
-		ctx.fillStyle = gradient;
+		ctx.fillStyle = color;
 		ctx.fillRect(barX, barY, barWidth, barHeight);
 
-		ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-		ctx.lineWidth = 1;
+		ctx.strokeStyle = 'gray';
+		ctx.lineWidth = 2;
 		ctx.strokeRect(barX, barY, barWidth, barHeight);
 
 		// ALWAYS SHOW predicted/day above the bar
@@ -781,7 +742,7 @@ const drawItemBarChart = () => {
 		ctx.font = '16px pixel, monospace';
 		ctx.fillText(d.name, xCenter, labelY0);
 
-		ctx.fillStyle = 'rgba(255,255,255,0.6)';
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '14px pixel, monospace';
 		ctx.fillText(d.count.toLocaleString(), xCenter, labelY1);
 	}
@@ -797,15 +758,11 @@ const drawItemBarChart = () => {
 		const thumbX =
 			padding + (itemChartOffset / itemData.length) * trackW;
 
-		ctx.fillStyle = 'rgba(255,255,255,0.1)';
-		ctx.beginPath();
-		ctx.roundRect(padding, trackY, trackW, scrollBarH, 6);
-		ctx.fill();
+		ctx.fillStyle = '#222';
+		ctx.fillRect(padding, trackY, trackW, scrollBarH);
 
 		ctx.fillStyle = sectionColors.items.primary + 'AA';
-		ctx.beginPath();
-		ctx.roundRect(thumbX, trackY, thumbW, scrollBarH, 6);
-		ctx.fill();
+		ctx.fillRect(thumbX, trackY, thumbW, scrollBarH);
 	}
 };
 
@@ -840,7 +797,7 @@ const drawCoopBarChart = () => {
 	}
 
 	if (!entities.length) {
-		ctx.fillStyle = '#999';
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '24px pixel, monospace';
 		ctx.textAlign = 'center';
 		ctx.fillText('No boss damage yet...', canvas.width / 2, canvas.height / 2);
@@ -877,7 +834,7 @@ const drawCoopBarChart = () => {
 		ctx.lineTo(canvas.width - padding, y);
 		ctx.stroke();
 
-		ctx.fillStyle = sectionColors.coop.primary;
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '16px pixel, monospace';
 		ctx.textAlign = 'right';
 		ctx.fillText(fmtVal(maxValue * i / 5), padding - 10, y + 5);
@@ -891,13 +848,10 @@ const drawCoopBarChart = () => {
 		const barX = groupX + (BAR_GROUP_W - barWidth) / 2;
 		const barY = padding + chartHeight - barHeight;
 
-		const gradient = ctx.createLinearGradient(barX, barY, barX, barY + barHeight);
-		gradient.addColorStop(0, color);
-		gradient.addColorStop(1, color + '80');
-		ctx.fillStyle = gradient;
+		ctx.fillStyle = color;
 		ctx.fillRect(barX, barY, barWidth, barHeight);
 
-		ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+		ctx.strokeStyle = 'gray';
 		ctx.lineWidth = 2;
 		ctx.strokeRect(barX, barY, barWidth, barHeight);
 
@@ -935,17 +889,13 @@ const drawCoopBarChart = () => {
 		const thumbW = Math.max(30, (visibleCount / entities.length) * trackW);
 		const thumbX = padding + (coopChartOffset / entities.length) * trackW;
 
-		ctx.fillStyle = 'rgba(255,255,255,0.1)';
-		ctx.beginPath();
-		ctx.roundRect(padding, trackY, trackW, scrollBarH, 6);
-		ctx.fill();
+		ctx.fillStyle = '#222';
+		ctx.fillRect(padding, trackY, trackW, scrollBarH);
 
 		ctx.fillStyle = sectionColors.coop.primary + 'AA';
-		ctx.beginPath();
-		ctx.roundRect(thumbX, trackY, thumbW, scrollBarH, 6);
-		ctx.fill();
+		ctx.fillRect(thumbX, trackY, thumbW, scrollBarH);
 
-		ctx.fillStyle = 'rgba(255,255,255,0.4)';
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '14px pixel, monospace';
 		ctx.textAlign = 'right';
 		ctx.fillText(`${coopChartOffset + 1}–${coopChartOffset + visible.length} of ${entities.length}`, canvas.width - padding, padding - 8);
@@ -985,7 +935,7 @@ const drawDPSBarChart = () => {
 	}
 
 	if (players.length === 0) {
-		ctx.fillStyle = '#999';
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '24px pixel, monospace';
 		ctx.textAlign = 'center';
 		ctx.fillText('No data available', canvas.width / 2, canvas.height / 2);
@@ -993,7 +943,7 @@ const drawDPSBarChart = () => {
 	}
 
 	if (selectedDamageTypes.length === 0) {
-		ctx.fillStyle = '#999';
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '24px pixel, monospace';
 		ctx.textAlign = 'center';
 		ctx.fillText('Select a damage type to display', canvas.width / 2, canvas.height / 2);
@@ -1024,7 +974,7 @@ const drawDPSBarChart = () => {
 		ctx.lineTo(canvas.width - padding, y);
 		ctx.stroke();
 
-		ctx.fillStyle = sectionColors.dps.primary;
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '16px pixel, monospace';
 		ctx.textAlign = 'right';
 		ctx.fillText(fmtVal(maxValue * i / 5), padding - 10, y + 5);
@@ -1045,15 +995,13 @@ const drawDPSBarChart = () => {
 			const barX = groupX + groupPadding + j * barWidth;
 			const barY = padding + chartHeight - barHeight;
 
-			const baseColor = type === 'DPS'
+			ctx.fillStyle = type === 'DPS'
 				? (classColors[player.ctype] || damageTypeColors.DPS)
 				: damageTypeColors[type];
-
-			ctx.fillStyle = getDamageBarFill(ctx, type, barX, barY, barWidth, barHeight, baseColor);
 			ctx.fillRect(barX, barY, barWidth, barHeight);
 
-			ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-			ctx.lineWidth = 1;
+			ctx.strokeStyle = 'gray';
+			ctx.lineWidth = 2;
 			ctx.strokeRect(barX, barY, barWidth, barHeight);
 
 			if (barHeight > 30) {
@@ -1093,7 +1041,7 @@ const drawDPSBarChart = () => {
 			}
 			ctx.fillRect(legendX, legendY, 15, 15);
 
-			ctx.fillStyle = 'white';
+			ctx.fillStyle = '#E4E4E4';
 			ctx.font = '16px pixel, monospace';
 			ctx.textAlign = 'left';
 			const label = damageTypeLabels[type];
@@ -1108,20 +1056,20 @@ const updateMobBreakdown = ($) => {
 	const sortedMobs = Object.entries(mobKills).sort((a, b) => b[1] - a[1]);
 
 	if (sortedMobs.length === 0) {
-		$mobBreakdown.html('<div style="text-align: center; color: #999; padding: 20px;">No kills yet...</div>');
+		$mobBreakdown.html('<div style="text-align: center; color: #8A8D8F; padding: 20px;">No kills yet...</div>');
 		return;
 	}
 
-	let html = `<div class="mob-breakdown-title" style=" text-align: center; color: #9D4EDD; font-weight: bold; font-size: 22px; margin-bottom: 10px;">Mob Breakdown</div><div class="mob-breakdown-grid" style="display: flex; justify-content: center; gap: 30px; flex-wrap: wrap;">`;
+	let html = `<div class="mob-breakdown-title" style="text-align: center; color: ${sectionColors.kills.primary}; font-size: 24px; margin-bottom: 10px;">Mob Breakdown</div><div class="mob-breakdown-grid" style="display: flex; justify-content: center; gap: 8px; flex-wrap: wrap;">`;
 
 	sortedMobs.forEach(([mobType, count]) => {
 		const percentage = ((count / totalKills) * 100).toFixed(1);
 		const color = getMobColor(mobType);
 
 		html += `
-			<div class="mob-stat" style="text-align: center; font-size: 18px;">
-				<span class="mob-stat-name" style="color: ${color}; display: block; font-weight: bold;">${mobType}</span>
-				<span class="mob-stat-count" style="display: block;">${count.toLocaleString()} (${percentage}%)</span>
+			<div class="mob-stat" style="text-align: center; font-size: 18px; background: #000; border: 2px solid gray; padding: 6px 16px; min-width: 120px;">
+				<span class="mob-stat-name" style="color: ${color}; display: block; font-size: 20px;">${mobType}</span>
+				<span class="mob-stat-count" style="display: block; color: #C3C3C3;">${count.toLocaleString()} (${percentage}%)</span>
 			</div>
 		`;
 	});
@@ -1151,7 +1099,7 @@ const drawKillBarChart = () => {
 	}
 
 	if (!mobData.length) {
-		ctx.fillStyle = '#999';
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '24px pixel, monospace';
 		ctx.textAlign = 'center';
 		ctx.fillText('No kills yet...', canvas.width / 2, canvas.height / 2);
@@ -1188,7 +1136,7 @@ const drawKillBarChart = () => {
 		ctx.lineTo(canvas.width - padding, y);
 		ctx.stroke();
 
-		ctx.fillStyle = sectionColors.kills.primary;
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '16px pixel, monospace';
 		ctx.textAlign = 'right';
 		ctx.fillText(fmtVal(maxValue * i / 5), padding - 10, y + 5);
@@ -1205,8 +1153,8 @@ const drawKillBarChart = () => {
 		ctx.fillStyle = mobColor;
 		ctx.fillRect(barX, barY, barWidth, barHeight);
 
-		ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-		ctx.lineWidth = 1;
+		ctx.strokeStyle = 'gray';
+		ctx.lineWidth = 2;
 		ctx.strokeRect(barX, barY, barWidth, barHeight);
 
 		if (barHeight > 30) {
@@ -1238,17 +1186,13 @@ const drawKillBarChart = () => {
 		const thumbW = Math.max(30, (visibleCount / mobData.length) * trackW);
 		const thumbX = padding + (killChartOffset / mobData.length) * trackW;
 
-		ctx.fillStyle = 'rgba(255,255,255,0.1)';
-		ctx.beginPath();
-		ctx.roundRect(padding, trackY, trackW, scrollBarH, 6);
-		ctx.fill();
+		ctx.fillStyle = '#222';
+		ctx.fillRect(padding, trackY, trackW, scrollBarH);
 
 		ctx.fillStyle = sectionColors.kills.primary + 'AA';
-		ctx.beginPath();
-		ctx.roundRect(thumbX, trackY, thumbW, scrollBarH, 6);
-		ctx.fill();
+		ctx.fillRect(thumbX, trackY, thumbW, scrollBarH);
 
-		ctx.fillStyle = 'rgba(255,255,255,0.4)';
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '14px pixel, monospace';
 		ctx.textAlign = 'right';
 		ctx.fillText(`${killChartOffset + 1}–${killChartOffset + visible.length} of ${mobData.length}`, canvas.width - padding, padding - 8);
@@ -1278,7 +1222,7 @@ const drawChart = (canvasId, lines, sectionColor) => {
 	}
 
 	if (!hasData) {
-		ctx.fillStyle = '#999';
+		ctx.fillStyle = '#8A8D8F';
 		ctx.font = '24px pixel, monospace';
 		ctx.textAlign = 'center';
 		ctx.fillText('Collecting data...', canvas.width / 2, canvas.height / 2);
@@ -1305,7 +1249,7 @@ const drawChart = (canvasId, lines, sectionColor) => {
 	const labelSpace = lines[0].label ? 60 : 0;
 	const gw = canvas.width - 2 * padding - labelSpace;
 	const gh = canvas.height - 2 * padding;
-	const axisColor = sectionColors[canvasId.replace('Chart', '').toLowerCase()]?.axis || 'rgba(255,255,255,0.1)';
+	const axisColor = sectionColors[canvasId.replace('Chart', '').toLowerCase()]?.axis || '#2A2A2A';
 
 	ctx.strokeStyle = axisColor;
 	ctx.lineWidth = 1;
@@ -1317,7 +1261,7 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		ctx.stroke();
 	}
 
-	ctx.strokeStyle = axisColor;
+	ctx.strokeStyle = '#555';
 	ctx.lineWidth = 2;
 	ctx.beginPath();
 	ctx.moveTo(padding, padding);
@@ -1332,10 +1276,7 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		const histLen = history.length - 1;
 
 		if (lines.length === 1) {
-			const gradient = ctx.createLinearGradient(0, padding, 0, canvas.height - padding);
-			gradient.addColorStop(0, color + '4D');
-			gradient.addColorStop(1, color + '0D');
-			ctx.fillStyle = gradient;
+			ctx.fillStyle = color + '26';
 			ctx.beginPath();
 			ctx.moveTo(padding, canvas.height - padding);
 			for (let i = 0; i < history.length; i++) {
@@ -1363,9 +1304,7 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		for (let i = 0; i < history.length; i++) {
 			const x = padding + gw * i / histLen;
 			const y = canvas.height - padding - gh * history[i].value / range;
-			ctx.beginPath();
-			ctx.arc(x, y, 3, 0, 2 * Math.PI);
-			ctx.fill();
+			ctx.fillRect(x - 3, y - 3, 6, 6);
 		}
 
 		if (line.label) {
@@ -1377,7 +1316,7 @@ const drawChart = (canvasId, lines, sectionColor) => {
 		}
 	}
 
-	ctx.fillStyle = sectionColor;
+	ctx.fillStyle = '#8A8D8F';
 	ctx.font = '18px pixel, monospace';
 	ctx.textAlign = 'right';
 	for (let i = 0; i <= 5; i++) {
@@ -1472,23 +1411,6 @@ const resetKillHistory = () => {
 	}
 	lastKillUpdate = 0;
 };
-
-function getDamageBarFill(ctx, type, barX, barY, barWidth, barHeight, fallbackColor) {
-	if (type !== 'Burn' && type !== 'Blast') return fallbackColor;
-
-	const g = ctx.createLinearGradient(barX, barY + barHeight, barX, barY);
-
-	if (type === 'Burn') {
-		g.addColorStop(0.0, '#8B1A1A');
-		g.addColorStop(0.5, '#F4511E');
-		g.addColorStop(1.0, '#FFD54F');
-	} else {
-		g.addColorStop(0.0, '#6D2C00');
-		g.addColorStop(1.0, '#FF9800');
-	}
-
-	return g;
-}
 
 // ========== EVENT LISTENERS ==========
 let updateInterval;

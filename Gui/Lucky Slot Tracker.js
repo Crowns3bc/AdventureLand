@@ -1,359 +1,121 @@
-// Load existing data from storage or initialize empty
 let slotData = get("slot_roll_data") || {};
 let lastLoggedRoll = null;
 
-// Initialize slot data structure
-function initSlotData(slot) {
-	if (!slotData[slot]) {
-		slotData[slot] = {
-			totalRolls: 0,
-			sumRolls: 0,
-			rollsAbove96_3: 0,
-			perfectRolls: 0
-		};
-	}
+for (let i = 0; i < 42; i++) {
+	const old = slotData[i] || slotData[String(i)];
+	slotData[i] = { zero: old?.zero ?? old?.perfectRolls ?? 0, high: old?.high ?? old?.rollsAbove96_3 ?? 0 };
 }
+set("slot_roll_data", slotData);
 
 async function q_data_handler(event) {
-	if (event.p.nums.length === 4) {
-		// Calculate the rolled value
-		const rolled = parseFloat(
-			`0.${event.p.nums[3]}${event.p.nums[2]}${event.p.nums[1]}${event.p.nums[0]}`
-		);
-		const slot = event.num;
+	if (event.p.nums.length !== 4) return;
+	const rolled = (event.p.nums[3] * 1000 + event.p.nums[2] * 100 + event.p.nums[1] * 10 + event.p.nums[0]) / 10000;
+	const slot = event.num;
+	if (slot < 0 || slot >= 42) return;
 
-		// Prevent duplicate logging (same slot + roll within 100ms)
-		if (lastLoggedRoll &&
-			lastLoggedRoll.slot === slot &&
-			lastLoggedRoll.rolled === rolled &&
-			Date.now() - lastLoggedRoll.timestamp < 100) {
-			return;
-		}
+	const now = Date.now();
+	if (lastLoggedRoll && lastLoggedRoll.slot === slot && lastLoggedRoll.rolled === rolled && now - lastLoggedRoll.time < 100) return;
 
-		// Log the roll
-		initSlotData(slot);
-		slotData[slot].totalRolls++;
-		slotData[slot].sumRolls += rolled;
-		if (rolled > 0.963) {
-			slotData[slot].rollsAbove96_3++;
-		}
-		if (rolled === 0) {
-			slotData[slot].perfectRolls++;
-		}
+	if (rolled === 0) slotData[slot].zero++;
+	else if (rolled > 0.963) slotData[slot].high++;
 
-		// Save to storage
-		set("slot_roll_data", slotData);
-
-		// Update duplicate tracker
-		lastLoggedRoll = { slot: slot, rolled: rolled, timestamp: Date.now() };
-
-		console.log(`Logged roll ${rolled.toFixed(4)} for slot ${slot}`);
-	}
-}
-
-// Analysis function
-function analyzeSlots() {
-	const slots = Object.keys(slotData).sort((a, b) => parseInt(a) - parseInt(b));
-
-	if (slots.length === 0) {
-		show_json("No data collected yet.");
-		return;
-	}
-
-	let output = "=".repeat(50) + "\n";
-	output += "SLOT ANALYSIS\n";
-	output += "=".repeat(50) + "\n\n";
-
-	let bestSlot = null;
-	let bestAvg = 1;
-
-	for (const slot of slots) {
-		const data = slotData[slot];
-		const avgRoll = data.sumRolls / data.totalRolls;
-		const highRollPercent = (data.rollsAbove96_3 / data.totalRolls) * 100;
-
-		output += `Slot ${slot}: ${data.totalRolls} rolls | Avg: ${avgRoll.toFixed(4)} | >0.963: ${data.rollsAbove96_3} (${highRollPercent.toFixed(1)}%) | Perfect 0s: ${data.perfectRolls}\n`;
-
-		if (avgRoll < bestAvg) {
-			bestAvg = avgRoll;
-			bestSlot = slot;
-		}
-	}
-
-	output += "=".repeat(50) + "\n";
-	output += `Best Slot: ${bestSlot} (Avg: ${bestAvg.toFixed(4)})\n`;
-	output += "=".repeat(50);
-
-	show_json(output);
-}
-
-// Export compact data
-function exportSlotData() {
-	const compactData = {};
-
-	for (const slot in slotData) {
-		const data = slotData[slot];
-		compactData[slot] = {
-			totalRolls: data.totalRolls,
-			avgRoll: parseFloat((data.sumRolls / data.totalRolls).toFixed(4)),
-			rollsAbove96_3: data.rollsAbove96_3,
-			perfectRolls: data.perfectRolls
-		};
-	}
-
-	show_json(compactData);
-	return compactData;
+	set("slot_roll_data", slotData);
+	lastLoggedRoll = { slot, rolled, time: now };
+	updateSlotDashboard();
 }
 
 parent.socket.on("q_data", q_data_handler);
 
-window.analyzeSlots = analyzeSlots;
-window.exportSlotData = exportSlotData;
-
-// ========== UI CREATION ==========
 setTimeout(() => {
 	const $ = parent.$;
-	$('#slotAnalysisDashboard').remove();
-	if (parent.buttons?.['slotAnalysis']) {
-		delete parent.buttons['slotAnalysis'];
-		$('.codebuttonslotAnalysis').remove();
-	}
-	add_top_button('slotAnalysis', 'Slots', toggleSlotDashboard);
+	$("#slotLuckDashboard").remove();
+	if (parent.buttons?.slotLuck) delete parent.buttons.slotLuck;
+	$(".codebuttonslotLuck").remove();
+	add_top_button("slotLuck", "Luck", toggleSlotDashboard);
 }, 100);
 
-const createSlotDashboard = () => {
+function createSlotDashboard() {
 	const $ = parent.$;
-	$('#slotAnalysisDashboard').remove();
+	$("#slotLuckDashboard").remove();
+	const font = $("#bottomrightcorner").css("font-family") || "pixel, monospace";
 
 	const dashboard = $(`
-		<div id="slotAnalysisDashboard">
-			<div id="slotHeader">
-				<span id="slotTitle">Lucky Slot Analysis</span>
-				<button id="slotCloseBtn">×</button>
+		<div id="slotLuckDashboard">
+			<div class="sl-title cbold">Lucky Slots</div>
+			<div class="sl-legend">
+				<span class="sl-legend-item"><b class="sl-badge-zero">00</b></span></span>
+				<span class="sl-legend-item"><b class="sl-badge-high">&gt;96</b></span></span>
 			</div>
-			<div id="slotContent">
-				<div class="slot-stats">
-					<div class="stat-card">
-						<div class="stat-label">Total Rolls</div>
-						<div class="stat-value" id="totalRollsAll">0</div>
-					</div>
-					<div class="stat-card">
-						<div class="stat-label">Best Slot</div>
-						<div class="stat-value" id="bestSlotDisplay">--</div>
-					</div>
-					<div class="stat-card">
-						<div class="stat-label">Worst Slot</div>
-						<div class="stat-value" id="worstSlotDisplay">--</div>
-					</div>
-				</div>
-				<canvas id="slotChart"></canvas>
+			<div class="sl-lucky">
+				<div class="sl-lucky-label">CURRENT LUCKY SLOT</div>
+				<div class="sl-lucky-slot">--</div>
+				<div class="sl-lucky-stats">Waiting for rolls...</div>
 			</div>
+			<div class="sl-grid"></div>
 		</div>
 	`).css({
-		position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-		width: '1400px', height: '800px', background: 'rgba(20, 20, 30, 0.98)',
-		border: '3px solid #FFD700', borderRadius: '10px', zIndex: 9999, display: 'none',
-		boxShadow: '0 0 30px rgba(255, 215, 0, 0.5)', overflow: 'hidden',
-		fontFamily: $('#bottomrightcorner').css('font-family') || 'pixel'
+		position:"fixed", top:"50%", left:"50%", transform:"translate(-50%,-50%)",
+		background:"black", border:"5px solid gray", zIndex:9999, display:"none",
+		color:"#E4E4E4", fontFamily:font, fontSize:"28px", padding:"24px", lineHeight:"30px"
 	});
 
-	$('body').append(dashboard);
-	applySlotStyles($);
-	attachSlotHandlers($);
-};
+	$("body").append(dashboard);
 
-const applySlotStyles = ($) => {
-	const styles = {
-		'#slotHeader': {
-			background: 'linear-gradient(to right, #1a1a2e, #16213e)', padding: '12px 15px',
-			borderBottom: '2px solid #FFD700', display: 'flex', justifyContent: 'space-between',
-			alignItems: 'center', borderRadius: '7px 7px 0 0', userSelect: 'none'
-		},
-		'#slotTitle': { color: '#FFD700', fontSize: '24px', fontWeight: 'bold', textShadow: '0 0 10px rgba(255, 215, 0, 0.5)' },
-		'#slotCloseBtn': { background: 'rgba(255, 255, 255, 0.1)', border: '1px solid #FFD700', color: '#FFD700', fontSize: '20px', width: '30px', height: '30px', cursor: 'pointer', borderRadius: '3px', transition: 'all 0.2s' },
-		'#slotContent': { padding: '20px', color: 'white', height: 'calc(100% - 70px)', display: 'flex', flexDirection: 'column' },
-		'.slot-stats': { display: 'flex', gap: '15px', marginBottom: '20px', justifyContent: 'center' },
-		'.stat-card': { background: 'rgba(0, 0, 0, 0.4)', padding: '15px 30px', borderRadius: '8px', textAlign: 'center', border: '1px solid rgba(255, 215, 0, 0.3)' },
-		'.stat-label': { fontSize: '16px', color: '#aaa', marginBottom: '5px', textTransform: 'uppercase' },
-		'.stat-value': { fontSize: '28px', fontWeight: 'bold', color: '#FFD700' },
-		'#slotChart': { width: '100%', height: '600px', background: 'rgba(0, 0, 0, 0.3)', borderRadius: '8px', border: '1px solid rgba(255, 215, 0, 0.2)', display: 'block' }
-	};
+	$("<style id='slotLuckStyles'>").text(`
+		#slotLuckDashboard *{box-sizing:border-box}
+		#slotLuckDashboard .sl-title{text-align:center;color:#f1c054;font-size:40px;margin-bottom:20px}
+		#slotLuckDashboard .sl-legend{display:flex;justify-content:center;gap:44px;padding-bottom:18px;margin-bottom:20px;border-bottom:2px solid gray}
+		#slotLuckDashboard .sl-legend-item{display:flex;align-items:center;gap:12px}
+		#slotLuckDashboard .sl-legend-item b{display:inline-flex;align-items:center;justify-content:center;width:52px;height:38px;border:2px solid gray;font-size:22px!important;background:black}
+		#slotLuckDashboard .sl-legend-text{color:#E4E4E4!important;font-size:26px!important;line-height:32px!important;font-family:inherit!important}
+		#slotLuckDashboard .sl-badge-zero{color:#5DE376!important;border-color:#5DE376!important}
+		#slotLuckDashboard .sl-badge-high{color:#D95A55!important;border-color:#D95A55!important}
+		#slotLuckDashboard .sl-lucky{margin:0 auto 24px;padding:12px 24px;text-align:center;width:400px;border:2px solid #f1c054}
+		#slotLuckDashboard .sl-lucky-label{color:gray;font-size:20px}
+		#slotLuckDashboard .sl-lucky-slot{color:#f1c054;font-size:40px;font-weight:bold}
+		#slotLuckDashboard .sl-lucky-stats{color:#C3C3C3;font-size:24px}
+		#slotLuckDashboard .sl-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px}
+		#slotLuckDashboard .sl-slot{position:relative;width:82px;height:82px;background:black;border:2px solid gray;display:flex;align-items:center;justify-content:center}
+		#slotLuckDashboard .sl-slot.sl-lucky-tile{border-color:#f1c054;box-shadow:inset 0 0 0 1px rgba(241,192,84,.25),0 0 6px rgba(241,192,84,.4)}
+		#slotLuckDashboard .sl-slot-num{color:gray;font-size:22px}
+		#slotLuckDashboard .sl-corner{position:absolute;background:black;border:2px solid gray;font-size:20px;line-height:20px;padding:3px 6px;min-width:20px;text-align:center}
+		#slotLuckDashboard .sl-corner-zero{bottom:-2px;left:-2px;color:#5DE376;border-color:#5DE376}
+		#slotLuckDashboard .sl-corner-high{bottom:-2px;right:-2px;color:#D95A55;border-color:#D95A55}
+	`).appendTo("head");
 
-	Object.entries(styles).forEach(([sel, style]) => $(sel).css(style));
-};
+	dashboard.find(".sl-close").on("click", () => dashboard.hide());
+}
 
-const attachSlotHandlers = ($) => {
-	$('#slotCloseBtn').on('click', () => $('#slotAnalysisDashboard').hide());
-	$('#slotCloseBtn').hover(
-		function () { $(this).css('background', 'rgba(255, 215, 0, 0.3)'); },
-		function () { $(this).css('background', 'rgba(255, 255, 255, 0.1)'); }
-	);
-};
-
-const updateSlotDashboard = () => {
+function updateSlotDashboard() {
 	const $ = parent.$;
-	const slots = Object.keys(slotData).map(Number).sort((a, b) => a - b);
-
-	if (slots.length === 0) return;
-
-	let totalRolls = 0;
-	let bestSlot = null;
-	let worstSlot = null;
-	let bestAvg = 1;
-	let worstAvg = 0;
-
-	for (const slot of slots) {
-		const data = slotData[slot];
-		const avg = data.sumRolls / data.totalRolls;
-		totalRolls += data.totalRolls;
-
-		if (avg < bestAvg) {
-			bestAvg = avg;
-			bestSlot = slot;
-		}
-		if (avg > worstAvg) {
-			worstAvg = avg;
-			worstSlot = slot;
-		}
-	}
-
-	$('#totalRollsAll').text(totalRolls.toLocaleString());
-	$('#bestSlotDisplay').text(bestSlot !== null ? `${bestSlot} (${bestAvg.toFixed(4)})` : '--');
-	$('#worstSlotDisplay').text(worstSlot !== null ? `${worstSlot} (${worstAvg.toFixed(4)})` : '--');
-
-	drawSlotChart();
-};
-
-const drawSlotChart = () => {
-	const canvas = parent.document.getElementById('slotChart');
-	if (!canvas || !parent.$('#slotAnalysisDashboard').is(':visible')) return;
-
-	const ctx = canvas.getContext('2d');
-	const rect = canvas.getBoundingClientRect();
-
-	if (canvas.width !== rect.width || canvas.height !== rect.height) {
-		canvas.width = rect.width;
-		canvas.height = rect.height;
-	}
-
-	ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-	const slots = Object.keys(slotData).map(Number).sort((a, b) => a - b);
-
-	if (slots.length === 0) {
-		ctx.fillStyle = '#999';
-		ctx.font = '24px pixel, monospace';
-		ctx.textAlign = 'center';
-		ctx.fillText('No data collected yet. Start upgrading!', canvas.width / 2, canvas.height / 2);
-		return;
-	}
-
-	// Calculate averages and find min/max for scaling
-	const slotAvgs = {};
-	let minAvg = 1;
-	let maxAvg = 0;
-
-	for (const slot of slots) {
-		const data = slotData[slot];
-		const avg = data.sumRolls / data.totalRolls;
-		slotAvgs[slot] = avg;
-		minAvg = Math.min(minAvg, avg);
-		maxAvg = Math.max(maxAvg, avg);
-	}
-
-	const padding = 60;
-	const bottomPadding = 50;
-	const chartWidth = canvas.width - 2 * padding;
-	const chartHeight = canvas.height - padding - bottomPadding;
-	const barWidth = Math.max(15, chartWidth / slots.length - 5);
-	const barSpacing = (chartWidth - barWidth * slots.length) / (slots.length - 1 || 1);
-
-	// Draw grid lines
-	ctx.strokeStyle = 'rgba(255, 215, 0, 0.1)';
-	ctx.lineWidth = 1;
-	for (let i = 0; i <= 5; i++) {
-		const y = padding + chartHeight * i / 5;
-		ctx.beginPath();
-		ctx.moveTo(padding, y);
-		ctx.lineTo(canvas.width - padding, y);
-		ctx.stroke();
-	}
-
-	// Draw axes
-	ctx.strokeStyle = 'rgba(255, 215, 0, 0.3)';
-	ctx.lineWidth = 2;
-	ctx.beginPath();
-	ctx.moveTo(padding, padding);
-	ctx.lineTo(padding, canvas.height - bottomPadding);
-	ctx.lineTo(canvas.width - padding, canvas.height - bottomPadding);
-	ctx.stroke();
-
-	// Draw bars
-	slots.forEach((slot, idx) => {
-		const avg = slotAvgs[slot];
-		const x = padding + idx * (barWidth + barSpacing);
-		const barHeight = chartHeight * (avg / maxAvg);
-		const y = canvas.height - bottomPadding - barHeight;
-
-		// Color based on performance (green = good/low, red = bad/high)
-		const normalized = (avg - minAvg) / (maxAvg - minAvg || 1);
-		const r = Math.floor(normalized * 255);
-		const g = Math.floor((1 - normalized) * 255);
-		ctx.fillStyle = `rgb(${r}, ${g}, 50)`;
-
-		ctx.fillRect(x, y, barWidth, barHeight);
-
-		// Draw perfect rolls count inside the bar at the bottom (always show, even if 0)
-		const perfectRolls = slotData[slot].perfectRolls || 0;
-		ctx.font = 'bold 16px pixel, monospace';
-		ctx.textAlign = 'center';
-
-		// Draw black outline
-		ctx.strokeStyle = '#000000';
-		ctx.lineWidth = 3;
-		ctx.strokeText(perfectRolls.toString(), x + barWidth / 2, canvas.height - bottomPadding - 8);
-
-		// Draw white text on top
-		ctx.fillStyle = '#FFFFFF';
-		ctx.fillText(perfectRolls.toString(), x + barWidth / 2, canvas.height - bottomPadding - 8);
-
-		// Draw slot number below each bar
-		ctx.fillStyle = '#FFD700';
-		ctx.font = '14px pixel, monospace';
-		ctx.textAlign = 'center';
-		ctx.fillText(slot.toString(), x + barWidth / 2, canvas.height - bottomPadding + 20);
-	});
-
-	// Draw Y-axis labels
-	ctx.fillStyle = '#FFD700';
-	ctx.font = '16px pixel, monospace';
-	ctx.textAlign = 'right';
-	for (let i = 0; i <= 5; i++) {
-		const value = (maxAvg * i / 5).toFixed(3);
-		const y = canvas.height - bottomPadding - (chartHeight * i / 5);
-		ctx.fillText(value, padding - 10, y + 4);
-	}
-
-	// Draw title
-	ctx.font = '20px pixel, monospace';
-	ctx.textAlign = 'center';
-	ctx.fillText('Average Roll by Slot (Lower = Better)', canvas.width / 2, 30);
-};
-
-const toggleSlotDashboard = () => {
-	const $ = parent.$;
-	let dashboard = $('#slotAnalysisDashboard');
-	if (dashboard.length === 0) {
+	let dashboard = $("#slotLuckDashboard");
+	if (!dashboard.length) {
 		createSlotDashboard();
-		dashboard = $('#slotAnalysisDashboard');
+		dashboard = $("#slotLuckDashboard");
 	}
 
-	if (dashboard.is(':visible')) {
-		dashboard.hide();
-	} else {
-		dashboard.show();
-		updateSlotDashboard();
-	}
-};
+	const grid = dashboard.find(".sl-grid").empty();
+	let maxZero = -1, luckySlot = null, minHigh = Infinity;
 
-console.log("Slot Logger loaded. Commands: analyzeSlots() | exportSlotData() | Click 'Slots' button");
+	for (let i = 0; i < 42; i++) maxZero = Math.max(maxZero, slotData[i].zero);
+	for (let i = 0; i < 42; i++) {
+		const d = slotData[i];
+		if (d.zero === maxZero && d.high < minHigh) minHigh = d.high, luckySlot = i;
+		grid.append(`<div class="sl-slot${i === luckySlot ? " sl-lucky-tile" : ""}"><div class="sl-slot-num">${i}</div><div class="sl-corner sl-corner-zero">${d.zero}</div><div class="sl-corner sl-corner-high">${d.high}</div></div>`);
+	}
+
+	if (luckySlot !== null) {
+		const d = slotData[luckySlot];
+		dashboard.find(".sl-lucky-slot").text(`SLOT ${luckySlot}`);
+		dashboard.find(".sl-lucky-stats").text(`${d.zero} × 00.00  •  ${d.high} × >96.3`);
+	}
+}
+
+function toggleSlotDashboard() {
+	const $ = parent.$;
+	if (!$("#slotLuckDashboard").length) createSlotDashboard();
+	const d = $("#slotLuckDashboard");
+	d.is(":visible") ? d.hide() : (d.show(), updateSlotDashboard());
+}
+
+console.log("Lucky Slots loaded.");

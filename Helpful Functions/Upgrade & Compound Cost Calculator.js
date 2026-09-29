@@ -68,6 +68,7 @@ const OFFERING_NAMES = ["none", "offeringp", "offering", "offeringx"];
 const gradeCache = {}, igradeCache = {};
 const getZeroGrade = n => gradeCache[n] ?? (gradeCache[n] = item_grade({ name: n, level: 0 }));
 const getIgrade = n => igradeCache[n] ?? (igradeCache[n] = MANUAL_IGRADE[n] ?? getZeroGrade(n));
+const getIgrace = n => [1, -1, -2][getIgrade(n)] ?? 0;
 const fmtGold = n => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 const tableLookup = (table, igrade, level) => {
 	const v = table[igrade]?.[level];
@@ -76,14 +77,14 @@ const tableLookup = (table, igrade, level) => {
 };
 
 const getUpgradeChance = (item, scroll_def, offering_def) => {
-	const igrade = getIgrade(item.name), grade = item_grade(item);
+	const igrade = getIgrade(item.name), igrace = getIgrace(item.name), grade = item_grade(item);
 	if (grade > scroll_def.grade) return { chance: 0, new_grace: 0 };
 
 	const new_level = (item.level || 0) + 1;
 	const oprobability = tableLookup(UPGRADES, igrade, new_level);
 	if (oprobability == null) return { chance: 0, new_grace: 0 };
 	let probability = oprobability;
-	let grace = Math.max(0, Math.min(new_level + 1, (item.grace || 0) + igrade));
+	let grace = Math.max(0, Math.min(new_level + 1, (item.grace || 0) + igrace));
 	grace = (probability * grace) / new_level + grace / 1000;
 
 	let high = false, new_grace = item.grace || 0;
@@ -156,7 +157,7 @@ const getCompoundChance = (item, scroll_def, offering_def) => {
 
 const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 	const { targetLevel = 12, startLevel = 0, startGrace = 0 } = opts;
-	const dp = Array(13).fill(0).map(() => Array(140).fill(null));
+	const dp = Array(13).fill(0).map(() => Array(151).fill(null));
 	const pq = new MinHeap();
 
 	dp[startLevel][startGrace * 10] = [itemValue, "init", -1, -1];
@@ -170,8 +171,8 @@ const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 		const item = { name: itemName, level: lvl, grace: realGrace };
 		const grade = item_grade(item);
 
-		if (realGrace < 13) {
-			const newGrace = Math.min(realGrace + 0.5, 13);
+		if (realGrace < 15) {
+			const newGrace = Math.min(realGrace + 0.5, 15);
 			const newTotalCost = totalCost + COSTS.offering[1];
 			const idx = Math.round(newGrace * 10);
 			if (!dp[lvl][idx] || newTotalCost < dp[lvl][idx][0]) {
@@ -189,7 +190,7 @@ const calculateUpgrade = (itemName, itemValue, opts = {}) => {
 					const attemptCost = totalCost + COSTS.scroll[s] + COSTS.offering[o];
 					const expectedCost = attemptCost / chance;
 					const newLvl = lvl + 1;
-					const idx = Math.round(new_grace * 10);
+					const idx = Math.min(150, Math.round(new_grace * 10));
 
 					if (!dp[newLvl][idx] || expectedCost < dp[newLvl][idx][0]) {
 						dp[newLvl][idx] = [expectedCost, `${s},${o}`, lvl, grace];
@@ -209,7 +210,7 @@ function upgradeCost(itemName, itemValue, targetLevel = 12, luckySlot = false, d
 	const dp = calculateUpgrade(itemName, itemValue, { targetLevel });
 
 	let minCost = Infinity, minIdx = -1;
-	for (let g = 0; g < 140; g++) {
+	for (let g = 0; g < 151; g++) {
 		if (dp[targetLevel][g] && dp[targetLevel][g][0] < minCost) {
 			minCost = dp[targetLevel][g][0];
 			minIdx = g;
